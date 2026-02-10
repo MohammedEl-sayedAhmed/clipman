@@ -14,7 +14,7 @@ Like Windows `Win+V` — but for Linux.
 
 ---
 
-Press **Super+V** to view your clipboard history, search entries, pin favorites, and quickly paste previous copies.
+Press **Super+V** to view your clipboard history, search entries, pin favorites, and instantly paste previous copies.
 
 </div>
 
@@ -25,18 +25,19 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 | Feature | Description |
 |---------|-------------|
 | **Text & Image support** | Stores both text and image clipboard entries |
+| **Instant paste** | Click an entry and it pastes directly into the focused app |
 | **Pin favorites** | Keep important entries permanently — exempt from pruning |
 | **Search** | Instantly filter clipboard history by text content |
 | **Super+V shortcut** | Toggle the popup with a familiar keyboard shortcut |
 | **Autostart** | Runs as a background daemon, starts on login |
-| **Wayland native** | Built on `wl-clipboard` for full Wayland compatibility |
+| **Wayland native** | GNOME Shell extension for zero-overhead clipboard detection |
 | **Lightweight** | Python + GTK3 — no Electron, no heavy frameworks |
 | **Deduplication** | SHA256 hashing prevents duplicate entries |
 | **Auto-pruning** | History capped at 500 entries (pinned entries are exempt) |
 
 ## Requirements
 
-- Ubuntu 22.04+ with GNOME and Wayland
+- Ubuntu 22.04+ with GNOME 46 and Wayland
 - Python 3.10+
 - GTK 3
 
@@ -49,8 +50,10 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 git clone https://github.com/MohammedEl-sayedAhmed/clipman.git
 cd clipman
 
-# Install dependencies, keybinding, and autostart
+# Install dependencies, extension, keybinding, and autostart
 ./install.sh
+
+# Log out and back in to activate the GNOME Shell extension
 
 # Start the daemon
 python3 clipman.py &
@@ -63,12 +66,12 @@ After your next login, the daemon starts automatically.
 | Action | How |
 |--------|-----|
 | Open clipboard history | <kbd>Super</kbd> + <kbd>V</kbd> |
-| Copy an entry | Click on it |
+| Paste an entry | Click on it |
 | Pin / unpin an entry | Click the star icon |
 | Delete an entry | Click the X icon |
 | Search history | Type in the search bar |
 | Clear all unpinned | Click **Clear All** |
-| Close popup | <kbd>Escape</kbd> |
+| Close popup | <kbd>Escape</kbd> or click outside |
 
 ## Architecture
 
@@ -77,23 +80,28 @@ clipman/
 ├── clipman.py                  # Entry point (start daemon / toggle popup)
 ├── clipman/
 │   ├── app.py                  # GTK Application lifecycle
-│   ├── clipboard_monitor.py    # wl-paste --watch clipboard watcher
+│   ├── clipboard_monitor.py    # Event-driven clipboard monitor
 │   ├── database.py             # SQLite storage with dedup/search/pin
-│   ├── dbus_service.py         # D-Bus IPC for Super+V toggle
+│   ├── dbus_service.py         # D-Bus IPC for toggle + clipboard events
 │   └── window.py               # GTK3 popup window UI
+├── extension/
+│   ├── extension.js            # GNOME Shell extension (clipboard detection + paste simulation)
+│   └── metadata.json           # Extension metadata
 ├── data/
 │   └── com.clipman.Clipman.desktop
+├── launcher.sh                 # Snap-aware launcher script
 ├── install.sh
 └── uninstall.sh
 ```
 
 ### How it works
 
-1. A **background daemon** monitors the system clipboard via `wl-paste --watch`
-2. New entries (text or images) are stored in an **SQLite database** at `~/.local/share/clipman/`
-3. Duplicates are detected via **SHA256 hashing** — copying the same content just updates the timestamp
-4. Pressing **Super+V** sends a **D-Bus signal** to the running daemon, toggling the popup window
-5. Clicking an entry copies it back to the clipboard via `wl-copy` and closes the popup
+1. A **GNOME Shell extension** listens for clipboard changes natively via `Meta.Selection`'s `owner-changed` signal — zero polling, zero subprocess overhead
+2. When a clipboard change is detected, the extension reads the content and sends it to the daemon over **D-Bus**
+3. The **daemon** stores entries in an **SQLite database** at `~/.local/share/clipman/`
+4. Duplicates are detected via **SHA256 hashing** — copying the same content just updates the timestamp
+5. Pressing **Super+V** sends a D-Bus call to the running daemon, toggling the popup window
+6. Clicking an entry copies it to the clipboard via `wl-copy`, hides the popup, and **auto-pastes** into the previously focused app using the extension's virtual keyboard
 
 ## Uninstall
 
@@ -101,7 +109,7 @@ clipman/
 ./uninstall.sh
 ```
 
-This removes the keybinding, autostart entry, and optionally your clipboard history data.
+This removes the extension, keybinding, autostart entry, and optionally your clipboard history data.
 
 ## License
 
