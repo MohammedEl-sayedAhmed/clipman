@@ -7,6 +7,10 @@ gi.require_version("GLib", "2.0")
 from gi.repository import GLib
 
 
+MAX_TEXT_SIZE = 10 * 1024 * 1024   # 10 MB
+MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
 class ClipboardMonitor:
     def __init__(self, db, on_new_entry=None):
         self.db = db
@@ -69,6 +73,8 @@ class ClipboardMonitor:
                 capture_output=True, timeout=2
             )
             if result.returncode == 0 and result.stdout:
+                if len(result.stdout) > MAX_TEXT_SIZE:
+                    return  # Skip oversized text
                 text = result.stdout.decode("utf-8", errors="replace")
                 h = hashlib.sha256(text.encode("utf-8")).hexdigest()
                 if h == self._last_hash:
@@ -86,6 +92,8 @@ class ClipboardMonitor:
                 capture_output=True, timeout=5
             )
             if result.returncode == 0 and result.stdout:
+                if len(result.stdout) > MAX_IMAGE_SIZE:
+                    return  # Skip oversized image
                 h = hashlib.sha256(result.stdout).hexdigest()
                 if h == self._last_hash:
                     return
