@@ -6,7 +6,7 @@
 
 Like Windows `Win+V` — but for Linux.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04+-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com)
 [![GNOME](https://img.shields.io/badge/GNOME-46-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
 [![Wayland](https://img.shields.io/badge/Wayland-native-yellow)](https://wayland.freedesktop.org)
@@ -105,28 +105,12 @@ This removes the keybinding, autostart entry, and optionally your clipboard hist
 
 ## License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+Copyright 2025 Mohammed El-sayed Ahmed
 
-```
-MIT License
+Licensed under the **Apache License, Version 2.0**. You may use, modify, and distribute this software, provided you:
 
-Copyright (c) 2025 Mohammed El-sayed Ahmed
+- Include the original [LICENSE](LICENSE) and [NOTICE](NOTICE) files
+- Give appropriate credit to the original author
+- State any changes you made
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+See the [LICENSE](LICENSE) and [NOTICE](NOTICE) files for full details.
