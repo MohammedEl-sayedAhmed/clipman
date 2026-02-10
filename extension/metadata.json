@@ -1,0 +1,7 @@
+{
+    "uuid": "clipman@clipman.com",
+    "name": "Clipman Clipboard Monitor",
+    "description": "Native clipboard change detection for the Clipman clipboard manager",
+    "shell-version": ["46"],
+    "version": 1
+}
