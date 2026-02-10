@@ -1,5 +1,6 @@
 import signal
 import gi
+import dbus.mainloop.glib
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib
@@ -12,6 +13,8 @@ from clipman.dbus_service import ClipmanDBusService
 
 class ClipmanApp(Gtk.Application):
     def __init__(self):
+        # Must be called before GTK main loop starts
+        dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
         super().__init__(application_id="com.clipman.Clipman")
         self.db = None
         self.monitor = None

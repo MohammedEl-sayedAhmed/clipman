@@ -1,6 +1,5 @@
 import dbus
 import dbus.service
-import dbus.mainloop.glib
 
 BUS_NAME = "com.clipman.Daemon"
 OBJ_PATH = "/com/clipman/Daemon"
@@ -9,7 +8,6 @@ IFACE = "com.clipman.Daemon"
 
 class ClipmanDBusService(dbus.service.Object):
     def __init__(self, window, app):
-        dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
         bus = dbus.SessionBus()
         bus_name = dbus.service.BusName(BUS_NAME, bus)
         super().__init__(bus_name, OBJ_PATH)
