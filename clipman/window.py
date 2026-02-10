@@ -44,7 +44,7 @@ class ClipmanWindow(Gtk.Window):
     # ── CSS ──────────────────────────────────────────────────────────
 
     def _apply_css(self):
-        css = b"""
+        css = """
         .clipman-window {
             background-color: #1e1e2e;
             border-radius: 12px;
@@ -250,7 +250,7 @@ class ClipmanWindow(Gtk.Window):
         }
         """
         provider = Gtk.CssProvider()
-        provider.load_from_data(css)
+        provider.load_from_data(css.encode("utf-8"))
         Gtk.StyleContext.add_provider_for_screen(
             Gdk.Screen.get_default(), provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
