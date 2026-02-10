@@ -22,7 +22,7 @@ class ClipmanWindow(Gtk.Window):
         self._ignore_focus_out = False
 
         self.set_title("Clipman")
-        self.set_default_size(440, 560)
+        self.set_default_size(400, 520)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_decorated(True)
         self.set_resizable(True)
@@ -46,185 +46,207 @@ class ClipmanWindow(Gtk.Window):
     def _apply_css(self):
         css = b"""
         .clipman-window {
-            background-color: #2d2d2d;
+            background-color: #1e1e2e;
             border-radius: 12px;
         }
+
+        /* ── Header ─────────────────────────────── */
         .clipman-header {
-            background-color: #383838;
+            background-color: #252536;
             border-radius: 12px 12px 0 0;
-            padding: 8px;
+            padding: 6px 8px;
         }
         .clipman-search {
-            background-color: #404040;
-            color: #ffffff;
-            border: 1px solid #555555;
+            background-color: #313147;
+            color: #cdd6f4;
+            border: 1px solid #45475a;
             border-radius: 8px;
-            padding: 8px 12px;
-            font-size: 14px;
-        }
-        .clipman-search:focus {
-            border-color: #3584e4;
-        }
-        .count-label {
-            color: #666666;
-            font-size: 11px;
-        }
-
-        /* Filter tabs */
-        .filter-bar {
-            background-color: #2d2d2d;
-            padding: 2px 8px;
-        }
-        .filter-tab {
-            background: none;
-            background-image: none;
-            border: none;
-            color: #888888;
-            font-size: 12px;
-            padding: 4px 12px;
-            min-height: 28px;
-            border-bottom: 2px solid transparent;
-        }
-        .filter-tab:hover {
-            color: #e0e0e0;
-        }
-        .filter-tab-active {
-            background: none;
-            background-image: none;
-            border: none;
-            color: #3584e4;
-            font-size: 12px;
-            font-weight: bold;
-            padding: 4px 12px;
-            min-height: 28px;
-            border-bottom: 2px solid #3584e4;
-        }
-
-        /* Rows */
-        .clip-row {
-            background-color: #353535;
-            border-radius: 8px;
-            padding: 10px 12px;
-            margin: 2px 6px;
-        }
-        .clip-row:hover {
-            background-color: #404040;
-        }
-        row:selected .clip-row {
-            background-color: #2a3a4a;
-            border-left: 3px solid #3584e4;
-        }
-        .clip-text {
-            color: #e0e0e0;
+            padding: 6px 10px;
             font-size: 13px;
         }
-        .clip-time {
-            color: #888888;
+        .clipman-search:focus {
+            border-color: #89b4fa;
+        }
+        .count-label {
+            color: #585b70;
+            font-size: 10px;
+        }
+
+        /* ── Filter tabs ────────────────────────── */
+        .filter-bar {
+            background-color: #1e1e2e;
+            padding: 4px 8px 2px 8px;
+        }
+        .filter-tab {
+            background-color: transparent;
+            background-image: none;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: #6c7086;
             font-size: 11px;
+            padding: 2px 10px;
+            min-height: 22px;
+            margin: 0 2px;
+        }
+        .filter-tab:hover {
+            color: #bac2de;
+            background-color: #313147;
+            background-image: none;
+        }
+        .filter-tab-active {
+            background-color: #313147;
+            background-image: none;
+            border: 1px solid #45475a;
+            border-radius: 6px;
+            color: #89b4fa;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 2px 10px;
+            min-height: 22px;
+            margin: 0 2px;
+        }
+
+        /* ── Rows ───────────────────────────────── */
+        .clip-row {
+            background-color: #252536;
+            border-radius: 8px;
+            padding: 6px 10px;
+            margin: 1px 4px;
+        }
+        .clip-row:hover {
+            background-color: #2e2e42;
+        }
+        row:selected .clip-row {
+            background-color: #1e3a5f;
+            border-left: 2px solid #89b4fa;
+        }
+        .clip-text {
+            color: #cdd6f4;
+            font-size: 12px;
+        }
+        .clip-time {
+            color: #6c7086;
+            font-size: 10px;
         }
         .clip-chars {
-            color: #666666;
-            font-size: 10px;
+            color: #585b70;
+            font-size: 9px;
         }
         .clip-type-badge {
-            color: #3584e4;
+            color: #89b4fa;
+            font-size: 9px;
+            font-weight: bold;
+        }
+
+        /* ── Section headers ────────────────────── */
+        .section-header {
+            color: #6c7086;
             font-size: 10px;
             font-weight: bold;
-        }
-
-        /* Section headers */
-        .section-header {
-            color: #888888;
-            font-size: 11px;
-            font-weight: bold;
             letter-spacing: 1px;
-            padding: 8px 12px 4px 12px;
+            padding: 6px 10px 2px 10px;
         }
 
-        /* Buttons */
+        /* ── Row action buttons ─────────────────── */
         .pin-button, .delete-button, .edit-button {
             background: none;
+            background-image: none;
             border: none;
-            padding: 4px;
-            min-height: 24px;
-            min-width: 24px;
+            padding: 0;
+            min-height: 18px;
+            min-width: 18px;
+            font-size: 12px;
         }
         .pin-button:hover, .delete-button:hover, .edit-button:hover {
-            background: #4a4a4a;
+            background-color: rgba(255, 255, 255, 0.08);
             background-image: none;
             border-radius: 4px;
         }
         .pinned {
-            color: #f5c211;
+            color: #f9e2af;
         }
         .unpinned {
-            color: #888888;
+            color: #585b70;
         }
-        .clear-button {
-            font-size: 12px;
-            padding: 6px 12px;
+        .delete-button {
+            color: #585b70;
         }
-        .add-snippet-button {
-            font-size: 12px;
-            padding: 6px 12px;
-        }
-        .empty-label {
-            color: #888888;
-            font-size: 16px;
+        .delete-button:hover {
+            color: #f38ba8;
         }
 
-        /* Snippet name */
-        .snippet-name {
-            color: #e0e0e0;
+        /* ── Header action buttons ──────────────── */
+        .clear-button {
+            font-size: 11px;
+            padding: 3px 10px;
+            min-height: 22px;
+            border-radius: 6px;
+        }
+        .add-snippet-button {
+            font-size: 11px;
+            padding: 3px 10px;
+            min-height: 22px;
+            border-radius: 6px;
+        }
+        .gear-button {
+            background-color: #313147;
+            background-image: none;
+            border: 1px solid #45475a;
+            border-radius: 6px;
+            color: #a6adc8;
+            padding: 2px 6px;
+            min-height: 22px;
+            min-width: 22px;
             font-size: 13px;
+        }
+        .gear-button:hover {
+            background-color: #3b3b55;
+            background-image: none;
+            color: #cdd6f4;
+        }
+
+        /* ── Empty state ────────────────────────── */
+        .empty-label {
+            color: #6c7086;
+            font-size: 14px;
+        }
+
+        /* ── Snippet name ───────────────────────── */
+        .snippet-name {
+            color: #cdd6f4;
+            font-size: 12px;
             font-weight: bold;
         }
 
-        /* Settings panel */
+        /* ── Settings panel ─────────────────────── */
         .settings-panel {
-            background-color: #383838;
-            padding: 8px 12px;
-            border-bottom: 1px solid #555555;
+            background-color: #252536;
+            padding: 6px 12px;
+            border-bottom: 1px solid #313147;
         }
         .settings-label {
-            color: #cccccc;
-            font-size: 12px;
-        }
-        .settings-panel scale trough {
-            background-color: #555555;
-            min-height: 6px;
-            border-radius: 3px;
-        }
-        .settings-panel scale highlight {
-            background-color: #3584e4;
-            min-height: 6px;
-            border-radius: 3px;
-        }
-        .settings-panel scale slider {
-            background-color: #ffffff;
-            min-height: 16px;
-            min-width: 16px;
-            border-radius: 8px;
-        }
-        .settings-panel scale value {
-            color: #cccccc;
+            color: #a6adc8;
             font-size: 11px;
         }
-        .gear-button {
-            background-color: #4a4a4a;
-            background-image: none;
-            border: none;
-            border-radius: 6px;
-            color: #cccccc;
-            padding: 4px 8px;
-            min-height: 24px;
-            min-width: 24px;
-            font-size: 14px;
+        .settings-panel scale trough {
+            background-color: #45475a;
+            min-height: 4px;
+            border-radius: 2px;
         }
-        .gear-button:hover {
-            background-color: #555555;
-            background-image: none;
-            color: #ffffff;
+        .settings-panel scale highlight {
+            background-color: #89b4fa;
+            min-height: 4px;
+            border-radius: 2px;
+        }
+        .settings-panel scale slider {
+            background-color: #cdd6f4;
+            min-height: 14px;
+            min-width: 14px;
+            border-radius: 7px;
+        }
+        .settings-panel scale value {
+            color: #a6adc8;
+            font-size: 10px;
         }
         """
         provider = Gtk.CssProvider()
@@ -243,14 +265,11 @@ class ClipmanWindow(Gtk.Window):
         self.add(main_box)
 
         # Header: search + count + action button
-        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         header_box.get_style_context().add_class("clipman-header")
-        header_box.set_margin_start(4)
-        header_box.set_margin_end(4)
-        header_box.set_margin_top(4)
 
         self.search_entry = Gtk.SearchEntry()
-        self.search_entry.set_placeholder_text("Search clipboard history...")
+        self.search_entry.set_placeholder_text("Search...")
         self.search_entry.get_style_context().add_class("clipman-search")
         self.search_entry.set_hexpand(True)
         self.search_entry.connect("search-changed", self._on_search_changed)
@@ -300,7 +319,7 @@ class ClipmanWindow(Gtk.Window):
 
         # Settings panel (hidden by default)
         self.settings_panel = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=12
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=8
         )
         self.settings_panel.get_style_context().add_class("settings-panel")
         self.settings_panel.set_no_show_all(True)
@@ -467,9 +486,7 @@ class ClipmanWindow(Gtk.Window):
         row.entry_data = entry
         row.get_style_context().add_class("clip-row")
 
-        outer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        outer_box.set_margin_top(2)
-        outer_box.set_margin_bottom(2)
+        outer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
 
         # Content area (clickable)
         content_event = Gtk.EventBox()
@@ -477,10 +494,10 @@ class ClipmanWindow(Gtk.Window):
         content_event.connect("button-press-event", self._on_entry_click, entry)
         content_event.set_tooltip_text("Click to paste")
 
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
 
         # Type badge + time + char count
-        meta_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        meta_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         type_label = Gtk.Label(label=entry["content_type"].upper())
         type_label.get_style_context().add_class("clip-type-badge")
         type_label.set_halign(Gtk.Align.START)
@@ -519,7 +536,7 @@ class ClipmanWindow(Gtk.Window):
         elif entry["content_type"] == "image" and entry["image_path"]:
             try:
                 pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                    entry["image_path"], 64, 64, True
+                    entry["image_path"], 48, 48, True
                 )
                 image = Gtk.Image.new_from_pixbuf(pixbuf)
                 image.set_halign(Gtk.Align.START)
@@ -565,9 +582,7 @@ class ClipmanWindow(Gtk.Window):
         row.snippet_data = snippet
         row.get_style_context().add_class("clip-row")
 
-        outer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        outer_box.set_margin_top(2)
-        outer_box.set_margin_bottom(2)
+        outer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
 
         # Content area (clickable)
         content_event = Gtk.EventBox()
@@ -577,7 +592,7 @@ class ClipmanWindow(Gtk.Window):
         )
         content_event.set_tooltip_text("Click to paste")
 
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
 
         name_label = Gtk.Label(label=snippet["name"])
         name_label.get_style_context().add_class("snippet-name")
