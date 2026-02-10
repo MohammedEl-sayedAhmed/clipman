@@ -3,15 +3,23 @@ set -e
 
 AUTOSTART_DIR="$HOME/.config/autostart"
 DATA_DIR="$HOME/.local/share/clipman"
+EXTENSION_UUID="clipman@clipman.com"
+EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
 
 echo "=== Uninstalling Clipman ==="
 
-# Step 1: Remove autostart entry
-echo "[1/3] Removing autostart entry..."
+# Step 1: Remove GNOME Shell extension
+echo "[1/4] Removing GNOME Shell clipboard extension..."
+gnome-extensions disable "$EXTENSION_UUID" 2>/dev/null || true
+rm -rf "$EXTENSION_DIR"
+echo "  Extension removed."
+
+# Step 2: Remove autostart entry
+echo "[2/4] Removing autostart entry..."
 rm -f "$AUTOSTART_DIR/com.clipman.Clipman.desktop"
 
-# Step 2: Remove keybinding
-echo "[2/3] Removing keyboard shortcut..."
+# Step 3: Remove keybinding
+echo "[3/4] Removing keyboard shortcut..."
 CUSTOM_KEYS_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"
 CLIPMAN_KEY_PATH="$CUSTOM_KEYS_PATH/clipman/"
 
@@ -36,7 +44,7 @@ else
     echo "  No keybinding found."
 fi
 
-# Step 3: Remove data (ask first)
+# Step 4: Remove data (ask first)
 echo ""
 read -p "Remove clipboard history data ($DATA_DIR)? [y/N] " -n 1 -r
 echo
