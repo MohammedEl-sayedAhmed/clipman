@@ -401,6 +401,21 @@ class TestClipboardDB(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["name"], "Percent")
 
+    # ── Settings ──────────────────────────────────────────────────
+
+    def test_get_setting_default(self):
+        self.assertIsNone(self.db.get_setting("nonexistent"))
+        self.assertEqual(self.db.get_setting("nonexistent", "fallback"), "fallback")
+
+    def test_set_and_get_setting(self):
+        self.db.set_setting("opacity", "0.85")
+        self.assertEqual(self.db.get_setting("opacity"), "0.85")
+
+    def test_set_setting_overwrites(self):
+        self.db.set_setting("opacity", "0.9")
+        self.db.set_setting("opacity", "0.7")
+        self.assertEqual(self.db.get_setting("opacity"), "0.7")
+
 
 if __name__ == "__main__":
     unittest.main()

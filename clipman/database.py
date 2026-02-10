@@ -59,6 +59,12 @@ class ClipboardDB:
                 created_at REAL NOT NULL
             )
         """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            )
+        """)
         self.conn.commit()
 
     def add_entry(self, content_type: str, content_text: str = None,
@@ -243,6 +249,21 @@ class ClipboardDB:
             (f"%{escaped}%", f"%{escaped}%", limit)
         ).fetchall()
         return [dict(r) for r in rows]
+
+    # --- Settings ---
+
+    def get_setting(self, key: str, default: str = None) -> str:
+        row = self.conn.execute(
+            "SELECT value FROM settings WHERE key = ?", (key,)
+        ).fetchone()
+        return row["value"] if row else default
+
+    def set_setting(self, key: str, value: str):
+        self.conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
+            (key, value)
+        )
+        self.conn.commit()
 
     def close(self):
         self.conn.close()

@@ -9,7 +9,7 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Pango
 
 
-WINDOW_OPACITY = 0.95
+DEFAULT_OPACITY = 0.95
 
 
 class ClipmanWindow(Gtk.Window):
@@ -29,7 +29,10 @@ class ClipmanWindow(Gtk.Window):
         self.set_keep_above(True)
         self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
         self.set_skip_taskbar_hint(True)
-        self.set_opacity(WINDOW_OPACITY)
+
+        saved = self.db.get_setting("opacity", str(DEFAULT_OPACITY))
+        self._opacity = max(0.3, min(1.0, float(saved)))
+        self.set_opacity(self._opacity)
 
         self._apply_css()
         self._build_ui()
@@ -176,6 +179,28 @@ class ClipmanWindow(Gtk.Window):
             font-size: 13px;
             font-weight: bold;
         }
+
+        /* Settings panel */
+        .settings-panel {
+            background-color: #383838;
+            padding: 8px 12px;
+            border-bottom: 1px solid #555555;
+        }
+        .settings-label {
+            color: #cccccc;
+            font-size: 12px;
+        }
+        .gear-button {
+            background: none;
+            border: none;
+            color: #888888;
+            padding: 4px;
+            min-height: 24px;
+            min-width: 24px;
+        }
+        .gear-button:hover {
+            color: #e0e0e0;
+        }
         """
         provider = Gtk.CssProvider()
         provider.load_from_data(css)
@@ -225,6 +250,12 @@ class ClipmanWindow(Gtk.Window):
         self.add_snippet_btn.set_no_show_all(True)
         header_box.pack_end(self.add_snippet_btn, False, False, 0)
 
+        gear_btn = Gtk.Button(label="\u2699")
+        gear_btn.get_style_context().add_class("gear-button")
+        gear_btn.set_tooltip_text("Settings")
+        gear_btn.connect("clicked", self._on_gear_clicked)
+        header_box.pack_end(gear_btn, False, False, 0)
+
         main_box.pack_start(header_box, False, False, 0)
 
         # Filter tabs
@@ -241,6 +272,29 @@ class ClipmanWindow(Gtk.Window):
             filter_box.pack_start(btn, False, False, 0)
             self._filter_buttons[fid] = btn
         main_box.pack_start(filter_box, False, False, 0)
+
+        # Settings panel (hidden by default)
+        self.settings_panel = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=12
+        )
+        self.settings_panel.get_style_context().add_class("settings-panel")
+        self.settings_panel.set_no_show_all(True)
+
+        opacity_label = Gtk.Label(label="Opacity:")
+        opacity_label.get_style_context().add_class("settings-label")
+        self.settings_panel.pack_start(opacity_label, False, False, 0)
+
+        self.opacity_scale = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL, 0.3, 1.0, 0.05
+        )
+        self.opacity_scale.set_value(self._opacity)
+        self.opacity_scale.set_draw_value(True)
+        self.opacity_scale.set_value_pos(Gtk.PositionType.RIGHT)
+        self.opacity_scale.set_hexpand(True)
+        self.opacity_scale.connect("value-changed", self._on_opacity_changed)
+        self.settings_panel.pack_start(self.opacity_scale, True, True, 0)
+
+        main_box.pack_start(self.settings_panel, False, False, 0)
 
         # Scrollable list
         scrolled = Gtk.ScrolledWindow()
@@ -698,6 +752,19 @@ class ClipmanWindow(Gtk.Window):
             )
         self._active_filter = filter_id
         self.refresh()
+
+    # ── Settings ─────────────────────────────────────────────────────
+
+    def _on_gear_clicked(self, button):
+        visible = self.settings_panel.get_visible()
+        self.settings_panel.set_visible(not visible)
+        if not visible:
+            self.settings_panel.show_all()
+
+    def _on_opacity_changed(self, scale):
+        self._opacity = round(scale.get_value(), 2)
+        self.set_opacity(self._opacity)
+        self.db.set_setting("opacity", str(self._opacity))
 
     # ── Snippet dialogs ──────────────────────────────────────────────
 
