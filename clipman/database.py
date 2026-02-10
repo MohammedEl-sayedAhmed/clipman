@@ -12,8 +12,11 @@ MAX_ENTRIES = 500
 
 
 def _ensure_dirs():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    IMAGES_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    # Enforce permissions even if dirs already existed with wrong perms
+    os.chmod(DATA_DIR, 0o700)
+    os.chmod(IMAGES_DIR, 0o700)
 
 
 def content_hash(data: bytes) -> str:
@@ -95,14 +98,23 @@ class ClipboardDB:
         return [dict(r) for r in rows]
 
     def search(self, query: str, limit: int = 50):
+        # Escape LIKE wildcards so user input is treated literally
+        escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
         rows = self.conn.execute(
             """SELECT * FROM entries
-               WHERE content_type = 'text' AND content_text LIKE ?
+               WHERE content_type = 'text' AND content_text LIKE ? ESCAPE '\\'
                ORDER BY pinned DESC, accessed_at DESC
                LIMIT ?""",
-            (f"%{query}%", limit)
+            (f"%{escaped}%", limit)
         ).fetchall()
         return [dict(r) for r in rows]
+
+    def update_accessed(self, entry_id: int):
+        self.conn.execute(
+            "UPDATE entries SET accessed_at = ? WHERE id = ?",
+            (time.time(), entry_id)
+        )
+        self.conn.commit()
 
     def toggle_pin(self, entry_id: int) -> bool:
         row = self.conn.execute(
