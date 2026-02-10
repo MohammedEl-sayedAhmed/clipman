@@ -34,8 +34,7 @@ class ClipmanApp(Gtk.Application):
         # Keep the app running even when the window is hidden
         self.hold()
 
-        self.dbus_service = ClipmanDBusService(self.window, self)
-        self.monitor.start()
+        self.dbus_service = ClipmanDBusService(self.window, self, self.monitor)
 
         # Handle SIGINT/SIGTERM gracefully
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, self._shutdown)
