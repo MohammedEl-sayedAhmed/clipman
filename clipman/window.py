@@ -289,17 +289,15 @@ class ClipmanWindow(Gtk.Window):
             )
             proc.communicate(input=entry["content_text"].encode("utf-8"))
         elif entry["content_type"] == "image" and entry["image_path"]:
-            subprocess.Popen(
-                ["wl-copy", "--type", "image/png"],
-                stdin=open(entry["image_path"], "rb"),
-                stderr=subprocess.DEVNULL
-            )
+            with open(entry["image_path"], "rb") as img_file:
+                proc = subprocess.Popen(
+                    ["wl-copy", "--type", "image/png"],
+                    stdin=img_file,
+                    stderr=subprocess.DEVNULL
+                )
+                proc.wait()
 
-        self.db.conn.execute(
-            "UPDATE entries SET accessed_at = ? WHERE id = ?",
-            (time.time(), entry["id"])
-        )
-        self.db.conn.commit()
+        self.db.update_accessed(entry["id"])
         self.hide()
 
     def _on_pin_click(self, button, entry_id):
