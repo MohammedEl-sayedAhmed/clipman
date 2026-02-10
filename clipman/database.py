@@ -26,6 +26,8 @@ def content_hash(data: bytes) -> str:
 class ClipboardDB:
     def __init__(self):
         _ensure_dirs()
+        # Safe: all DB access happens on the GLib main thread (D-Bus callbacks
+        # and GTK signal handlers both run on the main loop).
         self.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self._create_table()

@@ -68,5 +68,5 @@ class ClipboardMonitor:
                         self.db.add_entry("image", image_data=result.stdout)
                         if self.on_new_entry:
                             self.on_new_entry()
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             pass

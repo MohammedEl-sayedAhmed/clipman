@@ -25,12 +25,12 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 | Feature | Description |
 |---------|-------------|
 | **Text & Image support** | Stores both text and image clipboard entries |
-| **Instant paste** | Click an entry and it pastes directly into the focused app |
+| **Instant paste** | Click an entry to paste it directly into the focused app |
 | **Pin favorites** | Keep important entries permanently — exempt from pruning |
 | **Search** | Instantly filter clipboard history by text content |
 | **Super+V shortcut** | Toggle the popup with a familiar keyboard shortcut |
 | **Autostart** | Runs as a background daemon, starts on login |
-| **Wayland native** | GNOME Shell extension for zero-overhead clipboard detection |
+| **Wayland native** | Zero polling — uses a GNOME Shell extension for flicker-free monitoring |
 | **Lightweight** | Python + GTK3 — no Electron, no heavy frameworks |
 | **Deduplication** | SHA256 hashing prevents duplicate entries |
 | **Auto-pruning** | History capped at 500 entries (pinned entries are exempt) |
@@ -66,7 +66,7 @@ After your next login, the daemon starts automatically.
 | Action | How |
 |--------|-----|
 | Open clipboard history | <kbd>Super</kbd> + <kbd>V</kbd> |
-| Paste an entry | Click on it |
+| Paste an entry | Click on it or navigate with <kbd>Arrow</kbd> keys and press <kbd>Enter</kbd> |
 | Pin / unpin an entry | Click the star icon |
 | Delete an entry | Click the X icon |
 | Search history | Type in the search bar |
@@ -82,26 +82,26 @@ clipman/
 │   ├── app.py                  # GTK Application lifecycle
 │   ├── clipboard_monitor.py    # Event-driven clipboard monitor
 │   ├── database.py             # SQLite storage with dedup/search/pin
-│   ├── dbus_service.py         # D-Bus IPC for toggle + clipboard events
+│   ├── dbus_service.py         # D-Bus IPC for toggle and clipboard events
 │   └── window.py               # GTK3 popup window UI
 ├── extension/
-│   ├── extension.js            # GNOME Shell extension (clipboard detection + paste simulation)
+│   ├── extension.js            # GNOME Shell extension (clipboard detection)
 │   └── metadata.json           # Extension metadata
 ├── data/
 │   └── com.clipman.Clipman.desktop
-├── launcher.sh                 # Snap-aware launcher script
+├── launcher.sh                 # Environment wrapper for snap terminals
 ├── install.sh
 └── uninstall.sh
 ```
 
 ### How it works
 
-1. A **GNOME Shell extension** listens for clipboard changes natively via `Meta.Selection`'s `owner-changed` signal — zero polling, zero subprocess overhead
-2. When a clipboard change is detected, the extension reads the content and sends it to the daemon over **D-Bus**
-3. The **daemon** stores entries in an **SQLite database** at `~/.local/share/clipman/`
+1. A **GNOME Shell extension** detects clipboard changes natively via `Meta.Selection`'s `owner-changed` signal — no polling, no subprocesses, no screen flicker
+2. The extension reads the clipboard content and sends it to the **daemon** over **D-Bus**
+3. The daemon stores entries in an **SQLite database** at `~/.local/share/clipman/`
 4. Duplicates are detected via **SHA256 hashing** — copying the same content just updates the timestamp
-5. Pressing **Super+V** sends a D-Bus call to the running daemon, toggling the popup window
-6. Clicking an entry copies it to the clipboard via `wl-copy`, hides the popup, and **auto-pastes** into the previously focused app using the extension's virtual keyboard
+5. Pressing **Super+V** sends a **D-Bus toggle** to the daemon, showing the popup window
+6. Clicking an entry copies it via `wl-copy`, hides the popup, and the extension simulates **Ctrl+V** using a Clutter virtual keyboard to paste it into the focused app
 
 ## Uninstall
 
@@ -109,7 +109,7 @@ clipman/
 ./uninstall.sh
 ```
 
-This removes the extension, keybinding, autostart entry, and optionally your clipboard history data.
+This removes the GNOME Shell extension, keybinding, autostart entry, and optionally your clipboard history data.
 
 ## License
 
