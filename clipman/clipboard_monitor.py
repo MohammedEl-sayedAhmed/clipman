@@ -1,6 +1,6 @@
 import subprocess
-import threading
 import hashlib
+import threading
 import gi
 
 gi.require_version("GLib", "2.0")
@@ -9,63 +9,44 @@ from gi.repository import GLib
 
 MAX_TEXT_SIZE = 10 * 1024 * 1024   # 10 MB
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+POLL_INTERVAL_SEC = 1.5  # Poll clipboard every 1.5 seconds
 
 
 class ClipboardMonitor:
     def __init__(self, db, on_new_entry=None):
         self.db = db
         self.on_new_entry = on_new_entry
-        self._process = None
-        self._thread = None
-        self._running = False
         self._last_hash = None
         self._self_copy = False
+        self._running = False
+        self._thread = None
 
     def start(self):
         self._running = True
-        self._thread = threading.Thread(target=self._watch_loop, daemon=True)
+        self._thread = threading.Thread(target=self._poll_loop, daemon=True)
         self._thread.start()
 
     def stop(self):
         self._running = False
-        if self._process:
-            try:
-                self._process.terminate()
-                self._process.wait(timeout=2)
-            except Exception:
-                try:
-                    self._process.kill()
-                except Exception:
-                    pass
-        self._process = None
 
     def set_self_copy(self, val: bool):
         self._self_copy = val
 
-    def _watch_loop(self):
+    def _poll_loop(self):
+        """Runs in background thread. Polls wl-paste without blocking GTK."""
         while self._running:
-            try:
-                self._process = subprocess.Popen(
-                    ["wl-paste", "--watch", "echo", "CLIP_CHANGED"],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                )
-                for line in self._process.stdout:
-                    if not self._running:
-                        break
-                    decoded = line.decode("utf-8", errors="replace").strip()
-                    if decoded == "CLIP_CHANGED":
-                        if self._self_copy:
-                            self._self_copy = False
-                            continue
-                        self._handle_clip_change()
-                self._process.wait()
-            except Exception:
-                if self._running:
-                    import time
-                    time.sleep(1)
+            if self._self_copy:
+                self._self_copy = False
+            else:
+                self._check_clipboard()
 
-    def _handle_clip_change(self):
+            # Sleep in small increments so stop() is responsive
+            elapsed = 0.0
+            while elapsed < POLL_INTERVAL_SEC and self._running:
+                threading.Event().wait(0.1)
+                elapsed += 0.1
+
+    def _check_clipboard(self):
         # Try text first
         try:
             result = subprocess.run(
@@ -73,14 +54,13 @@ class ClipboardMonitor:
                 capture_output=True, timeout=2
             )
             if result.returncode == 0 and result.stdout:
-                if len(result.stdout) > MAX_TEXT_SIZE:
-                    return  # Skip oversized text
-                text = result.stdout.decode("utf-8", errors="replace")
-                h = hashlib.sha256(text.encode("utf-8")).hexdigest()
-                if h == self._last_hash:
-                    return
-                self._last_hash = h
-                GLib.idle_add(self._add_text_entry, text)
+                if len(result.stdout) <= MAX_TEXT_SIZE:
+                    text = result.stdout.decode("utf-8", errors="replace")
+                    h = hashlib.sha256(text.encode("utf-8")).hexdigest()
+                    if h != self._last_hash:
+                        self._last_hash = h
+                        # Dispatch DB write and callback to main thread
+                        GLib.idle_add(self._handle_new_text, text)
                 return
         except Exception:
             pass
@@ -92,25 +72,25 @@ class ClipboardMonitor:
                 capture_output=True, timeout=5
             )
             if result.returncode == 0 and result.stdout:
-                if len(result.stdout) > MAX_IMAGE_SIZE:
-                    return  # Skip oversized image
-                h = hashlib.sha256(result.stdout).hexdigest()
-                if h == self._last_hash:
-                    return
-                self._last_hash = h
-                GLib.idle_add(self._add_image_entry, result.stdout)
-                return
+                if len(result.stdout) <= MAX_IMAGE_SIZE:
+                    h = hashlib.sha256(result.stdout).hexdigest()
+                    if h != self._last_hash:
+                        self._last_hash = h
+                        image_data = result.stdout
+                        GLib.idle_add(self._handle_new_image, image_data)
         except Exception:
             pass
 
-    def _add_text_entry(self, text):
+    def _handle_new_text(self, text):
+        """Called on GTK main thread via GLib.idle_add."""
         self.db.add_entry("text", content_text=text)
         if self.on_new_entry:
             self.on_new_entry()
-        return False  # Remove from idle
+        return False  # Don't repeat
 
-    def _add_image_entry(self, data):
-        self.db.add_entry("image", image_data=data)
+    def _handle_new_image(self, image_data):
+        """Called on GTK main thread via GLib.idle_add."""
+        self.db.add_entry("image", image_data=image_data)
         if self.on_new_entry:
             self.on_new_entry()
-        return False
+        return False  # Don't repeat
