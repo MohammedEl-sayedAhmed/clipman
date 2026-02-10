@@ -191,15 +191,20 @@ class ClipmanWindow(Gtk.Window):
             font-size: 12px;
         }
         .gear-button {
-            background: none;
+            background-color: #4a4a4a;
+            background-image: none;
             border: none;
-            color: #888888;
-            padding: 4px;
+            border-radius: 6px;
+            color: #cccccc;
+            padding: 4px 8px;
             min-height: 24px;
             min-width: 24px;
+            font-size: 14px;
         }
         .gear-button:hover {
-            color: #e0e0e0;
+            background-color: #555555;
+            background-image: none;
+            color: #ffffff;
         }
         """
         provider = Gtk.CssProvider()
