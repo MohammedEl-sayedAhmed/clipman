@@ -51,6 +51,14 @@ class ClipboardDB:
         self.conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_content_hash ON entries(content_hash)
         """)
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS snippets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                content_text TEXT NOT NULL,
+                created_at REAL NOT NULL
+            )
+        """)
         self.conn.commit()
 
     def add_entry(self, content_type: str, content_text: str = None,
@@ -90,14 +98,35 @@ class ClipboardDB:
         self.enforce_max_entries()
         return cursor.lastrowid
 
-    def get_entries(self, limit: int = 50, offset: int = 0):
-        rows = self.conn.execute(
-            """SELECT * FROM entries
-               ORDER BY pinned DESC, accessed_at DESC
-               LIMIT ? OFFSET ?""",
-            (limit, offset)
-        ).fetchall()
+    def get_entries(self, limit: int = 50, offset: int = 0,
+                    content_type: str = None):
+        if content_type:
+            rows = self.conn.execute(
+                """SELECT * FROM entries WHERE content_type = ?
+                   ORDER BY pinned DESC, accessed_at DESC
+                   LIMIT ? OFFSET ?""",
+                (content_type, limit, offset)
+            ).fetchall()
+        else:
+            rows = self.conn.execute(
+                """SELECT * FROM entries
+                   ORDER BY pinned DESC, accessed_at DESC
+                   LIMIT ? OFFSET ?""",
+                (limit, offset)
+            ).fetchall()
         return [dict(r) for r in rows]
+
+    def count_entries(self, content_type: str = None) -> int:
+        if content_type:
+            row = self.conn.execute(
+                "SELECT COUNT(*) as cnt FROM entries WHERE content_type = ?",
+                (content_type,)
+            ).fetchone()
+        else:
+            row = self.conn.execute(
+                "SELECT COUNT(*) as cnt FROM entries"
+            ).fetchone()
+        return row["cnt"]
 
     def search(self, query: str, limit: int = 50):
         # Escape LIKE wildcards so user input is treated literally
@@ -177,6 +206,43 @@ class ClipboardDB:
                     pass
             self.conn.execute("DELETE FROM entries WHERE id = ?", (row["id"],))
         self.conn.commit()
+
+    # --- Snippets ---
+
+    def add_snippet(self, name: str, content_text: str) -> int:
+        cursor = self.conn.execute(
+            "INSERT INTO snippets (name, content_text, created_at) VALUES (?, ?, ?)",
+            (name, content_text, time.time())
+        )
+        self.conn.commit()
+        return cursor.lastrowid
+
+    def get_snippets(self):
+        rows = self.conn.execute(
+            "SELECT * FROM snippets ORDER BY created_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_snippet(self, snippet_id: int, name: str, content_text: str):
+        self.conn.execute(
+            "UPDATE snippets SET name = ?, content_text = ? WHERE id = ?",
+            (name, content_text, snippet_id)
+        )
+        self.conn.commit()
+
+    def delete_snippet(self, snippet_id: int):
+        self.conn.execute("DELETE FROM snippets WHERE id = ?", (snippet_id,))
+        self.conn.commit()
+
+    def search_snippets(self, query: str, limit: int = 50):
+        escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        rows = self.conn.execute(
+            """SELECT * FROM snippets
+               WHERE name LIKE ? ESCAPE '\\' OR content_text LIKE ? ESCAPE '\\'
+               ORDER BY created_at DESC LIMIT ?""",
+            (f"%{escaped}%", f"%{escaped}%", limit)
+        ).fetchall()
+        return [dict(r) for r in rows]
 
     def close(self):
         self.conn.close()
