@@ -190,6 +190,26 @@ class ClipmanWindow(Gtk.Window):
             color: #cccccc;
             font-size: 12px;
         }
+        .settings-panel scale trough {
+            background-color: #555555;
+            min-height: 6px;
+            border-radius: 3px;
+        }
+        .settings-panel scale highlight {
+            background-color: #3584e4;
+            min-height: 6px;
+            border-radius: 3px;
+        }
+        .settings-panel scale slider {
+            background-color: #ffffff;
+            min-height: 16px;
+            min-width: 16px;
+            border-radius: 8px;
+        }
+        .settings-panel scale value {
+            color: #cccccc;
+            font-size: 11px;
+        }
         .gear-button {
             background-color: #4a4a4a;
             background-image: none;
