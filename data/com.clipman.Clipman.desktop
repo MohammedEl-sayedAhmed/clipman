@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Clipman
+Comment=Clipboard Manager for GNOME/Wayland
+Exec=python3 CLIPMAN_PATH_PLACEHOLDER/clipman.py
+Icon=edit-paste
+Terminal=false
+Categories=Utility;
+X-GNOME-Autostart-enabled=true
+StartupNotify=false
+NoDisplay=true
