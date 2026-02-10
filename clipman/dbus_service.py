@@ -43,14 +43,3 @@ class ClipmanDBusService(dbus.service.Object):
             self.monitor.handle_new_text(content)
         elif content_type == "image":
             self.monitor.handle_new_image()
-
-
-def send_toggle():
-    try:
-        bus = dbus.SessionBus()
-        proxy = bus.get_object(BUS_NAME, OBJ_PATH)
-        iface = dbus.Interface(proxy, IFACE)
-        iface.Toggle()
-        return True
-    except dbus.exceptions.DBusException:
-        return False

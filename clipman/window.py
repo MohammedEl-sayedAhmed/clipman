@@ -191,7 +191,7 @@ class ClipmanWindow(Gtk.Window):
         content_event = Gtk.EventBox()
         content_event.set_hexpand(True)
         content_event.connect("button-press-event", self._on_entry_click, entry)
-        content_event.set_tooltip_text("Click to copy")
+        content_event.set_tooltip_text("Click to paste")
 
         content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
 
