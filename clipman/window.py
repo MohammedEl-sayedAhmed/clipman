@@ -5,7 +5,7 @@ import gi
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
 gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Gtk, Gdk, GdkPixbuf, Pango
+from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Pango
 
 
 class ClipmanWindow(Gtk.Window):
@@ -29,6 +29,7 @@ class ClipmanWindow(Gtk.Window):
 
         self.connect("key-press-event", self._on_key_press)
         self.connect("delete-event", self._on_delete)
+        self.connect("focus-out-event", self._on_focus_out)
 
     def _apply_css(self):
         css = b"""
@@ -294,6 +295,25 @@ class ClipmanWindow(Gtk.Window):
 
         self.db.update_accessed(entry["id"])
         self.hide()
+        GLib.timeout_add(150, self._simulate_paste)
+
+    def _simulate_paste(self):
+        """Ask the GNOME Shell extension to simulate Ctrl+V."""
+        try:
+            import dbus
+            bus = dbus.SessionBus()
+            proxy = bus.get_object(
+                "com.clipman.Extension", "/com/clipman/Extension"
+            )
+            iface = dbus.Interface(proxy, "com.clipman.Extension")
+            iface.SimulatePaste()
+        except Exception:
+            pass
+        return False  # Don't repeat
+
+    def _on_focus_out(self, widget, event):
+        self.hide()
+        return False
 
     def _on_pin_click(self, button, entry_id):
         self.db.toggle_pin(entry_id)
