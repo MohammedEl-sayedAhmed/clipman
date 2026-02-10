@@ -45,9 +45,9 @@ else
 fi
 
 # Set the keybinding properties
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CLIPMAN_KEY_PATH name "Clipman Toggle"
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CLIPMAN_KEY_PATH command "python3 $CLIPMAN_PY toggle"
-gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CLIPMAN_KEY_PATH binding "<Super>v"
+gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${CLIPMAN_KEY_PATH}" name "Clipman Toggle"
+gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${CLIPMAN_KEY_PATH}" command "python3 $CLIPMAN_PY toggle"
+gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${CLIPMAN_KEY_PATH}" binding "<Super>v"
 
 echo ""
 echo "=== Installation Complete ==="

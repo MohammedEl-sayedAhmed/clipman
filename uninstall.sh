@@ -45,8 +45,8 @@ else
     echo "  Data kept."
 fi
 
-# Kill running daemon
-pkill -f "clipman.py" 2>/dev/null || true
+# Kill running daemon (match exact command pattern to avoid killing unrelated processes)
+pkill -f "python3.*clipman\.py$" 2>/dev/null || true
 
 echo ""
 echo "=== Uninstall Complete ==="
