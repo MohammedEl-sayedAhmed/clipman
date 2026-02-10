@@ -9,7 +9,9 @@ gi.require_version("GdkPixbuf", "2.0")
 from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Pango
 
 
-DEFAULT_OPACITY = 0.95
+DEFAULT_OPACITY = 1.0
+DEFAULT_FONT_SIZE = 12
+DEFAULT_MAX_HISTORY = 500
 
 
 class ClipmanWindow(Gtk.Window):
@@ -20,9 +22,10 @@ class ClipmanWindow(Gtk.Window):
         self._search_query = ""
         self._active_filter = "all"
         self._ignore_focus_out = False
+        self._css_provider = None
 
         self.set_title("Clipman")
-        self.set_default_size(400, 520)
+        self.set_default_size(380, 500)
         self.set_position(Gtk.WindowPosition.CENTER)
         self.set_decorated(True)
         self.set_resizable(True)
@@ -30,9 +33,16 @@ class ClipmanWindow(Gtk.Window):
         self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
         self.set_skip_taskbar_hint(True)
 
-        saved = self.db.get_setting("opacity", str(DEFAULT_OPACITY))
-        self._opacity = max(0.3, min(1.0, float(saved)))
+        # Load persisted settings
+        saved_opacity = self.db.get_setting("opacity", str(DEFAULT_OPACITY))
+        self._opacity = max(0.3, min(1.0, float(saved_opacity)))
         self.set_opacity(self._opacity)
+
+        saved_font = self.db.get_setting("font_size", str(DEFAULT_FONT_SIZE))
+        self._font_size = max(8, min(20, int(float(saved_font))))
+
+        saved_max = self.db.get_setting("max_entries", str(DEFAULT_MAX_HISTORY))
+        self._max_history = max(50, min(5000, int(float(saved_max))))
 
         self._apply_css()
         self._build_ui()
@@ -41,222 +51,358 @@ class ClipmanWindow(Gtk.Window):
         self.connect("delete-event", self._on_delete)
         self.connect("focus-out-event", self._on_focus_out)
 
-    # ── CSS ──────────────────────────────────────────────────────────
-
     def _apply_css(self):
-        css = """
-        .clipman-window {
-            background-color: #1e1e2e;
+        fs = self._font_size
+        css = f"""
+        /* Base window */
+        .clipman-window {{
+            background-color: #181825;
             border-radius: 12px;
-        }
+        }}
 
-        /* ── Header ─────────────────────────────── */
-        .clipman-header {
-            background-color: #252536;
-            border-radius: 12px 12px 0 0;
-            padding: 6px 8px;
-        }
-        .clipman-search {
-            background-color: #313147;
+        /* Title bar (CSD headerbar) */
+        .clipman-window headerbar {{
+            background-color: #181825;
+            background-image: none;
             color: #cdd6f4;
-            border: 1px solid #45475a;
-            border-radius: 8px;
-            padding: 6px 10px;
-            font-size: 13px;
-        }
-        .clipman-search:focus {
-            border-color: #89b4fa;
-        }
-        .count-label {
-            color: #585b70;
-            font-size: 10px;
-        }
-
-        /* ── Filter tabs ────────────────────────── */
-        .filter-bar {
-            background-color: #1e1e2e;
-            padding: 4px 8px 2px 8px;
-        }
-        .filter-tab {
-            background-color: transparent;
-            background-image: none;
-            border: 1px solid transparent;
-            border-radius: 6px;
-            color: #6c7086;
-            font-size: 11px;
-            padding: 2px 10px;
-            min-height: 22px;
-            margin: 0 2px;
-        }
-        .filter-tab:hover {
-            color: #bac2de;
-            background-color: #313147;
-            background-image: none;
-        }
-        .filter-tab-active {
-            background-color: #313147;
-            background-image: none;
-            border: 1px solid #45475a;
-            border-radius: 6px;
-            color: #89b4fa;
-            font-size: 11px;
-            font-weight: bold;
-            padding: 2px 10px;
-            min-height: 22px;
-            margin: 0 2px;
-        }
-
-        /* ── Rows ───────────────────────────────── */
-        .clip-row {
-            background-color: #252536;
-            border-radius: 8px;
-            padding: 6px 10px;
-            margin: 1px 4px;
-        }
-        .clip-row:hover {
-            background-color: #2e2e42;
-        }
-        row:selected .clip-row {
-            background-color: #1e3a5f;
-            border-left: 2px solid #89b4fa;
-        }
-        .clip-text {
+            border-bottom: 1px solid #313244;
+            min-height: 28px;
+            padding: 2px 6px;
+        }}
+        .clipman-window headerbar .title {{
             color: #cdd6f4;
             font-size: 12px;
-        }
-        .clip-time {
-            color: #6c7086;
-            font-size: 10px;
-        }
-        .clip-chars {
-            color: #585b70;
-            font-size: 9px;
-        }
-        .clip-type-badge {
-            color: #89b4fa;
-            font-size: 9px;
             font-weight: bold;
-        }
-
-        /* ── Section headers ────────────────────── */
-        .section-header {
+        }}
+        .clipman-window headerbar button {{
+            background-color: transparent;
+            background-image: none;
             color: #6c7086;
+            border: none;
+            min-height: 20px;
+            min-width: 20px;
+            padding: 2px;
+        }}
+        .clipman-window headerbar button:hover {{
+            background-color: #313244;
+            background-image: none;
+            color: #cdd6f4;
+            border-radius: 4px;
+        }}
+
+        /* Search bar */
+        .clipman-header {{
+            background-color: #1e1e2e;
+            padding: 6px 8px;
+        }}
+        .clipman-search {{
+            background-color: #313244;
+            color: #cdd6f4;
+            border: 1px solid #45475a;
+            border-radius: 8px;
+            padding: 4px 8px;
+            font-size: {fs}px;
+            min-height: 0;
+        }}
+        .clipman-search:focus {{
+            border-color: #89b4fa;
+        }}
+
+        /* Gear button */
+        .gear-button {{
+            background-color: transparent;
+            background-image: none;
+            border: none;
+            border-radius: 6px;
+            color: #6c7086;
+            padding: 2px 4px;
+            min-height: 20px;
+            min-width: 20px;
+            font-size: 13px;
+        }}
+        .gear-button:hover {{
+            background-color: #313244;
+            background-image: none;
+            color: #cdd6f4;
+        }}
+
+        /* Filter tabs */
+        .filter-bar {{
+            background-color: #1e1e2e;
+            padding: 2px 8px 4px 8px;
+        }}
+        .filter-tab {{
+            background-color: transparent;
+            background-image: none;
+            border: none;
+            border-radius: 12px;
+            color: #585b70;
+            font-size: 11px;
+            padding: 1px 10px;
+            min-height: 20px;
+            margin: 0 1px;
+        }}
+        .filter-tab:hover {{
+            color: #a6adc8;
+            background-color: #313244;
+            background-image: none;
+        }}
+        .filter-tab-active {{
+            background-color: #313244;
+            background-image: none;
+            border: none;
+            border-radius: 12px;
+            color: #89b4fa;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 1px 10px;
+            min-height: 20px;
+            margin: 0 1px;
+        }}
+
+        /* Settings panel */
+        .settings-panel {{
+            background-color: #1e1e2e;
+            padding: 8px 12px;
+            border-top: 1px solid #313244;
+            border-bottom: 1px solid #313244;
+        }}
+        .settings-title {{
+            color: #89b4fa;
             font-size: 10px;
             font-weight: bold;
             letter-spacing: 1px;
-            padding: 6px 10px 2px 10px;
-        }
+        }}
+        .settings-label {{
+            color: #a6adc8;
+            font-size: 11px;
+            min-width: 80px;
+        }}
+        .settings-value {{
+            color: #585b70;
+            font-size: 10px;
+            min-width: 32px;
+        }}
+        .settings-panel scale trough {{
+            background-color: #45475a;
+            min-height: 4px;
+            border-radius: 2px;
+        }}
+        .settings-panel scale highlight {{
+            background-color: #89b4fa;
+            min-height: 4px;
+            border-radius: 2px;
+        }}
+        .settings-panel scale slider {{
+            background-color: #cdd6f4;
+            min-height: 12px;
+            min-width: 12px;
+            border-radius: 6px;
+        }}
 
-        /* ── Row action buttons ─────────────────── */
-        .pin-button, .delete-button, .edit-button {
+        /* Section headers */
+        .section-header {{
+            color: #585b70;
+            font-size: 9px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            padding: 6px 12px 2px 12px;
+        }}
+
+        /* Clipboard entry rows */
+        .clip-row {{
+            background-color: #1e1e2e;
+            border-radius: 6px;
+            padding: 5px 10px;
+            margin: 1px 4px;
+        }}
+        .clip-row:hover {{
+            background-color: #252536;
+        }}
+        row:selected .clip-row {{
+            background-color: #1e3a5f;
+            border-left: 2px solid #89b4fa;
+        }}
+        .clip-text {{
+            color: #cdd6f4;
+            font-size: {fs}px;
+        }}
+        .clip-time {{
+            color: #585b70;
+            font-size: 9px;
+        }}
+        .clip-chars {{
+            color: #45475a;
+            font-size: 9px;
+        }}
+        .clip-type-badge {{
+            color: #89b4fa;
+            font-size: 8px;
+            font-weight: bold;
+        }}
+
+        /* Row action buttons */
+        .pin-button, .delete-button, .edit-button {{
             background: none;
             background-image: none;
             border: none;
             padding: 0;
-            min-height: 18px;
-            min-width: 18px;
-            font-size: 12px;
-        }
-        .pin-button:hover, .delete-button:hover, .edit-button:hover {
-            background-color: rgba(255, 255, 255, 0.08);
+            min-height: 16px;
+            min-width: 16px;
+            font-size: 11px;
+        }}
+        .pin-button:hover, .delete-button:hover, .edit-button:hover {{
+            background-color: rgba(255, 255, 255, 0.06);
             background-image: none;
             border-radius: 4px;
-        }
-        .pinned {
+        }}
+        .pinned {{
             color: #f9e2af;
-        }
-        .unpinned {
-            color: #585b70;
-        }
-        .delete-button {
-            color: #585b70;
-        }
-        .delete-button:hover {
+        }}
+        .unpinned {{
+            color: #45475a;
+        }}
+        .delete-button {{
+            color: #45475a;
+        }}
+        .delete-button:hover {{
             color: #f38ba8;
-        }
+        }}
 
-        /* ── Header action buttons ──────────────── */
-        .clear-button {
-            font-size: 11px;
-            padding: 3px 10px;
-            min-height: 22px;
-            border-radius: 6px;
-        }
-        .add-snippet-button {
-            font-size: 11px;
-            padding: 3px 10px;
-            min-height: 22px;
-            border-radius: 6px;
-        }
-        .gear-button {
-            background-color: #313147;
+        /* Snippet name */
+        .snippet-name {{
+            color: #cdd6f4;
+            font-size: {fs}px;
+            font-weight: bold;
+        }}
+
+        /* Empty state */
+        .empty-label {{
+            color: #585b70;
+            font-size: 13px;
+        }}
+
+        /* Bottom status bar */
+        .status-bar {{
+            background-color: #1e1e2e;
+            padding: 4px 10px;
+            border-top: 1px solid #313244;
+        }}
+        .status-count {{
+            color: #585b70;
+            font-size: 10px;
+        }}
+        .action-button {{
+            background-color: transparent;
             background-image: none;
             border: 1px solid #45475a;
             border-radius: 6px;
             color: #a6adc8;
-            padding: 2px 6px;
-            min-height: 22px;
-            min-width: 22px;
-            font-size: 13px;
-        }
-        .gear-button:hover {
-            background-color: #3b3b55;
+            font-size: 10px;
+            padding: 1px 8px;
+            min-height: 18px;
+        }}
+        .action-button:hover {{
+            background-color: #313244;
             background-image: none;
             color: #cdd6f4;
-        }
+        }}
+        .action-button-danger {{
+            background-color: transparent;
+            background-image: none;
+            border: 1px solid #45475a;
+            border-radius: 6px;
+            color: #f38ba8;
+            font-size: 10px;
+            padding: 1px 8px;
+            min-height: 18px;
+        }}
+        .action-button-danger:hover {{
+            background-color: rgba(243, 139, 168, 0.1);
+            background-image: none;
+            border-color: #f38ba8;
+            color: #f38ba8;
+        }}
 
-        /* ── Empty state ────────────────────────── */
-        .empty-label {
-            color: #6c7086;
-            font-size: 14px;
-        }
-
-        /* ── Snippet name ───────────────────────── */
-        .snippet-name {
-            color: #cdd6f4;
+        /* Snippet dialog */
+        .snippet-dialog {{
+            background-color: #1e1e2e;
+        }}
+        .snippet-dialog-content {{
+            background-color: #1e1e2e;
+        }}
+        .snippet-dialog-label {{
+            color: #a6adc8;
             font-size: 12px;
             font-weight: bold;
-        }
-
-        /* ── Settings panel ─────────────────────── */
-        .settings-panel {
-            background-color: #252536;
-            padding: 6px 12px;
-            border-bottom: 1px solid #313147;
-        }
-        .settings-label {
+        }}
+        .snippet-dialog-entry {{
+            background-color: #313244;
+            color: #cdd6f4;
+            border: 1px solid #45475a;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 12px;
+        }}
+        .snippet-dialog-entry:focus {{
+            border-color: #89b4fa;
+        }}
+        .snippet-dialog-textview {{
+            background-color: #313244;
+            color: #cdd6f4;
+            font-size: 12px;
+            border-radius: 6px;
+        }}
+        .snippet-dialog-textview text {{
+            background-color: #313244;
+            color: #cdd6f4;
+        }}
+        .snippet-dialog .dialog-action-area button {{
+            background-color: #313244;
+            background-image: none;
             color: #a6adc8;
-            font-size: 11px;
-        }
-        .settings-panel scale trough {
+            border: 1px solid #45475a;
+            border-radius: 6px;
+            padding: 4px 14px;
+            font-size: 12px;
+        }}
+        .snippet-dialog .dialog-action-area button:hover {{
             background-color: #45475a;
-            min-height: 4px;
-            border-radius: 2px;
-        }
-        .settings-panel scale highlight {
+            background-image: none;
+            color: #cdd6f4;
+        }}
+        .snippet-dialog .dialog-action-area button:last-child {{
             background-color: #89b4fa;
-            min-height: 4px;
-            border-radius: 2px;
-        }
-        .settings-panel scale slider {
-            background-color: #cdd6f4;
-            min-height: 14px;
-            min-width: 14px;
-            border-radius: 7px;
-        }
-        .settings-panel scale value {
-            color: #a6adc8;
-            font-size: 10px;
-        }
+            background-image: none;
+            color: #1e1e2e;
+            border: none;
+            font-weight: bold;
+        }}
+        .snippet-dialog .dialog-action-area button:last-child:hover {{
+            background-color: #b4d0fb;
+            background-image: none;
+        }}
+        .snippet-dialog headerbar {{
+            background-color: #181825;
+            background-image: none;
+            color: #cdd6f4;
+            border-bottom: 1px solid #313244;
+        }}
+        .snippet-dialog headerbar .title {{
+            color: #cdd6f4;
+        }}
         """
-        provider = Gtk.CssProvider()
-        provider.load_from_data(css.encode("utf-8"))
+        screen = Gdk.Screen.get_default()
+        if self._css_provider:
+            Gtk.StyleContext.remove_provider_for_screen(screen, self._css_provider)
+        self._css_provider = Gtk.CssProvider()
+        self._css_provider.load_from_data(css.encode("utf-8"))
         Gtk.StyleContext.add_provider_for_screen(
-            Gdk.Screen.get_default(), provider,
+            screen, self._css_provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
-    # ── Build UI ─────────────────────────────────────────────────────
+    # -- Build UI ----------------------------------------------------------
 
     def _build_ui(self):
         self.get_style_context().add_class("clipman-window")
@@ -264,45 +410,26 @@ class ClipmanWindow(Gtk.Window):
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(main_box)
 
-        # Header: search + count + action button
-        header_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        header_box.get_style_context().add_class("clipman-header")
+        # -- Header: search + gear -----------------------------------------
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        header.get_style_context().add_class("clipman-header")
 
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_placeholder_text("Search...")
         self.search_entry.get_style_context().add_class("clipman-search")
         self.search_entry.set_hexpand(True)
         self.search_entry.connect("search-changed", self._on_search_changed)
-        header_box.pack_start(self.search_entry, True, True, 0)
-
-        self.count_label = Gtk.Label(label="")
-        self.count_label.get_style_context().add_class("count-label")
-        header_box.pack_start(self.count_label, False, False, 0)
-
-        self.clear_btn = Gtk.Button(label="Clear All")
-        self.clear_btn.get_style_context().add_class("clear-button")
-        self.clear_btn.get_style_context().add_class("destructive-action")
-        self.clear_btn.set_tooltip_text("Clear all unpinned entries")
-        self.clear_btn.connect("clicked", self._on_clear_all)
-        header_box.pack_end(self.clear_btn, False, False, 0)
-
-        self.add_snippet_btn = Gtk.Button(label="+ Add")
-        self.add_snippet_btn.get_style_context().add_class("add-snippet-button")
-        self.add_snippet_btn.get_style_context().add_class("suggested-action")
-        self.add_snippet_btn.set_tooltip_text("Add a new snippet")
-        self.add_snippet_btn.connect("clicked", self._on_add_snippet_clicked)
-        self.add_snippet_btn.set_no_show_all(True)
-        header_box.pack_end(self.add_snippet_btn, False, False, 0)
+        header.pack_start(self.search_entry, True, True, 0)
 
         gear_btn = Gtk.Button(label="\u2699")
         gear_btn.get_style_context().add_class("gear-button")
         gear_btn.set_tooltip_text("Settings")
         gear_btn.connect("clicked", self._on_gear_clicked)
-        header_box.pack_end(gear_btn, False, False, 0)
+        header.pack_end(gear_btn, False, False, 0)
 
-        main_box.pack_start(header_box, False, False, 0)
+        main_box.pack_start(header, False, False, 0)
 
-        # Filter tabs
+        # -- Filter tabs ----------------------------------------------------
         filter_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         filter_box.get_style_context().add_class("filter-bar")
         self._filter_buttons = {}
@@ -317,30 +444,48 @@ class ClipmanWindow(Gtk.Window):
             self._filter_buttons[fid] = btn
         main_box.pack_start(filter_box, False, False, 0)
 
-        # Settings panel (hidden by default)
+        # -- Settings panel (hidden by default) -----------------------------
         self.settings_panel = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=8
+            orientation=Gtk.Orientation.VERTICAL, spacing=4
         )
         self.settings_panel.get_style_context().add_class("settings-panel")
         self.settings_panel.set_no_show_all(True)
 
-        opacity_label = Gtk.Label(label="Opacity:")
-        opacity_label.get_style_context().add_class("settings-label")
-        self.settings_panel.pack_start(opacity_label, False, False, 0)
+        # Title
+        title_label = Gtk.Label(label="SETTINGS")
+        title_label.get_style_context().add_class("settings-title")
+        title_label.set_halign(Gtk.Align.START)
+        self.settings_panel.pack_start(title_label, False, False, 0)
 
-        self.opacity_scale = Gtk.Scale.new_with_range(
-            Gtk.Orientation.HORIZONTAL, 0.3, 1.0, 0.05
+        # Opacity row
+        self._opacity_value_label = Gtk.Label(
+            label=f"{int(self._opacity * 100)}%"
         )
-        self.opacity_scale.set_value(self._opacity)
-        self.opacity_scale.set_draw_value(True)
-        self.opacity_scale.set_value_pos(Gtk.PositionType.RIGHT)
-        self.opacity_scale.set_hexpand(True)
-        self.opacity_scale.connect("value-changed", self._on_opacity_changed)
-        self.settings_panel.pack_start(self.opacity_scale, True, True, 0)
+        self._build_setting_row(
+            self.settings_panel, "Opacity",
+            0.3, 1.0, 0.05, self._opacity,
+            self._on_opacity_changed, self._opacity_value_label
+        )
+
+        # Font size row
+        self._font_value_label = Gtk.Label(label=f"{self._font_size}px")
+        self._build_setting_row(
+            self.settings_panel, "Font size",
+            8, 20, 1, self._font_size,
+            self._on_font_size_changed, self._font_value_label
+        )
+
+        # Max history row
+        self._max_value_label = Gtk.Label(label=str(self._max_history))
+        self._build_setting_row(
+            self.settings_panel, "Max history",
+            50, 5000, 50, self._max_history,
+            self._on_max_history_changed, self._max_value_label
+        )
 
         main_box.pack_start(self.settings_panel, False, False, 0)
 
-        # Scrollable list
+        # -- Scrollable list ------------------------------------------------
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled.set_vexpand(True)
@@ -353,7 +498,7 @@ class ClipmanWindow(Gtk.Window):
 
         main_box.pack_start(scrolled, True, True, 0)
 
-        # Empty state
+        # -- Empty state label ----------------------------------------------
         self.empty_label = Gtk.Label(
             label="No clipboard entries yet.\nCopy something to get started!"
         )
@@ -363,13 +508,62 @@ class ClipmanWindow(Gtk.Window):
         self.empty_label.set_vexpand(True)
         main_box.pack_start(self.empty_label, True, True, 0)
 
-    # ── Refresh ──────────────────────────────────────────────────────
+        # -- Bottom status bar ----------------------------------------------
+        self.status_bar = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=6
+        )
+        self.status_bar.get_style_context().add_class("status-bar")
+
+        self.count_label = Gtk.Label(label="")
+        self.count_label.get_style_context().add_class("status-count")
+        self.count_label.set_halign(Gtk.Align.START)
+        self.status_bar.pack_start(self.count_label, True, True, 0)
+
+        self.clear_btn = Gtk.Button(label="Clear All")
+        self.clear_btn.get_style_context().add_class("action-button-danger")
+        self.clear_btn.set_tooltip_text("Clear all unpinned entries")
+        self.clear_btn.connect("clicked", self._on_clear_all)
+        self.status_bar.pack_end(self.clear_btn, False, False, 0)
+
+        self.add_snippet_btn = Gtk.Button(label="+ Add")
+        self.add_snippet_btn.get_style_context().add_class("action-button")
+        self.add_snippet_btn.set_tooltip_text("Add a new snippet")
+        self.add_snippet_btn.connect("clicked", self._on_add_snippet_clicked)
+        self.add_snippet_btn.set_no_show_all(True)
+        self.status_bar.pack_end(self.add_snippet_btn, False, False, 0)
+
+        main_box.pack_end(self.status_bar, False, False, 0)
+
+    def _build_setting_row(self, parent, label_text, min_val, max_val, step,
+                           current, callback, value_label):
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+
+        label = Gtk.Label(label=label_text)
+        label.get_style_context().add_class("settings-label")
+        label.set_halign(Gtk.Align.START)
+        row.pack_start(label, False, False, 0)
+
+        scale = Gtk.Scale.new_with_range(
+            Gtk.Orientation.HORIZONTAL, min_val, max_val, step
+        )
+        scale.set_value(current)
+        scale.set_draw_value(False)
+        scale.set_hexpand(True)
+        scale.connect("value-changed", callback)
+        row.pack_start(scale, True, True, 0)
+
+        value_label.get_style_context().add_class("settings-value")
+        value_label.set_halign(Gtk.Align.END)
+        row.pack_end(value_label, False, False, 0)
+
+        parent.pack_start(row, False, False, 0)
+
+    # -- Refresh -----------------------------------------------------------
 
     def refresh(self):
         for child in self.listbox.get_children():
             self.listbox.remove(child)
 
-        # Toggle header buttons
         is_snippets = self._active_filter == "snippets"
         self.clear_btn.set_visible(not is_snippets)
         self.add_snippet_btn.set_visible(is_snippets)
@@ -394,7 +588,6 @@ class ClipmanWindow(Gtk.Window):
         else:
             entries = self.db.get_entries(limit=50, content_type=content_type)
 
-        # Update count
         if self._search_query:
             self.count_label.set_text(f"{len(entries)} results")
         else:
@@ -413,17 +606,14 @@ class ClipmanWindow(Gtk.Window):
         self.empty_label.hide()
         self.listbox.get_parent().show()
 
-        # Split pinned / unpinned
         pinned = [e for e in entries if e["pinned"]]
         unpinned = [e for e in entries if not e["pinned"]]
 
-        # Pinned section
         if pinned:
             self.listbox.add(self._create_section_header("PINNED"))
             for entry in pinned:
                 self.listbox.add(self._create_row(entry))
 
-        # Date-grouped unpinned
         if unpinned:
             today = datetime.date.today()
             today_start = datetime.datetime.combine(
@@ -469,7 +659,7 @@ class ClipmanWindow(Gtk.Window):
         for snippet in snippets:
             self.listbox.add(self._create_snippet_row(snippet))
 
-    # ── Row builders ─────────────────────────────────────────────────
+    # -- Row builders ------------------------------------------------------
 
     def _create_section_header(self, text):
         row = Gtk.ListBoxRow()
@@ -488,16 +678,14 @@ class ClipmanWindow(Gtk.Window):
 
         outer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
 
-        # Content area (clickable)
         content_event = Gtk.EventBox()
         content_event.set_hexpand(True)
         content_event.connect("button-press-event", self._on_entry_click, entry)
         content_event.set_tooltip_text("Click to paste")
 
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
 
-        # Type badge + time + char count
-        meta_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        meta_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         type_label = Gtk.Label(label=entry["content_type"].upper())
         type_label.get_style_context().add_class("clip-type-badge")
         type_label.set_halign(Gtk.Align.START)
@@ -519,7 +707,6 @@ class ClipmanWindow(Gtk.Window):
 
         content_box.pack_start(meta_box, False, False, 0)
 
-        # Content preview
         if entry["content_type"] == "text":
             text = entry["content_text"] or ""
             preview = text[:150].replace("\n", " ")
@@ -553,7 +740,6 @@ class ClipmanWindow(Gtk.Window):
         content_event.add(content_box)
         outer_box.pack_start(content_event, True, True, 0)
 
-        # Action buttons
         btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         btn_box.set_valign(Gtk.Align.CENTER)
 
@@ -584,7 +770,6 @@ class ClipmanWindow(Gtk.Window):
 
         outer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
 
-        # Content area (clickable)
         content_event = Gtk.EventBox()
         content_event.set_hexpand(True)
         content_event.connect(
@@ -592,7 +777,7 @@ class ClipmanWindow(Gtk.Window):
         )
         content_event.set_tooltip_text("Click to paste")
 
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
 
         name_label = Gtk.Label(label=snippet["name"])
         name_label.get_style_context().add_class("snippet-name")
@@ -615,7 +800,6 @@ class ClipmanWindow(Gtk.Window):
         content_event.add(content_box)
         outer_box.pack_start(content_event, True, True, 0)
 
-        # Action buttons: edit + delete
         btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         btn_box.set_valign(Gtk.Align.CENTER)
 
@@ -637,7 +821,7 @@ class ClipmanWindow(Gtk.Window):
         row.add(outer_box)
         return row
 
-    # ── Image tooltip ────────────────────────────────────────────────
+    # -- Image tooltip -----------------------------------------------------
 
     def _on_image_tooltip(self, widget, x, y, keyboard_mode, tooltip,
                           image_path):
@@ -650,7 +834,7 @@ class ClipmanWindow(Gtk.Window):
         except (GLib.Error, OSError):
             return False
 
-    # ── Helpers ──────────────────────────────────────────────────────
+    # -- Helpers -----------------------------------------------------------
 
     def _format_time(self, timestamp):
         diff = time.time() - timestamp
@@ -666,10 +850,9 @@ class ClipmanWindow(Gtk.Window):
             days = int(diff / 86400)
             return f"{days}d ago"
 
-    # ── Paste / Copy ─────────────────────────────────────────────────
+    # -- Paste / Copy ------------------------------------------------------
 
     def _paste_entry(self, entry):
-        """Copy entry to clipboard, hide the window, and auto-paste."""
         if self.monitor:
             self.monitor.set_self_copy(True)
 
@@ -692,7 +875,6 @@ class ClipmanWindow(Gtk.Window):
         GLib.timeout_add(150, self._simulate_paste)
 
     def _paste_snippet(self, snippet):
-        """Copy snippet text to clipboard, hide, and auto-paste."""
         if self.monitor:
             self.monitor.set_self_copy(True)
 
@@ -705,7 +887,6 @@ class ClipmanWindow(Gtk.Window):
         GLib.timeout_add(150, self._simulate_paste)
 
     def _copy_only(self, data):
-        """Copy to clipboard without auto-pasting (Shift+Enter)."""
         if self.monitor:
             self.monitor.set_self_copy(True)
 
@@ -731,7 +912,6 @@ class ClipmanWindow(Gtk.Window):
         self.hide()
 
     def _simulate_paste(self):
-        """Ask the GNOME Shell extension to simulate Ctrl+V."""
         try:
             import dbus
             bus = dbus.SessionBus()
@@ -742,9 +922,9 @@ class ClipmanWindow(Gtk.Window):
             iface.SimulatePaste()
         except Exception:
             pass
-        return False  # Don't repeat
+        return False
 
-    # ── Event handlers ───────────────────────────────────────────────
+    # -- Event handlers ----------------------------------------------------
 
     def _on_entry_click(self, widget, event, entry):
         self._paste_entry(entry)
@@ -793,23 +973,41 @@ class ClipmanWindow(Gtk.Window):
         self._active_filter = filter_id
         self.refresh()
 
-    # ── Settings ─────────────────────────────────────────────────────
+    # -- Settings ----------------------------------------------------------
 
     def _on_gear_clicked(self, button):
         if self.settings_panel.get_visible():
             self.settings_panel.hide()
         else:
-            # show() bypasses no_show_all; then show children explicitly
             self.settings_panel.show()
-            for child in self.settings_panel.get_children():
+            self._show_all_children(self.settings_panel)
+
+    def _show_all_children(self, widget):
+        """Recursively show all children (bypasses set_no_show_all)."""
+        if hasattr(widget, "get_children"):
+            for child in widget.get_children():
                 child.show()
+                self._show_all_children(child)
 
     def _on_opacity_changed(self, scale):
         self._opacity = round(scale.get_value(), 2)
         self.set_opacity(self._opacity)
+        self._opacity_value_label.set_text(f"{int(self._opacity * 100)}%")
         self.db.set_setting("opacity", str(self._opacity))
 
-    # ── Snippet dialogs ──────────────────────────────────────────────
+    def _on_font_size_changed(self, scale):
+        self._font_size = int(scale.get_value())
+        self._font_value_label.set_text(f"{self._font_size}px")
+        self.db.set_setting("font_size", str(self._font_size))
+        self._apply_css()
+        self.refresh()
+
+    def _on_max_history_changed(self, scale):
+        self._max_history = int(scale.get_value())
+        self._max_value_label.set_text(str(self._max_history))
+        self.db.set_setting("max_entries", str(self._max_history))
+
+    # -- Snippet dialogs ---------------------------------------------------
 
     def _on_add_snippet_clicked(self, button):
         self._show_snippet_dialog()
@@ -825,39 +1023,53 @@ class ClipmanWindow(Gtk.Window):
         self._ignore_focus_out = True
         editing = snippet is not None
 
+        # Hide the main window to avoid Wayland "unmap parent of popup" warnings
+        self.hide()
+
         dialog = Gtk.Dialog(
             title="Edit Snippet" if editing else "Add Snippet",
-            parent=self,
-            flags=Gtk.DialogFlags.MODAL | Gtk.DialogFlags.DESTROY_WITH_PARENT,
+            flags=Gtk.DialogFlags.MODAL,
         )
+        dialog.get_style_context().add_class("snippet-dialog")
+        dialog.set_keep_above(True)
+        dialog.set_position(Gtk.WindowPosition.CENTER)
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
         dialog.add_button("Save", Gtk.ResponseType.OK)
         dialog.set_default_size(360, 280)
 
         area = dialog.get_content_area()
+        area.get_style_context().add_class("snippet-dialog-content")
         area.set_spacing(8)
         area.set_margin_start(12)
         area.set_margin_end(12)
         area.set_margin_top(12)
 
-        name_label = Gtk.Label(label="Name:")
+        name_label = Gtk.Label(label="Name")
+        name_label.get_style_context().add_class("snippet-dialog-label")
         name_label.set_halign(Gtk.Align.START)
         area.pack_start(name_label, False, False, 0)
 
         name_entry = Gtk.Entry()
+        name_entry.get_style_context().add_class("snippet-dialog-entry")
         name_entry.set_placeholder_text("e.g., Email signature")
         if editing:
             name_entry.set_text(snippet["name"])
         area.pack_start(name_entry, False, False, 0)
 
-        content_label = Gtk.Label(label="Content:")
+        content_label = Gtk.Label(label="Content")
+        content_label.get_style_context().add_class("snippet-dialog-label")
         content_label.set_halign(Gtk.Align.START)
         area.pack_start(content_label, False, False, 0)
 
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_size_request(-1, 150)
         text_view = Gtk.TextView()
+        text_view.get_style_context().add_class("snippet-dialog-textview")
         text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        text_view.set_left_margin(6)
+        text_view.set_right_margin(6)
+        text_view.set_top_margin(4)
+        text_view.set_bottom_margin(4)
         if editing:
             text_view.get_buffer().set_text(snippet["content_text"])
         scrolled.add(text_view)
@@ -880,17 +1092,17 @@ class ClipmanWindow(Gtk.Window):
 
         dialog.destroy()
         self._ignore_focus_out = False
+        self.show_all()
         self.refresh()
+        self.present()
 
-    # ── Key handling ─────────────────────────────────────────────────
+    # -- Key handling ------------------------------------------------------
 
     def _on_key_press(self, widget, event):
-        # Escape — close
         if event.keyval == Gdk.KEY_Escape:
             self.hide()
             return True
 
-        # Shift+Enter — copy without paste
         if event.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
             if event.state & Gdk.ModifierType.SHIFT_MASK:
                 row = self.listbox.get_selected_row()
@@ -901,7 +1113,6 @@ class ClipmanWindow(Gtk.Window):
                     self._copy_only(row.snippet_data)
                     return True
 
-        # Down arrow from search — move to first selectable entry
         if event.keyval == Gdk.KEY_Down and self.search_entry.has_focus():
             idx = 0
             row = self.listbox.get_row_at_index(idx)
@@ -913,9 +1124,7 @@ class ClipmanWindow(Gtk.Window):
                 row.grab_focus()
                 return True
 
-        # Only when a listbox row is focused (not search entry)
         if not self.search_entry.has_focus():
-            # Delete — remove selected entry/snippet
             if event.keyval == Gdk.KEY_Delete:
                 row = self.listbox.get_selected_row()
                 if row and hasattr(row, "entry_data"):
@@ -927,7 +1136,6 @@ class ClipmanWindow(Gtk.Window):
                     self.refresh()
                     return True
 
-            # P — toggle pin on selected entry
             if event.keyval in (Gdk.KEY_p, Gdk.KEY_P):
                 row = self.listbox.get_selected_row()
                 if row and hasattr(row, "entry_data"):
@@ -941,7 +1149,7 @@ class ClipmanWindow(Gtk.Window):
         self.hide()
         return True
 
-    # ── Toggle ───────────────────────────────────────────────────────
+    # -- Toggle ------------------------------------------------------------
 
     def toggle(self):
         if self.get_visible():
