@@ -29,7 +29,9 @@ print(keys)
     gsettings reset org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CLIPMAN_KEY_PATH name 2>/dev/null || true
     gsettings reset org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CLIPMAN_KEY_PATH command 2>/dev/null || true
     gsettings reset org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CLIPMAN_KEY_PATH binding 2>/dev/null || true
-    echo "  Keybinding removed."
+    # Restore Super+V to GNOME's message tray
+    gsettings reset org.gnome.shell.keybindings toggle-message-tray 2>/dev/null || true
+    echo "  Keybinding removed. Super+V restored to GNOME message tray."
 else
     echo "  No keybinding found."
 fi

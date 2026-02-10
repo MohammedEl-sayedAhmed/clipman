@@ -44,9 +44,16 @@ else
     gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$NEW_LIST"
 fi
 
+# Remove Super+V from GNOME's built-in message tray toggle (conflicts with our binding)
+CURRENT_MSG_TRAY=$(gsettings get org.gnome.shell.keybindings toggle-message-tray 2>/dev/null || echo "[]")
+if echo "$CURRENT_MSG_TRAY" | grep -q "'<Super>v'"; then
+    gsettings set org.gnome.shell.keybindings toggle-message-tray "['<Super>m']"
+    echo "  Removed Super+V from GNOME message tray (Super+M still works)."
+fi
+
 # Set the keybinding properties
 gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${CLIPMAN_KEY_PATH}" name "Clipman Toggle"
-gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${CLIPMAN_KEY_PATH}" command "env -u LD_LIBRARY_PATH -u LD_PRELOAD python3 $CLIPMAN_PY toggle"
+gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${CLIPMAN_KEY_PATH}" command "$SCRIPT_DIR/launcher.sh toggle"
 gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${CLIPMAN_KEY_PATH}" binding "<Super>v"
 
 echo ""
