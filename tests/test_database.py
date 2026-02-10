@@ -284,6 +284,123 @@ class TestClipboardDB(unittest.TestCase):
         self.assertNotEqual(h1, h2)
         self.assertEqual(h1, h3)
 
+    # ── count_entries ──────────────────────────────────────────────
+
+    def test_count_entries_all(self):
+        self.db.add_entry("text", content_text="one")
+        self.db.add_entry("text", content_text="two")
+        fake_png = b"\x89PNG\r\n\x1a\ncount_img"
+        self.db.add_entry("image", image_data=fake_png)
+
+        self.assertEqual(self.db.count_entries(), 3)
+
+    def test_count_entries_by_type(self):
+        self.db.add_entry("text", content_text="one")
+        self.db.add_entry("text", content_text="two")
+        fake_png = b"\x89PNG\r\n\x1a\ncount_img2"
+        self.db.add_entry("image", image_data=fake_png)
+
+        self.assertEqual(self.db.count_entries("text"), 2)
+        self.assertEqual(self.db.count_entries("image"), 1)
+
+    def test_count_entries_empty(self):
+        self.assertEqual(self.db.count_entries(), 0)
+        self.assertEqual(self.db.count_entries("text"), 0)
+
+    # ── get_entries with content_type filter ────────────────────────
+
+    def test_get_entries_filter_text(self):
+        self.db.add_entry("text", content_text="hello")
+        fake_png = b"\x89PNG\r\n\x1a\nfilter_img"
+        self.db.add_entry("image", image_data=fake_png)
+
+        text_entries = self.db.get_entries(content_type="text")
+        self.assertEqual(len(text_entries), 1)
+        self.assertEqual(text_entries[0]["content_type"], "text")
+
+    def test_get_entries_filter_image(self):
+        self.db.add_entry("text", content_text="hello")
+        fake_png = b"\x89PNG\r\n\x1a\nfilter_img2"
+        self.db.add_entry("image", image_data=fake_png)
+
+        image_entries = self.db.get_entries(content_type="image")
+        self.assertEqual(len(image_entries), 1)
+        self.assertEqual(image_entries[0]["content_type"], "image")
+
+    def test_get_entries_no_filter_returns_all(self):
+        self.db.add_entry("text", content_text="hello")
+        fake_png = b"\x89PNG\r\n\x1a\nfilter_img3"
+        self.db.add_entry("image", image_data=fake_png)
+
+        all_entries = self.db.get_entries()
+        self.assertEqual(len(all_entries), 2)
+
+    # ── Snippets CRUD ──────────────────────────────────────────────
+
+    def test_add_snippet(self):
+        sid = self.db.add_snippet("Greeting", "Hello, world!")
+        self.assertGreater(sid, 0)
+
+        snippets = self.db.get_snippets()
+        self.assertEqual(len(snippets), 1)
+        self.assertEqual(snippets[0]["name"], "Greeting")
+        self.assertEqual(snippets[0]["content_text"], "Hello, world!")
+
+    def test_get_snippets_ordering(self):
+        self.db.add_snippet("First", "aaa")
+        time.sleep(0.05)
+        self.db.add_snippet("Second", "bbb")
+
+        snippets = self.db.get_snippets()
+        self.assertEqual(len(snippets), 2)
+        # Most recent first
+        self.assertEqual(snippets[0]["name"], "Second")
+        self.assertEqual(snippets[1]["name"], "First")
+
+    def test_update_snippet(self):
+        sid = self.db.add_snippet("Old name", "Old content")
+        self.db.update_snippet(sid, "New name", "New content")
+
+        snippets = self.db.get_snippets()
+        self.assertEqual(snippets[0]["name"], "New name")
+        self.assertEqual(snippets[0]["content_text"], "New content")
+
+    def test_delete_snippet(self):
+        sid = self.db.add_snippet("Delete me", "content")
+        self.db.delete_snippet(sid)
+
+        snippets = self.db.get_snippets()
+        self.assertEqual(len(snippets), 0)
+
+    def test_search_snippets_by_name(self):
+        self.db.add_snippet("Email signature", "Best regards")
+        self.db.add_snippet("Phone number", "555-1234")
+
+        results = self.db.search_snippets("email")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "Email signature")
+
+    def test_search_snippets_by_content(self):
+        self.db.add_snippet("Greeting", "Hello from the other side")
+        self.db.add_snippet("Farewell", "Goodbye for now")
+
+        results = self.db.search_snippets("other side")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "Greeting")
+
+    def test_search_snippets_no_results(self):
+        self.db.add_snippet("Test", "content")
+        results = self.db.search_snippets("nonexistent")
+        self.assertEqual(len(results), 0)
+
+    def test_search_snippets_escapes_wildcards(self):
+        self.db.add_snippet("Percent", "100% complete")
+        self.db.add_snippet("Normal", "just text")
+
+        results = self.db.search_snippets("%")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["name"], "Percent")
+
 
 if __name__ == "__main__":
     unittest.main()

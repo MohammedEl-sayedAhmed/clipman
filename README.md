@@ -25,9 +25,15 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 | Feature | Description |
 |---------|-------------|
 | **Text & Image support** | Stores both text and image clipboard entries |
-| **Instant paste** | Click an entry to paste it directly into the focused app |
+| **Instant paste** | Click or press Enter to paste directly into the focused app |
 | **Pin favorites** | Keep important entries permanently — exempt from pruning |
 | **Search** | Instantly filter clipboard history by text content |
+| **Filter tabs** | Switch between All, Text, Images, and Snippets views |
+| **Snippet templates** | Save reusable text snippets for quick pasting |
+| **Date grouping** | Entries organized into Today, Yesterday, and Older sections |
+| **Keyboard shortcuts** | Arrow keys to navigate, Del to delete, P to pin, Shift+Enter to copy only |
+| **Character count** | Text entries show character count badge |
+| **Image preview** | Hover over image entries for a larger preview tooltip |
 | **Super+V shortcut** | Toggle the popup with a familiar keyboard shortcut |
 | **Autostart** | Runs as a background daemon, starts on login |
 | **Wayland native** | Zero polling — uses a GNOME Shell extension for flicker-free monitoring |
@@ -67,8 +73,11 @@ After your next login, the daemon starts automatically.
 |--------|-----|
 | Open clipboard history | <kbd>Super</kbd> + <kbd>V</kbd> |
 | Paste an entry | Click on it or navigate with <kbd>Arrow</kbd> keys and press <kbd>Enter</kbd> |
-| Pin / unpin an entry | Click the star icon |
-| Delete an entry | Click the X icon |
+| Copy without pasting | <kbd>Shift</kbd> + <kbd>Enter</kbd> |
+| Pin / unpin an entry | Click the star icon or press <kbd>P</kbd> |
+| Delete an entry | Click the X icon or press <kbd>Delete</kbd> |
+| Filter by type | Click **All**, **Text**, **Images**, or **Snippets** tabs |
+| Create a snippet | Switch to **Snippets** tab and click **+ Add** |
 | Search history | Type in the search bar |
 | Clear all unpinned | Click **Clear All** |
 | Close popup | <kbd>Escape</kbd> or click outside |
@@ -81,7 +90,7 @@ clipman/
 ├── clipman/
 │   ├── app.py                  # GTK Application lifecycle
 │   ├── clipboard_monitor.py    # Event-driven clipboard monitor
-│   ├── database.py             # SQLite storage with dedup/search/pin
+│   ├── database.py             # SQLite storage with dedup/search/pin/snippets
 │   ├── dbus_service.py         # D-Bus IPC for toggle and clipboard events
 │   └── window.py               # GTK3 popup window UI
 ├── extension/
