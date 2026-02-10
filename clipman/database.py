@@ -191,12 +191,13 @@ class ClipboardDB:
         self.conn.commit()
 
     def enforce_max_entries(self):
+        max_entries = int(self.get_setting("max_entries", str(MAX_ENTRIES)))
         count = self.conn.execute(
             "SELECT COUNT(*) as cnt FROM entries WHERE pinned = 0"
         ).fetchone()["cnt"]
-        if count <= MAX_ENTRIES:
+        if count <= max_entries:
             return
-        excess = count - MAX_ENTRIES
+        excess = count - max_entries
         rows = self.conn.execute(
             """SELECT id, image_path FROM entries
                WHERE pinned = 0
