@@ -781,10 +781,13 @@ class ClipmanWindow(Gtk.Window):
     # ── Settings ─────────────────────────────────────────────────────
 
     def _on_gear_clicked(self, button):
-        visible = self.settings_panel.get_visible()
-        self.settings_panel.set_visible(not visible)
-        if not visible:
-            self.settings_panel.show_all()
+        if self.settings_panel.get_visible():
+            self.settings_panel.hide()
+        else:
+            # show() bypasses no_show_all; then show children explicitly
+            self.settings_panel.show()
+            for child in self.settings_panel.get_children():
+                child.show()
 
     def _on_opacity_changed(self, scale):
         self._opacity = round(scale.get_value(), 2)
