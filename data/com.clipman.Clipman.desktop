@@ -2,7 +2,7 @@
 Type=Application
 Name=Clipman
 Comment=Clipboard Manager for GNOME/Wayland
-Exec=python3 CLIPMAN_PATH_PLACEHOLDER/clipman.py
+Exec=env -u LD_LIBRARY_PATH -u LD_PRELOAD python3 CLIPMAN_PATH_PLACEHOLDER/clipman.py
 Icon=edit-paste
 Terminal=false
 Categories=Utility;
