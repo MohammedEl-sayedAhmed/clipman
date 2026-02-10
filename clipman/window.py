@@ -82,7 +82,8 @@ class ClipmanWindow(Gtk.Window):
             min-width: 24px;
         }
         .pin-button:hover, .delete-button:hover {
-            background-color: #4a4a4a;
+            background: #4a4a4a;
+            background-image: none;
             border-radius: 4px;
         }
         .pinned {
@@ -92,15 +93,8 @@ class ClipmanWindow(Gtk.Window):
             color: #888888;
         }
         .clear-button {
-            background-color: #c01c28;
-            color: #ffffff;
-            border: none;
-            border-radius: 6px;
-            padding: 6px 12px;
             font-size: 12px;
-        }
-        .clear-button:hover {
-            background-color: #e01b24;
+            padding: 6px 12px;
         }
         .empty-label {
             color: #888888;
@@ -136,6 +130,7 @@ class ClipmanWindow(Gtk.Window):
 
         clear_btn = Gtk.Button(label="Clear All")
         clear_btn.get_style_context().add_class("clear-button")
+        clear_btn.get_style_context().add_class("destructive-action")
         clear_btn.set_tooltip_text("Clear all unpinned entries")
         clear_btn.connect("clicked", self._on_clear_all)
         header_box.pack_end(clear_btn, False, False, 0)
@@ -330,7 +325,7 @@ class ClipmanWindow(Gtk.Window):
         if self.get_visible():
             self.hide()
         else:
-            self.refresh()
             self.show_all()
+            self.refresh()  # Must come after show_all to control visibility
             self.search_entry.grab_focus()
             self.present()
