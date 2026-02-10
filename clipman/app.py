@@ -30,6 +30,10 @@ class ClipmanApp(Gtk.Application):
         self.monitor = ClipboardMonitor(self.db, on_new_entry=self._on_new_entry)
         self.window = ClipmanWindow(self.db, self.monitor)
         self.add_window(self.window)
+
+        # Keep the app running even when the window is hidden
+        self.hold()
+
         self.dbus_service = ClipmanDBusService(self.window, self)
         self.monitor.start()
 
