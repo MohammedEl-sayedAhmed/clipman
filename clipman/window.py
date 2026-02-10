@@ -144,8 +144,9 @@ class ClipmanWindow(Gtk.Window):
         scrolled.set_vexpand(True)
 
         self.listbox = Gtk.ListBox()
-        self.listbox.set_selection_mode(Gtk.SelectionMode.NONE)
+        self.listbox.set_selection_mode(Gtk.SelectionMode.BROWSE)
         self.listbox.set_activate_on_single_click(True)
+        self.listbox.connect("row-activated", self._on_row_activated)
         scrolled.add(self.listbox)
 
         main_box.pack_start(scrolled, True, True, 0)
@@ -181,6 +182,7 @@ class ClipmanWindow(Gtk.Window):
 
     def _create_row(self, entry):
         row = Gtk.ListBoxRow()
+        row.entry_data = entry
         row.get_style_context().add_class("clip-row")
 
         outer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -231,7 +233,7 @@ class ClipmanWindow(Gtk.Window):
                 image = Gtk.Image.new_from_pixbuf(pixbuf)
                 image.set_halign(Gtk.Align.START)
                 content_box.pack_start(image, False, False, 0)
-            except Exception:
+            except (GLib.Error, OSError):
                 label = Gtk.Label(label="[Image]")
                 label.get_style_context().add_class("clip-text")
                 content_box.pack_start(label, False, False, 0)
@@ -275,7 +277,8 @@ class ClipmanWindow(Gtk.Window):
             days = int(diff / 86400)
             return f"{days}d ago"
 
-    def _on_entry_click(self, widget, event, entry):
+    def _paste_entry(self, entry):
+        """Copy entry to clipboard, hide the window, and auto-paste."""
         if self.monitor:
             self.monitor.set_self_copy(True)
 
@@ -291,11 +294,18 @@ class ClipmanWindow(Gtk.Window):
                     stdin=img_file,
                     stderr=subprocess.DEVNULL
                 )
-                proc.wait()
+                proc.wait(timeout=5)
 
         self.db.update_accessed(entry["id"])
         self.hide()
         GLib.timeout_add(150, self._simulate_paste)
+
+    def _on_entry_click(self, widget, event, entry):
+        self._paste_entry(entry)
+
+    def _on_row_activated(self, listbox, row):
+        if row and hasattr(row, "entry_data"):
+            self._paste_entry(row.entry_data)
 
     def _simulate_paste(self):
         """Ask the GNOME Shell extension to simulate Ctrl+V."""
@@ -335,6 +345,12 @@ class ClipmanWindow(Gtk.Window):
         if event.keyval == Gdk.KEY_Escape:
             self.hide()
             return True
+        if event.keyval == Gdk.KEY_Down and self.search_entry.has_focus():
+            first_row = self.listbox.get_row_at_index(0)
+            if first_row:
+                self.listbox.select_row(first_row)
+                first_row.grab_focus()
+                return True
         return False
 
     def _on_delete(self, widget, event):
