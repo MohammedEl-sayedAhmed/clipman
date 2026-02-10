@@ -5,5 +5,16 @@ __pycache__/
 dist/
 build/
 .eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data (runtime)
 *.sqlite
 *.db
+
+# Environment
+.env
