@@ -94,6 +94,7 @@ class ClipmanWindow(Gtk.Window):
         self.connect("key-press-event", self._on_key_press)
         self.connect("delete-event", self._on_delete)
         self.connect("focus-out-event", self._on_focus_out)
+        GLib.timeout_add_seconds(10, self._cleanup_sensitive)
 
     def _apply_css(self):
         fs = self._font_size
@@ -367,7 +368,7 @@ class ClipmanWindow(Gtk.Window):
         }}
 
         /* Row action buttons */
-        .pin-button, .delete-button, .edit-button {{
+        .pin-button, .delete-button, .edit-button, .expand-button, .url-button {{
             background: none;
             background-image: none;
             border: none;
@@ -376,10 +377,17 @@ class ClipmanWindow(Gtk.Window):
             min-width: 16px;
             font-size: 11px;
         }}
-        .pin-button:hover, .delete-button:hover, .edit-button:hover {{
+        .pin-button:hover, .delete-button:hover, .edit-button:hover,
+        .expand-button:hover, .url-button:hover {{
             background-color: {t["hover_overlay"]};
             background-image: none;
             border-radius: 4px;
+        }}
+        .expand-button {{
+            color: {t["text_muted"]};
+        }}
+        .url-button {{
+            color: {t["accent"]};
         }}
         .pinned {{
             color: {t["pin_color"]};
@@ -447,6 +455,66 @@ class ClipmanWindow(Gtk.Window):
             background-image: none;
             border-color: {t["danger"]};
             color: {t["danger"]};
+        }}
+
+        /* Incognito button */
+        .incognito-btn {{
+            background-color: transparent;
+            background-image: none;
+            border: none;
+            border-radius: 6px;
+            color: {t["text_muted"]};
+            font-size: 14px;
+            padding: 1px 4px;
+            min-height: 18px;
+            min-width: 18px;
+        }}
+        .incognito-btn:hover {{
+            background-color: {t["bg_overlay"]};
+            background-image: none;
+        }}
+        .incognito-active {{
+            background-color: {t["danger_bg"]};
+            background-image: none;
+            border: 1px solid {t["danger"]};
+            border-radius: 6px;
+            color: {t["danger"]};
+            font-size: 14px;
+            padding: 1px 4px;
+            min-height: 18px;
+            min-width: 18px;
+        }}
+        .incognito-active:hover {{
+            background-color: {t["danger"]};
+            background-image: none;
+            color: {t["accent_on"]};
+        }}
+
+        /* Sensitive entries */
+        .sensitive-badge {{
+            color: {t["danger"]};
+            font-size: 9px;
+        }}
+        .sensitive-row {{
+            opacity: 0.7;
+        }}
+
+        /* Backup/Restore buttons */
+        .backup-btn {{
+            background-color: transparent;
+            background-image: none;
+            border: 1px solid {t["border"]};
+            border-radius: 6px;
+            color: {t["text_secondary"]};
+            font-size: 10px;
+            padding: 1px 10px;
+            min-height: 18px;
+            margin: 0 2px;
+        }}
+        .backup-btn:hover {{
+            background-color: {t["bg_overlay"]};
+            background-image: none;
+            color: {t["text_primary"]};
         }}
 
         /* Snippet dialog */
@@ -652,6 +720,27 @@ class ClipmanWindow(Gtk.Window):
             self._color_buttons.append((btn, hex_val))
         self.settings_panel.pack_start(color_row, False, False, 0)
 
+        # Backup/Restore row
+        backup_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        backup_label = Gtk.Label(label="Data")
+        backup_label.get_style_context().add_class("settings-label")
+        backup_label.set_halign(Gtk.Align.START)
+        backup_row.pack_start(backup_label, False, False, 0)
+        backup_spacer = Gtk.Box()
+        backup_spacer.set_hexpand(True)
+        backup_row.pack_start(backup_spacer, True, True, 0)
+        backup_btn = Gtk.Button(label="Backup")
+        backup_btn.get_style_context().add_class("backup-btn")
+        backup_btn.set_tooltip_text("Export clipboard database")
+        backup_btn.connect("clicked", self._on_backup_clicked)
+        backup_row.pack_start(backup_btn, False, False, 0)
+        restore_btn = Gtk.Button(label="Restore")
+        restore_btn.get_style_context().add_class("backup-btn")
+        restore_btn.set_tooltip_text("Import clipboard database")
+        restore_btn.connect("clicked", self._on_restore_clicked)
+        backup_row.pack_start(restore_btn, False, False, 0)
+        self.settings_panel.pack_start(backup_row, False, False, 0)
+
         main_box.pack_start(self.settings_panel, False, False, 0)
 
         # -- Scrollable list ------------------------------------------------
@@ -682,6 +771,12 @@ class ClipmanWindow(Gtk.Window):
             orientation=Gtk.Orientation.HORIZONTAL, spacing=6
         )
         self.status_bar.get_style_context().add_class("status-bar")
+
+        self.incognito_btn = Gtk.Button(label="\U0001f441")
+        self.incognito_btn.get_style_context().add_class("incognito-btn")
+        self.incognito_btn.set_tooltip_text("Incognito mode: OFF")
+        self.incognito_btn.connect("clicked", self._on_incognito_toggle)
+        self.status_bar.pack_start(self.incognito_btn, False, False, 0)
 
         self.count_label = Gtk.Label(label="")
         self.count_label.get_style_context().add_class("status-count")
@@ -845,6 +940,8 @@ class ClipmanWindow(Gtk.Window):
         row = Gtk.ListBoxRow()
         row.entry_data = entry
         row.get_style_context().add_class("clip-row")
+        if entry.get("sensitive"):
+            row.get_style_context().add_class("sensitive-row")
 
         outer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
 
@@ -875,6 +972,12 @@ class ClipmanWindow(Gtk.Window):
             chars_label.set_halign(Gtk.Align.START)
             meta_box.pack_start(chars_label, False, False, 0)
 
+        if entry.get("sensitive"):
+            sens_label = Gtk.Label(label="\U0001f6e1")
+            sens_label.get_style_context().add_class("sensitive-badge")
+            sens_label.set_halign(Gtk.Align.START)
+            meta_box.pack_start(sens_label, False, False, 0)
+
         content_box.pack_start(meta_box, False, False, 0)
 
         if entry["content_type"] == "text":
@@ -890,6 +993,9 @@ class ClipmanWindow(Gtk.Window):
             label.set_max_width_chars(45)
             label.set_ellipsize(Pango.EllipsizeMode.END)
             label.set_lines(2)
+            row.full_text = text
+            row.preview_text = preview
+            row.content_label = label
             content_box.pack_start(label, False, False, 0)
         elif entry["content_type"] == "image" and entry["image_path"]:
             try:
@@ -928,6 +1034,29 @@ class ClipmanWindow(Gtk.Window):
         del_btn.set_tooltip_text("Delete")
         del_btn.connect("clicked", self._on_delete_click, entry["id"])
         btn_box.pack_start(del_btn, False, False, 0)
+
+        if entry["content_type"] == "text" and entry["content_text"]:
+            edit_btn = Gtk.Button(label="\u270E")
+            edit_btn.get_style_context().add_class("edit-button")
+            edit_btn.get_style_context().add_class("unpinned")
+            edit_btn.set_tooltip_text("Edit")
+            edit_btn.connect("clicked", self._on_edit_entry_click, entry)
+            btn_box.pack_start(edit_btn, False, False, 0)
+
+            if len(entry["content_text"]) > 150:
+                expand_btn = Gtk.Button(label="\u25BC")
+                expand_btn.get_style_context().add_class("expand-button")
+                expand_btn.set_tooltip_text("Expand")
+                expand_btn.connect("clicked", self._on_expand_click, row)
+                btn_box.pack_start(expand_btn, False, False, 0)
+
+            url = self._detect_url(entry["content_text"])
+            if url:
+                url_btn = Gtk.Button(label="\u2197")
+                url_btn.get_style_context().add_class("url-button")
+                url_btn.set_tooltip_text("Open URL")
+                url_btn.connect("clicked", self._on_open_url_click, url)
+                btn_box.pack_start(url_btn, False, False, 0)
 
         outer_box.pack_end(btn_box, False, False, 0)
 
@@ -1203,6 +1332,180 @@ class ClipmanWindow(Gtk.Window):
                 ctx.add_class("swatch-active")
         self._apply_css()
         self.refresh()
+
+    def _cleanup_sensitive(self):
+        deleted = self.db.delete_expired_sensitive()
+        if deleted > 0 and self.get_visible():
+            self.refresh()
+        return True
+
+    def _on_incognito_toggle(self, button):
+        ctx = button.get_style_context()
+        if self.monitor and self.monitor._incognito:
+            self.monitor.set_incognito(False)
+            ctx.remove_class("incognito-active")
+            ctx.add_class("incognito-btn")
+            button.set_tooltip_text("Incognito mode: OFF")
+        else:
+            if self.monitor:
+                self.monitor.set_incognito(True)
+            ctx.remove_class("incognito-btn")
+            ctx.add_class("incognito-active")
+            button.set_tooltip_text("Incognito mode: ON — clipboard not recorded")
+
+    # -- Expand / Edit / URL handlers --------------------------------------
+
+    def _on_expand_click(self, button, row):
+        if getattr(row, '_is_expanded', False):
+            row.content_label.set_text(row.preview_text)
+            row.content_label.set_lines(2)
+            row.content_label.set_ellipsize(Pango.EllipsizeMode.END)
+            button.set_label("\u25BC")
+            button.set_tooltip_text("Expand")
+            row._is_expanded = False
+        else:
+            show = row.full_text[:2000]
+            if len(row.full_text) > 2000:
+                show += f"\n\u2026 ({len(row.full_text):,} total chars)"
+            row.content_label.set_text(show)
+            row.content_label.set_lines(20)
+            row.content_label.set_ellipsize(Pango.EllipsizeMode.NONE)
+            button.set_label("\u25B2")
+            button.set_tooltip_text("Collapse")
+            row._is_expanded = True
+
+    def _on_edit_entry_click(self, button, entry):
+        self._show_edit_dialog(entry)
+
+    def _show_edit_dialog(self, entry):
+        self._ignore_focus_out = True
+        self.hide()
+
+        dialog = Gtk.Dialog(
+            title="Edit Entry",
+            flags=Gtk.DialogFlags.MODAL,
+        )
+        dialog.get_style_context().add_class("snippet-dialog")
+        dialog.set_keep_above(True)
+        dialog.set_position(Gtk.WindowPosition.CENTER)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Save", Gtk.ResponseType.OK)
+        dialog.set_default_size(360, 280)
+
+        area = dialog.get_content_area()
+        area.get_style_context().add_class("snippet-dialog-content")
+        area.set_spacing(8)
+        area.set_margin_start(12)
+        area.set_margin_end(12)
+        area.set_margin_top(12)
+
+        label = Gtk.Label(label="Content")
+        label.get_style_context().add_class("snippet-dialog-label")
+        label.set_halign(Gtk.Align.START)
+        area.pack_start(label, False, False, 0)
+
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_size_request(-1, 200)
+        text_view = Gtk.TextView()
+        text_view.get_style_context().add_class("snippet-dialog-textview")
+        text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        text_view.set_left_margin(6)
+        text_view.set_right_margin(6)
+        text_view.set_top_margin(4)
+        text_view.set_bottom_margin(4)
+        text_view.get_buffer().set_text(entry["content_text"] or "")
+        scrolled.add(text_view)
+        area.pack_start(scrolled, True, True, 0)
+
+        dialog.show_all()
+        response = dialog.run()
+
+        if response == Gtk.ResponseType.OK:
+            buf = text_view.get_buffer()
+            new_text = buf.get_text(
+                buf.get_start_iter(), buf.get_end_iter(), False
+            )
+            if new_text and new_text != entry["content_text"]:
+                self.db.update_entry_text(entry["id"], new_text)
+
+        dialog.destroy()
+        self._ignore_focus_out = False
+        self.show_all()
+        self.refresh()
+        self.present()
+
+    @staticmethod
+    def _detect_url(text):
+        t = text.strip().split("\n")[0].strip()
+        if t.startswith(("http://", "https://")) and " " not in t:
+            return t
+        if t.startswith("www.") and " " not in t:
+            return "https://" + t
+        return None
+
+    def _on_open_url_click(self, button, url):
+        try:
+            subprocess.Popen(
+                ["xdg-open", url],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        except OSError:
+            pass
+
+    # -- Backup / Restore --------------------------------------------------
+
+    def _on_backup_clicked(self, button):
+        self._ignore_focus_out = True
+        dialog = Gtk.FileChooserDialog(
+            title="Backup Clipboard Database",
+            action=Gtk.FileChooserAction.SAVE,
+        )
+        dialog.set_keep_above(True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Save", Gtk.ResponseType.OK)
+        dialog.set_current_name("clipman-backup.db")
+        dialog.set_do_overwrite_confirmation(True)
+
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            path = dialog.get_filename()
+            try:
+                self.db.export_backup(path)
+            except Exception:
+                pass
+        dialog.destroy()
+        self._ignore_focus_out = False
+
+    def _on_restore_clicked(self, button):
+        self._ignore_focus_out = True
+        dialog = Gtk.FileChooserDialog(
+            title="Restore Clipboard Database",
+            action=Gtk.FileChooserAction.OPEN,
+        )
+        dialog.set_keep_above(True)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Open", Gtk.ResponseType.OK)
+
+        db_filter = Gtk.FileFilter()
+        db_filter.set_name("Database files")
+        db_filter.add_pattern("*.db")
+        dialog.add_filter(db_filter)
+
+        all_filter = Gtk.FileFilter()
+        all_filter.set_name("All files")
+        all_filter.add_pattern("*")
+        dialog.add_filter(all_filter)
+
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK:
+            path = dialog.get_filename()
+            try:
+                self.db.import_backup(path)
+                self.refresh()
+            except Exception:
+                pass
+        dialog.destroy()
+        self._ignore_focus_out = False
 
     # -- Snippet dialogs ---------------------------------------------------
 
