@@ -1,7 +1,37 @@
+import re
+import string
 import subprocess
 
 MAX_TEXT_SIZE = 10 * 1024 * 1024   # 10 MB
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+_TOKEN_PREFIXES = ("ghp_", "gho_", "ghs_", "github_pat_", "sk-", "sk_live_",
+                   "pk_live_", "Bearer ", "eyJ", "xox", "AKIA", "AIza")
+
+
+def _is_sensitive(text: str) -> bool:
+    if "\n" in text.strip():
+        return False
+    t = text.strip()
+    if not t or len(t) < 8 or len(t) > 128:
+        return False
+    if any(t.startswith(p) for p in _TOKEN_PREFIXES):
+        return True
+    if " " in t:
+        return False
+    cats = set()
+    for ch in t:
+        if ch in string.ascii_lowercase:
+            cats.add("lower")
+        elif ch in string.ascii_uppercase:
+            cats.add("upper")
+        elif ch in string.digits:
+            cats.add("digit")
+        elif ch in string.punctuation:
+            cats.add("punct")
+    if len(cats) >= 3 and len(t) >= 8:
+        return True
+    return False
 
 
 class ClipboardMonitor:
@@ -16,6 +46,7 @@ class ClipboardMonitor:
         self.db = db
         self.on_new_entry = on_new_entry
         self._self_copy = False
+        self._incognito = False
 
     def start(self):
         pass  # Event-driven — nothing to start
@@ -26,16 +57,23 @@ class ClipboardMonitor:
     def set_self_copy(self, val: bool):
         self._self_copy = val
 
+    def set_incognito(self, val: bool):
+        self._incognito = val
+
     def handle_new_text(self, text):
         """Called from D-Bus when the extension detects a text copy."""
         if self._self_copy:
             self._self_copy = False
             return
 
+        if self._incognito:
+            return
+
         if not text or len(text.encode("utf-8", errors="replace")) > MAX_TEXT_SIZE:
             return
 
-        self.db.add_entry("text", content_text=text)
+        sensitive = _is_sensitive(text)
+        self.db.add_entry("text", content_text=text, sensitive=sensitive)
         if self.on_new_entry:
             self.on_new_entry()
 
@@ -48,6 +86,9 @@ class ClipboardMonitor:
         """
         if self._self_copy:
             self._self_copy = False
+            return
+
+        if self._incognito:
             return
 
         try:

@@ -65,10 +65,16 @@ class ClipboardDB:
                 value TEXT NOT NULL
             )
         """)
+        # Migration: add sensitive column if missing
+        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(entries)")]
+        if "sensitive" not in cols:
+            self.conn.execute(
+                "ALTER TABLE entries ADD COLUMN sensitive INTEGER NOT NULL DEFAULT 0"
+            )
         self.conn.commit()
 
     def add_entry(self, content_type: str, content_text: str = None,
-                  image_data: bytes = None) -> int:
+                  image_data: bytes = None, sensitive: bool = False) -> int:
         now = time.time()
 
         if content_type == "text" and content_text:
@@ -96,9 +102,11 @@ class ClipboardDB:
 
         cursor = self.conn.execute(
             """INSERT INTO entries
-               (content_type, content_text, image_path, content_hash, pinned, created_at, accessed_at)
-               VALUES (?, ?, ?, ?, 0, ?, ?)""",
-            (content_type, content_text, image_path, h, now, now)
+               (content_type, content_text, image_path, content_hash, pinned,
+                created_at, accessed_at, sensitive)
+               VALUES (?, ?, ?, ?, 0, ?, ?, ?)""",
+            (content_type, content_text, image_path, h, now, now,
+             1 if sensitive else 0)
         )
         self.conn.commit()
         self.enforce_max_entries()
@@ -213,6 +221,45 @@ class ClipboardDB:
                     pass
             self.conn.execute("DELETE FROM entries WHERE id = ?", (row["id"],))
         self.conn.commit()
+
+    def delete_expired_sensitive(self, max_age_seconds: int = 30) -> int:
+        cutoff = time.time() - max_age_seconds
+        rows = self.conn.execute(
+            """SELECT id, image_path FROM entries
+               WHERE sensitive = 1 AND created_at < ?""",
+            (cutoff,)
+        ).fetchall()
+        for row in rows:
+            if row["image_path"]:
+                try:
+                    os.remove(row["image_path"])
+                except FileNotFoundError:
+                    pass
+            self.conn.execute("DELETE FROM entries WHERE id = ?", (row["id"],))
+        if rows:
+            self.conn.commit()
+        return len(rows)
+
+    def update_entry_text(self, entry_id: int, new_text: str):
+        h = content_hash(new_text.encode("utf-8"))
+        self.conn.execute(
+            """UPDATE entries SET content_text = ?, content_hash = ?,
+               accessed_at = ? WHERE id = ?""",
+            (new_text, h, time.time(), entry_id)
+        )
+        self.conn.commit()
+
+    def export_backup(self, path: str):
+        import shutil
+        self.conn.commit()
+        shutil.copy2(str(DB_PATH), path)
+
+    def import_backup(self, path: str):
+        import shutil
+        self.conn.close()
+        shutil.copy2(path, str(DB_PATH))
+        self.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+        self.conn.row_factory = sqlite3.Row
 
     # --- Snippets ---
 

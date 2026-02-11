@@ -27,7 +27,7 @@ class TestClipboardMonitor(unittest.TestCase):
         self.monitor.handle_new_text("hello clipboard")
 
         self.mock_db.add_entry.assert_called_once_with(
-            "text", content_text="hello clipboard"
+            "text", content_text="hello clipboard", sensitive=False
         )
 
     def test_allows_duplicate_text(self):
@@ -137,6 +137,76 @@ class TestClipboardMonitor(unittest.TestCase):
         # Should not raise
         self.monitor.start()
         self.monitor.stop()
+
+    # ── Incognito mode ─────────────────────────────────────────────
+
+    def test_incognito_skips_text(self):
+        self.monitor.set_incognito(True)
+        self.monitor.handle_new_text("secret text")
+
+        self.mock_db.add_entry.assert_not_called()
+        self.assertFalse(self.new_entry_called)
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_incognito_skips_image(self, mock_run):
+        mock_run.return_value = FakeCompletedProcess(
+            returncode=0, stdout=b"\x89PNGdata"
+        )
+        self.monitor.set_incognito(True)
+        self.monitor.handle_new_image()
+
+        self.mock_db.add_entry.assert_not_called()
+
+    def test_incognito_toggle(self):
+        self.monitor.set_incognito(True)
+        self.assertTrue(self.monitor._incognito)
+        self.monitor.set_incognito(False)
+        self.assertFalse(self.monitor._incognito)
+
+    # ── Sensitive detection ────────────────────────────────────────
+
+    def test_sensitive_token_prefix(self):
+        self.monitor.handle_new_text("ghp_ABC123xyzTOKEN")
+
+        self.mock_db.add_entry.assert_called_once_with(
+            "text", content_text="ghp_ABC123xyzTOKEN", sensitive=True
+        )
+
+    def test_sensitive_password_pattern(self):
+        # Mixed case, digits, punctuation, >= 8 chars, no spaces
+        self.monitor.handle_new_text("MyP@ssw0rd!")
+
+        self.mock_db.add_entry.assert_called_once_with(
+            "text", content_text="MyP@ssw0rd!", sensitive=True
+        )
+
+    def test_sensitive_sk_prefix(self):
+        self.monitor.handle_new_text("sk-proj-abcdef123456")
+
+        self.mock_db.add_entry.assert_called_once_with(
+            "text", content_text="sk-proj-abcdef123456", sensitive=True
+        )
+
+    def test_normal_text_not_sensitive(self):
+        self.monitor.handle_new_text("hello clipboard")
+
+        self.mock_db.add_entry.assert_called_once_with(
+            "text", content_text="hello clipboard", sensitive=False
+        )
+
+    def test_multiline_not_sensitive(self):
+        self.monitor.handle_new_text("line1\nline2")
+
+        self.mock_db.add_entry.assert_called_once_with(
+            "text", content_text="line1\nline2", sensitive=False
+        )
+
+    def test_short_text_not_sensitive(self):
+        self.monitor.handle_new_text("Ab1!")
+
+        self.mock_db.add_entry.assert_called_once_with(
+            "text", content_text="Ab1!", sensitive=False
+        )
 
 
 if __name__ == "__main__":

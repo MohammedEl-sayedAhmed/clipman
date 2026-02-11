@@ -401,6 +401,100 @@ class TestClipboardDB(unittest.TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["name"], "Percent")
 
+    # ── Sensitive entries ─────────────────────────────────────────
+
+    def test_add_sensitive_entry(self):
+        entry_id = self.db.add_entry("text", content_text="ghp_secret", sensitive=True)
+        entries = self.db.get_entries()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["sensitive"], 1)
+
+    def test_add_non_sensitive_entry(self):
+        entry_id = self.db.add_entry("text", content_text="normal text")
+        entries = self.db.get_entries()
+        self.assertEqual(entries[0]["sensitive"], 0)
+
+    def test_delete_expired_sensitive(self):
+        # Add a sensitive entry and backdate it
+        entry_id = self.db.add_entry("text", content_text="secret_token", sensitive=True)
+        self.db.conn.execute(
+            "UPDATE entries SET created_at = ? WHERE id = ?",
+            (time.time() - 60, entry_id)
+        )
+        self.db.conn.commit()
+
+        deleted = self.db.delete_expired_sensitive(max_age_seconds=30)
+        self.assertEqual(deleted, 1)
+        self.assertEqual(len(self.db.get_entries()), 0)
+
+    def test_delete_expired_sensitive_preserves_recent(self):
+        entry_id = self.db.add_entry("text", content_text="fresh_secret", sensitive=True)
+
+        deleted = self.db.delete_expired_sensitive(max_age_seconds=30)
+        self.assertEqual(deleted, 0)
+        self.assertEqual(len(self.db.get_entries()), 1)
+
+    def test_delete_expired_sensitive_ignores_non_sensitive(self):
+        entry_id = self.db.add_entry("text", content_text="normal old text")
+        self.db.conn.execute(
+            "UPDATE entries SET created_at = ? WHERE id = ?",
+            (time.time() - 60, entry_id)
+        )
+        self.db.conn.commit()
+
+        deleted = self.db.delete_expired_sensitive(max_age_seconds=30)
+        self.assertEqual(deleted, 0)
+        self.assertEqual(len(self.db.get_entries()), 1)
+
+    # ── Update entry text ─────────────────────────────────────────
+
+    def test_update_entry_text(self):
+        entry_id = self.db.add_entry("text", content_text="original text")
+        self.db.update_entry_text(entry_id, "updated text")
+
+        entries = self.db.get_entries()
+        self.assertEqual(entries[0]["content_text"], "updated text")
+
+    def test_update_entry_text_changes_hash(self):
+        from clipman.database import content_hash
+        entry_id = self.db.add_entry("text", content_text="original")
+        original_hash = content_hash(b"original")
+
+        self.db.update_entry_text(entry_id, "modified")
+
+        entries = self.db.get_entries()
+        self.assertNotEqual(entries[0]["content_hash"], original_hash)
+        self.assertEqual(entries[0]["content_hash"], content_hash(b"modified"))
+
+    # ── Backup / Restore ──────────────────────────────────────────
+
+    def test_export_backup(self):
+        import tempfile
+        self.db.add_entry("text", content_text="backup me")
+
+        backup_path = os.path.join(self.tmpdir, "backup.db")
+        self.db.export_backup(backup_path)
+        self.assertTrue(os.path.exists(backup_path))
+        self.assertGreater(os.path.getsize(backup_path), 0)
+
+    def test_import_backup(self):
+        import tempfile
+        # Create some entries and back up
+        self.db.add_entry("text", content_text="entry one")
+        self.db.add_entry("text", content_text="entry two")
+
+        backup_path = os.path.join(self.tmpdir, "backup.db")
+        self.db.export_backup(backup_path)
+
+        # Clear and verify empty
+        self.db.clear_unpinned()
+        self.assertEqual(len(self.db.get_entries()), 0)
+
+        # Restore and verify
+        self.db.import_backup(backup_path)
+        entries = self.db.get_entries()
+        self.assertEqual(len(entries), 2)
+
     # ── Settings ──────────────────────────────────────────────────
 
     def test_get_setting_default(self):
