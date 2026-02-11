@@ -1,4 +1,3 @@
-import hashlib
 import unittest
 from unittest.mock import patch, MagicMock
 
@@ -31,11 +30,11 @@ class TestClipboardMonitor(unittest.TestCase):
             "text", content_text="hello clipboard"
         )
 
-    def test_skips_duplicate_text(self):
+    def test_allows_duplicate_text(self):
         self.monitor.handle_new_text("same text")
         self.monitor.handle_new_text("same text")
 
-        self.mock_db.add_entry.assert_called_once()
+        self.assertEqual(self.mock_db.add_entry.call_count, 2)
 
     def test_detects_changed_text(self):
         self.monitor.handle_new_text("first text")
@@ -83,7 +82,7 @@ class TestClipboardMonitor(unittest.TestCase):
         )
 
     @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_skips_duplicate_image(self, mock_run):
+    def test_allows_duplicate_image(self, mock_run):
         image_data = b"\x89PNG\r\n\x1a\nfake_image"
         mock_run.return_value = FakeCompletedProcess(
             returncode=0, stdout=image_data
@@ -92,7 +91,7 @@ class TestClipboardMonitor(unittest.TestCase):
         self.monitor.handle_new_image()
         self.monitor.handle_new_image()
 
-        self.mock_db.add_entry.assert_called_once()
+        self.assertEqual(self.mock_db.add_entry.call_count, 2)
 
     @patch("clipman.clipboard_monitor.subprocess.run")
     def test_skips_oversized_image(self, mock_run):
@@ -133,26 +132,6 @@ class TestClipboardMonitor(unittest.TestCase):
         )
         self.monitor.handle_new_image()
         self.assertTrue(self.new_entry_called)
-
-    def test_hash_tracking_text(self):
-        text = "tracked text"
-        expected_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-        self.monitor.handle_new_text(text)
-
-        self.assertEqual(self.monitor._last_hash, expected_hash)
-
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_hash_tracking_image(self, mock_run):
-        image_data = b"\x89PNGtracked"
-        expected_hash = hashlib.sha256(image_data).hexdigest()
-        mock_run.return_value = FakeCompletedProcess(
-            returncode=0, stdout=image_data
-        )
-
-        self.monitor.handle_new_image()
-
-        self.assertEqual(self.monitor._last_hash, expected_hash)
 
     def test_start_stop_are_noops(self):
         # Should not raise

@@ -1,5 +1,4 @@
 import subprocess
-import hashlib
 
 MAX_TEXT_SIZE = 10 * 1024 * 1024   # 10 MB
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -16,7 +15,6 @@ class ClipboardMonitor:
     def __init__(self, db, on_new_entry=None):
         self.db = db
         self.on_new_entry = on_new_entry
-        self._last_hash = None
         self._self_copy = False
 
     def start(self):
@@ -37,12 +35,9 @@ class ClipboardMonitor:
         if not text or len(text.encode("utf-8", errors="replace")) > MAX_TEXT_SIZE:
             return
 
-        h = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        if h != self._last_hash:
-            self._last_hash = h
-            self.db.add_entry("text", content_text=text)
-            if self.on_new_entry:
-                self.on_new_entry()
+        self.db.add_entry("text", content_text=text)
+        if self.on_new_entry:
+            self.on_new_entry()
 
     def handle_new_image(self):
         """Called from D-Bus when the extension detects an image copy.
@@ -62,11 +57,8 @@ class ClipboardMonitor:
             )
             if result.returncode == 0 and result.stdout:
                 if len(result.stdout) <= MAX_IMAGE_SIZE:
-                    h = hashlib.sha256(result.stdout).hexdigest()
-                    if h != self._last_hash:
-                        self._last_hash = h
-                        self.db.add_entry("image", image_data=result.stdout)
-                        if self.on_new_entry:
-                            self.on_new_entry()
+                    self.db.add_entry("image", image_data=result.stdout)
+                    if self.on_new_entry:
+                        self.on_new_entry()
         except (subprocess.SubprocessError, OSError):
             pass
