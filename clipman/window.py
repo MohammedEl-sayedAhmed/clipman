@@ -12,6 +12,45 @@ from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Pango
 DEFAULT_OPACITY = 1.0
 DEFAULT_FONT_SIZE = 12
 DEFAULT_MAX_HISTORY = 500
+DEFAULT_THEME = "dark"
+DEFAULT_FONT_COLOR = ""
+
+THEME_DARK = {
+    "bg_crust": "#181825", "bg_base": "#1e1e2e", "bg_surface": "#252536",
+    "bg_overlay": "#313244", "border": "#45475a",
+    "text_primary": "#cdd6f4", "text_secondary": "#a6adc8",
+    "text_muted": "#585b70", "text_faint": "#45475a",
+    "headerbar_btn": "#6c7086",
+    "accent": "#89b4fa", "accent_hover": "#b4d0fb", "accent_on": "#1e1e2e",
+    "pin_color": "#f9e2af", "danger": "#f38ba8",
+    "danger_bg": "rgba(243, 139, 168, 0.1)",
+    "selected_bg": "#1e3a5f",
+    "hover_overlay": "rgba(255, 255, 255, 0.06)",
+}
+
+THEME_LIGHT = {
+    "bg_crust": "#dce0e8", "bg_base": "#eff1f5", "bg_surface": "#e6e9ef",
+    "bg_overlay": "#ccd0da", "border": "#bcc0cc",
+    "text_primary": "#11111b", "text_secondary": "#1e1e2e",
+    "text_muted": "#4c4f69", "text_faint": "#5c5f77",
+    "headerbar_btn": "#4c4f69",
+    "accent": "#1e66f5", "accent_hover": "#2a6ff7", "accent_on": "#eff1f5",
+    "pin_color": "#df8e1d", "danger": "#d20f39",
+    "danger_bg": "rgba(210, 15, 57, 0.08)",
+    "selected_bg": "#bdd6f2",
+    "hover_overlay": "rgba(0, 0, 0, 0.05)",
+}
+
+THEMES = {"dark": THEME_DARK, "light": THEME_LIGHT}
+
+FONT_COLOR_PRESETS = [
+    ("Default", None),
+    ("Green", "#40a02b"),
+    ("Peach", "#fe640b"),
+    ("Mauve", "#8839ef"),
+    ("Pink", "#ea76cb"),
+    ("Teal", "#179299"),
+]
 
 
 class ClipmanWindow(Gtk.Window):
@@ -44,6 +83,11 @@ class ClipmanWindow(Gtk.Window):
         saved_max = self.db.get_setting("max_entries", str(DEFAULT_MAX_HISTORY))
         self._max_history = max(50, min(5000, int(float(saved_max))))
 
+        saved_theme = self.db.get_setting("theme", DEFAULT_THEME)
+        self._theme = saved_theme if saved_theme in THEMES else DEFAULT_THEME
+
+        self._font_color = self.db.get_setting("font_color", DEFAULT_FONT_COLOR)
+
         self._apply_css()
         self._build_ui()
 
@@ -53,59 +97,62 @@ class ClipmanWindow(Gtk.Window):
 
     def _apply_css(self):
         fs = self._font_size
+        t = dict(THEMES[self._theme])
+        if self._font_color:
+            t["text_primary"] = self._font_color
         css = f"""
         /* Base window */
         .clipman-window {{
-            background-color: #181825;
+            background-color: {t["bg_crust"]};
             border-radius: 12px;
         }}
 
         /* Title bar (CSD headerbar) */
         .clipman-window headerbar {{
-            background-color: #181825;
+            background-color: {t["bg_crust"]};
             background-image: none;
-            color: #cdd6f4;
-            border-bottom: 1px solid #313244;
+            color: {t["text_primary"]};
+            border-bottom: 1px solid {t["bg_overlay"]};
             min-height: 28px;
             padding: 2px 6px;
         }}
         .clipman-window headerbar .title {{
-            color: #cdd6f4;
+            color: {t["text_primary"]};
             font-size: 12px;
             font-weight: bold;
         }}
         .clipman-window headerbar button {{
             background-color: transparent;
             background-image: none;
-            color: #6c7086;
+            color: {t["headerbar_btn"]};
             border: none;
             min-height: 20px;
             min-width: 20px;
             padding: 2px;
         }}
         .clipman-window headerbar button:hover {{
-            background-color: #313244;
+            background-color: {t["bg_overlay"]};
             background-image: none;
-            color: #cdd6f4;
+            color: {t["text_primary"]};
             border-radius: 4px;
         }}
 
         /* Search bar */
         .clipman-header {{
-            background-color: #1e1e2e;
+            background-color: {t["bg_base"]};
             padding: 6px 8px;
         }}
         .clipman-search {{
-            background-color: #313244;
-            color: #cdd6f4;
-            border: 1px solid #45475a;
+            background-color: {t["bg_overlay"]};
+            color: {t["text_primary"]};
+            border: 1px solid {t["border"]};
             border-radius: 8px;
             padding: 4px 8px;
             font-size: {fs}px;
             min-height: 0;
         }}
         .clipman-search:focus {{
-            border-color: #89b4fa;
+            border-color: {t["accent"]};
         }}
 
         /* Gear button */
@@ -114,21 +161,21 @@ class ClipmanWindow(Gtk.Window):
             background-image: none;
             border: none;
             border-radius: 6px;
-            color: #6c7086;
-            padding: 2px 4px;
-            min-height: 20px;
-            min-width: 20px;
-            font-size: 13px;
+            color: {t["headerbar_btn"]};
+            padding: 2px 6px;
+            min-height: 24px;
+            min-width: 24px;
+            font-size: 17px;
         }}
         .gear-button:hover {{
-            background-color: #313244;
+            background-color: {t["bg_overlay"]};
             background-image: none;
-            color: #cdd6f4;
+            color: {t["text_primary"]};
         }}
 
         /* Filter tabs */
         .filter-bar {{
-            background-color: #1e1e2e;
+            background-color: {t["bg_base"]};
             padding: 2px 8px 4px 8px;
         }}
         .filter-tab {{
@@ -136,23 +183,23 @@ class ClipmanWindow(Gtk.Window):
             background-image: none;
             border: none;
             border-radius: 12px;
-            color: #585b70;
+            color: {t["text_secondary"]};
             font-size: 11px;
             padding: 1px 10px;
             min-height: 20px;
             margin: 0 1px;
         }}
         .filter-tab:hover {{
-            color: #a6adc8;
-            background-color: #313244;
+            color: {t["text_primary"]};
+            background-color: {t["bg_overlay"]};
             background-image: none;
         }}
         .filter-tab-active {{
-            background-color: #313244;
+            background-color: {t["bg_overlay"]};
             background-image: none;
             border: none;
             border-radius: 12px;
-            color: #89b4fa;
+            color: {t["accent"]};
             font-size: 11px;
             font-weight: bold;
             padding: 1px 10px;
@@ -162,81 +209,159 @@ class ClipmanWindow(Gtk.Window):
 
         /* Settings panel */
         .settings-panel {{
-            background-color: #1e1e2e;
+            background-color: {t["bg_base"]};
             padding: 8px 12px;
-            border-top: 1px solid #313244;
-            border-bottom: 1px solid #313244;
+            border-top: 1px solid {t["bg_overlay"]};
+            border-bottom: 1px solid {t["bg_overlay"]};
         }}
         .settings-title {{
-            color: #89b4fa;
+            color: {t["accent"]};
             font-size: 10px;
             font-weight: bold;
             letter-spacing: 1px;
         }}
         .settings-label {{
-            color: #a6adc8;
+            color: {t["text_secondary"]};
             font-size: 11px;
             min-width: 80px;
         }}
         .settings-value {{
-            color: #585b70;
+            color: {t["text_muted"]};
             font-size: 10px;
             min-width: 32px;
         }}
         .settings-panel scale trough {{
-            background-color: #45475a;
+            background-color: {t["border"]};
             min-height: 4px;
             border-radius: 2px;
         }}
         .settings-panel scale highlight {{
-            background-color: #89b4fa;
+            background-color: {t["accent"]};
             min-height: 4px;
             border-radius: 2px;
         }}
         .settings-panel scale slider {{
-            background-color: #cdd6f4;
+            background-color: {t["text_primary"]};
             min-height: 12px;
             min-width: 12px;
             border-radius: 6px;
         }}
 
+        /* Theme toggle buttons */
+        .theme-btn {{
+            background-color: transparent;
+            background-image: none;
+            border: 1px solid {t["border"]};
+            border-radius: 6px;
+            color: {t["text_muted"]};
+            font-size: 10px;
+            padding: 1px 10px;
+            min-height: 18px;
+            margin: 0 2px;
+        }}
+        .theme-btn:hover {{
+            color: {t["text_secondary"]};
+            background-color: {t["bg_overlay"]};
+            background-image: none;
+        }}
+        .theme-btn-active {{
+            background-color: {t["accent"]};
+            background-image: none;
+            border: none;
+            border-radius: 6px;
+            color: {t["accent_on"]};
+            font-size: 10px;
+            font-weight: bold;
+            padding: 1px 10px;
+            min-height: 18px;
+            margin: 0 2px;
+        }}
+
+        /* Font color swatches */
+        .color-swatch {{
+            min-height: 18px;
+            min-width: 18px;
+            border-radius: 9px;
+            border: 2px solid transparent;
+            padding: 0;
+            margin: 0 1px;
+            background-image: none;
+        }}
+        .color-swatch:hover {{
+            border-color: {t["text_muted"]};
+            background-image: none;
+        }}
+        .swatch-active {{
+            border-color: {t["text_primary"]};
+        }}
+        .swatch-default {{
+            background-color: transparent;
+            border: 2px solid {t["text_muted"]};
+            color: {t["text_muted"]};
+            font-size: 9px;
+            font-weight: bold;
+        }}
+        .swatch-green {{
+            background-color: #40a02b;
+        }}
+        .swatch-peach {{
+            background-color: #fe640b;
+        }}
+        .swatch-mauve {{
+            background-color: #8839ef;
+        }}
+        .swatch-pink {{
+            background-color: #ea76cb;
+        }}
+        .swatch-teal {{
+            background-color: #179299;
+        }}
+
         /* Section headers */
         .section-header {{
-            color: #585b70;
+            color: {t["text_muted"]};
             font-size: 9px;
             font-weight: bold;
             letter-spacing: 1px;
             padding: 6px 12px 2px 12px;
         }}
 
+        /* Listbox background */
+        .clipman-window list {{
+            background-color: {t["bg_crust"]};
+        }}
+        .clipman-window list row {{
+            background-color: transparent;
+        }}
+
         /* Clipboard entry rows */
         .clip-row {{
-            background-color: #1e1e2e;
+            background-color: {t["bg_base"]};
             border-radius: 6px;
             padding: 5px 10px;
             margin: 1px 4px;
         }}
         .clip-row:hover {{
-            background-color: #252536;
+            background-color: {t["bg_surface"]};
         }}
         row:selected .clip-row {{
-            background-color: #1e3a5f;
-            border-left: 2px solid #89b4fa;
+            background-color: {t["selected_bg"]};
+            border-left: 2px solid {t["accent"]};
         }}
         .clip-text {{
-            color: #cdd6f4;
+            color: {t["text_primary"]};
             font-size: {fs}px;
         }}
         .clip-time {{
-            color: #585b70;
+            color: {t["text_muted"]};
             font-size: 9px;
         }}
         .clip-chars {{
-            color: #45475a;
+            color: {t["text_faint"]};
             font-size: 9px;
         }}
         .clip-type-badge {{
-            color: #89b4fa;
+            color: {t["accent"]};
             font-size: 8px;
             font-weight: bold;
         }}
@@ -252,144 +377,144 @@ class ClipmanWindow(Gtk.Window):
             font-size: 11px;
         }}
         .pin-button:hover, .delete-button:hover, .edit-button:hover {{
-            background-color: rgba(255, 255, 255, 0.06);
+            background-color: {t["hover_overlay"]};
             background-image: none;
             border-radius: 4px;
         }}
         .pinned {{
-            color: #f9e2af;
+            color: {t["pin_color"]};
         }}
         .unpinned {{
-            color: #45475a;
+            color: {t["text_muted"]};
         }}
         .delete-button {{
-            color: #45475a;
+            color: {t["text_muted"]};
         }}
         .delete-button:hover {{
-            color: #f38ba8;
+            color: {t["danger"]};
         }}
 
         /* Snippet name */
         .snippet-name {{
-            color: #cdd6f4;
+            color: {t["text_primary"]};
             font-size: {fs}px;
             font-weight: bold;
         }}
 
         /* Empty state */
         .empty-label {{
-            color: #585b70;
+            color: {t["text_muted"]};
             font-size: 13px;
         }}
 
         /* Bottom status bar */
         .status-bar {{
-            background-color: #1e1e2e;
+            background-color: {t["bg_base"]};
             padding: 4px 10px;
-            border-top: 1px solid #313244;
+            border-top: 1px solid {t["bg_overlay"]};
         }}
         .status-count {{
-            color: #585b70;
+            color: {t["text_muted"]};
             font-size: 10px;
         }}
         .action-button {{
             background-color: transparent;
             background-image: none;
-            border: 1px solid #45475a;
+            border: 1px solid {t["border"]};
             border-radius: 6px;
-            color: #a6adc8;
+            color: {t["text_secondary"]};
             font-size: 10px;
             padding: 1px 8px;
             min-height: 18px;
         }}
         .action-button:hover {{
-            background-color: #313244;
+            background-color: {t["bg_overlay"]};
             background-image: none;
-            color: #cdd6f4;
+            color: {t["text_primary"]};
         }}
         .action-button-danger {{
             background-color: transparent;
             background-image: none;
-            border: 1px solid #45475a;
+            border: 1px solid {t["border"]};
             border-radius: 6px;
-            color: #f38ba8;
+            color: {t["danger"]};
             font-size: 10px;
             padding: 1px 8px;
             min-height: 18px;
         }}
         .action-button-danger:hover {{
-            background-color: rgba(243, 139, 168, 0.1);
+            background-color: {t["danger_bg"]};
             background-image: none;
-            border-color: #f38ba8;
-            color: #f38ba8;
+            border-color: {t["danger"]};
+            color: {t["danger"]};
         }}
 
         /* Snippet dialog */
         .snippet-dialog {{
-            background-color: #1e1e2e;
+            background-color: {t["bg_base"]};
         }}
         .snippet-dialog-content {{
-            background-color: #1e1e2e;
+            background-color: {t["bg_base"]};
         }}
         .snippet-dialog-label {{
-            color: #a6adc8;
+            color: {t["text_secondary"]};
             font-size: 12px;
             font-weight: bold;
         }}
         .snippet-dialog-entry {{
-            background-color: #313244;
-            color: #cdd6f4;
-            border: 1px solid #45475a;
+            background-color: {t["bg_overlay"]};
+            color: {t["text_primary"]};
+            border: 1px solid {t["border"]};
             border-radius: 6px;
             padding: 4px 8px;
             font-size: 12px;
         }}
         .snippet-dialog-entry:focus {{
-            border-color: #89b4fa;
+            border-color: {t["accent"]};
         }}
         .snippet-dialog-textview {{
-            background-color: #313244;
-            color: #cdd6f4;
+            background-color: {t["bg_overlay"]};
+            color: {t["text_primary"]};
             font-size: 12px;
             border-radius: 6px;
         }}
         .snippet-dialog-textview text {{
-            background-color: #313244;
-            color: #cdd6f4;
+            background-color: {t["bg_overlay"]};
+            color: {t["text_primary"]};
         }}
         .snippet-dialog .dialog-action-area button {{
-            background-color: #313244;
+            background-color: {t["bg_overlay"]};
             background-image: none;
-            color: #a6adc8;
-            border: 1px solid #45475a;
+            color: {t["text_secondary"]};
+            border: 1px solid {t["border"]};
             border-radius: 6px;
             padding: 4px 14px;
             font-size: 12px;
         }}
         .snippet-dialog .dialog-action-area button:hover {{
-            background-color: #45475a;
+            background-color: {t["border"]};
             background-image: none;
-            color: #cdd6f4;
+            color: {t["text_primary"]};
         }}
         .snippet-dialog .dialog-action-area button:last-child {{
-            background-color: #89b4fa;
+            background-color: {t["accent"]};
             background-image: none;
-            color: #1e1e2e;
+            color: {t["accent_on"]};
             border: none;
             font-weight: bold;
         }}
         .snippet-dialog .dialog-action-area button:last-child:hover {{
-            background-color: #b4d0fb;
+            background-color: {t["accent_hover"]};
             background-image: none;
         }}
         .snippet-dialog headerbar {{
-            background-color: #181825;
+            background-color: {t["bg_crust"]};
             background-image: none;
-            color: #cdd6f4;
-            border-bottom: 1px solid #313244;
+            color: {t["text_primary"]};
+            border-bottom: 1px solid {t["bg_overlay"]};
         }}
         .snippet-dialog headerbar .title {{
-            color: #cdd6f4;
+            color: {t["text_primary"]};
         }}
         """
         screen = Gdk.Screen.get_default()
@@ -482,6 +607,50 @@ class ClipmanWindow(Gtk.Window):
             50, 5000, 50, self._max_history,
             self._on_max_history_changed, self._max_value_label
         )
+
+        # Theme toggle row
+        theme_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        theme_label = Gtk.Label(label="Theme")
+        theme_label.get_style_context().add_class("settings-label")
+        theme_label.set_halign(Gtk.Align.START)
+        theme_row.pack_start(theme_label, False, False, 0)
+        theme_spacer = Gtk.Box()
+        theme_spacer.set_hexpand(True)
+        theme_row.pack_start(theme_spacer, True, True, 0)
+        self._theme_buttons = {}
+        for tid, tlabel in [("dark", "Dark"), ("light", "Light")]:
+            btn = Gtk.Button(label=tlabel)
+            cls = "theme-btn-active" if tid == self._theme else "theme-btn"
+            btn.get_style_context().add_class(cls)
+            btn.connect("clicked", self._on_theme_changed, tid)
+            theme_row.pack_start(btn, False, False, 0)
+            self._theme_buttons[tid] = btn
+        self.settings_panel.pack_start(theme_row, False, False, 0)
+
+        # Font color swatch row
+        color_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        color_label = Gtk.Label(label="Font color")
+        color_label.get_style_context().add_class("settings-label")
+        color_label.set_halign(Gtk.Align.START)
+        color_row.pack_start(color_label, False, False, 0)
+        color_spacer = Gtk.Box()
+        color_spacer.set_hexpand(True)
+        color_row.pack_start(color_spacer, True, True, 0)
+        self._color_buttons = []
+        for name, hex_val in FONT_COLOR_PRESETS:
+            btn = Gtk.Button(label="A" if hex_val is None else "")
+            btn.set_tooltip_text(name)
+            btn.get_style_context().add_class("color-swatch")
+            btn.get_style_context().add_class(f"swatch-{name.lower()}")
+            current = self._font_color or None
+            if hex_val == current:
+                btn.get_style_context().add_class("swatch-active")
+            elif hex_val is None and not self._font_color:
+                btn.get_style_context().add_class("swatch-active")
+            btn.connect("clicked", self._on_font_color_changed, hex_val)
+            color_row.pack_start(btn, False, False, 0)
+            self._color_buttons.append((btn, hex_val))
+        self.settings_panel.pack_start(color_row, False, False, 0)
 
         main_box.pack_start(self.settings_panel, False, False, 0)
 
@@ -668,6 +837,7 @@ class ClipmanWindow(Gtk.Window):
         label = Gtk.Label(label=text)
         label.get_style_context().add_class("section-header")
         label.set_halign(Gtk.Align.START)
+        label.set_xalign(0)
         row.add(label)
         return row
 
@@ -715,6 +885,7 @@ class ClipmanWindow(Gtk.Window):
             label = Gtk.Label(label=preview)
             label.get_style_context().add_class("clip-text")
             label.set_halign(Gtk.Align.START)
+            label.set_xalign(0)
             label.set_line_wrap(True)
             label.set_max_width_chars(45)
             label.set_ellipsize(Pango.EllipsizeMode.END)
@@ -782,6 +953,7 @@ class ClipmanWindow(Gtk.Window):
         name_label = Gtk.Label(label=snippet["name"])
         name_label.get_style_context().add_class("snippet-name")
         name_label.set_halign(Gtk.Align.START)
+        name_label.set_xalign(0)
         name_label.set_ellipsize(Pango.EllipsizeMode.END)
         content_box.pack_start(name_label, False, False, 0)
 
@@ -791,6 +963,7 @@ class ClipmanWindow(Gtk.Window):
         preview_label = Gtk.Label(label=preview)
         preview_label.get_style_context().add_class("clip-text")
         preview_label.set_halign(Gtk.Align.START)
+        preview_label.set_xalign(0)
         preview_label.set_line_wrap(True)
         preview_label.set_max_width_chars(45)
         preview_label.set_ellipsize(Pango.EllipsizeMode.END)
@@ -1006,6 +1179,30 @@ class ClipmanWindow(Gtk.Window):
         self._max_history = int(scale.get_value())
         self._max_value_label.set_text(str(self._max_history))
         self.db.set_setting("max_entries", str(self._max_history))
+
+    def _on_theme_changed(self, button, theme_id):
+        if theme_id == self._theme:
+            return
+        self._theme = theme_id
+        self.db.set_setting("theme", theme_id)
+        for tid, btn in self._theme_buttons.items():
+            ctx = btn.get_style_context()
+            ctx.remove_class("theme-btn-active")
+            ctx.remove_class("theme-btn")
+            ctx.add_class("theme-btn-active" if tid == theme_id else "theme-btn")
+        self._apply_css()
+        self.refresh()
+
+    def _on_font_color_changed(self, button, hex_val):
+        self._font_color = hex_val or ""
+        self.db.set_setting("font_color", self._font_color)
+        for btn, val in self._color_buttons:
+            ctx = btn.get_style_context()
+            ctx.remove_class("swatch-active")
+            if val == hex_val:
+                ctx.add_class("swatch-active")
+        self._apply_css()
+        self.refresh()
 
     # -- Snippet dialogs ---------------------------------------------------
 
