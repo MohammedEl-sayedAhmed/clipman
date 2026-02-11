@@ -16,6 +16,10 @@ Like Windows `Win+V` — but for Linux.
 
 Press **Super+V** to view your clipboard history, search entries, pin favorites, and instantly paste previous copies.
 
+<br>
+
+<img src="docs/dark-theme.png" alt="Dark theme" width="320">&nbsp;&nbsp;<img src="docs/light-theme.png" alt="Light theme" width="320">
+
 </div>
 
 ---
@@ -32,14 +36,18 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 | **Snippet templates** | Save reusable text snippets for quick pasting |
 | **Date grouping** | Entries organized into Today, Yesterday, and Older sections |
 | **Keyboard shortcuts** | Arrow keys to navigate, Del to delete, P to pin, Shift+Enter to copy only |
+| **Dark & Light themes** | Switch between dark (Catppuccin Mocha) and light (Catppuccin Latte) themes |
+| **Font customization** | Adjustable font size and 6 font color presets |
+| **Window opacity** | Configurable transparency from 30% to 100% |
+| **Configurable history** | Adjust max history size from 50 to 5000 entries |
 | **Character count** | Text entries show character count badge |
 | **Image preview** | Hover over image entries for a larger preview tooltip |
 | **Super+V shortcut** | Toggle the popup with a familiar keyboard shortcut |
 | **Autostart** | Runs as a background daemon, starts on login |
 | **Wayland native** | Zero polling — uses a GNOME Shell extension for flicker-free monitoring |
 | **Lightweight** | Python + GTK3 — no Electron, no heavy frameworks |
-| **Deduplication** | SHA256 hashing prevents duplicate entries |
-| **Auto-pruning** | History capped at 500 entries (pinned entries are exempt) |
+| **Deduplication** | SHA256 hashing prevents duplicate entries; re-copying bumps to top |
+| **Auto-pruning** | History capped at configurable limit (pinned entries are exempt) |
 
 ## Requirements
 
@@ -82,6 +90,20 @@ After your next login, the daemon starts automatically.
 | Clear all unpinned | Click **Clear All** |
 | Close popup | <kbd>Escape</kbd> or click outside |
 
+### Settings
+
+Click the gear icon to access settings:
+
+| Setting | Description |
+|---------|-------------|
+| **Opacity** | Window transparency (30%–100%) |
+| **Font size** | Text size for entries (8–20px) |
+| **Max history** | Number of entries to keep (50–5000) |
+| **Theme** | Toggle between Dark and Light themes |
+| **Font color** | Choose from Default, Green, Peach, Mauve, Pink, or Teal presets |
+
+Settings are saved automatically and persist across sessions.
+
 ## Architecture
 
 ```
@@ -92,12 +114,15 @@ clipman/
 │   ├── clipboard_monitor.py    # Event-driven clipboard monitor
 │   ├── database.py             # SQLite storage with dedup/search/pin/snippets
 │   ├── dbus_service.py         # D-Bus IPC for toggle and clipboard events
-│   └── window.py               # GTK3 popup window UI
+│   └── window.py               # GTK3 popup window UI with theming
 ├── extension/
 │   ├── extension.js            # GNOME Shell extension (clipboard detection)
 │   └── metadata.json           # Extension metadata
 ├── data/
 │   └── com.clipman.Clipman.desktop
+├── tests/
+│   ├── test_database.py        # Database unit tests (41 tests)
+│   └── test_clipboard_monitor.py  # Monitor unit tests (15 tests)
 ├── launcher.sh                 # Environment wrapper for snap terminals
 ├── install.sh
 └── uninstall.sh
@@ -108,7 +133,7 @@ clipman/
 1. A **GNOME Shell extension** detects clipboard changes natively via `Meta.Selection`'s `owner-changed` signal — no polling, no subprocesses, no screen flicker
 2. The extension reads the clipboard content and sends it to the **daemon** over **D-Bus**
 3. The daemon stores entries in an **SQLite database** at `~/.local/share/clipman/`
-4. Duplicates are detected via **SHA256 hashing** — copying the same content just updates the timestamp
+4. Duplicates are detected via **SHA256 hashing** — copying the same content updates the timestamp and bumps it to the top
 5. Pressing **Super+V** sends a **D-Bus toggle** to the daemon, showing the popup window
 6. Clicking an entry copies it via `wl-copy`, hides the popup, and the extension simulates **Ctrl+V** using a Clutter virtual keyboard to paste it into the focused app
 
