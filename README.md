@@ -43,6 +43,12 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 | **Character count** | Text entries show character count badge |
 | **Image preview** | Hover over image entries for a larger preview tooltip |
 | **Super+V shortcut** | Toggle the popup with a familiar keyboard shortcut |
+| **Incognito mode** | Pause clipboard recording — nothing is saved while active |
+| **Sensitive data protection** | Passwords and tokens auto-detected and auto-cleared after 30 seconds |
+| **Preview expansion** | Expand long text entries inline to see the full content |
+| **Inline edit** | Edit any text entry directly from the clipboard history |
+| **URL detection** | URLs are auto-detected with a one-click open button |
+| **Backup & Restore** | Export and import your clipboard database from settings |
 | **Autostart** | Runs as a background daemon, starts on login |
 | **Wayland native** | Zero polling — uses a GNOME Shell extension for flicker-free monitoring |
 | **Lightweight** | Python + GTK3 — no Electron, no heavy frameworks |
@@ -87,6 +93,10 @@ After your next login, the daemon starts automatically.
 | Filter by type | Click **All**, **Text**, **Images**, or **Snippets** tabs |
 | Create a snippet | Switch to **Snippets** tab and click **+ Add** |
 | Search history | Type in the search bar |
+| Edit a text entry | Click the edit icon (✎) on any text entry |
+| Expand long text | Click the expand icon (▼) to see full content |
+| Open a URL | Click the arrow icon (↗) on URL entries |
+| Toggle incognito | Click the eye icon in the status bar |
 | Clear all unpinned | Click **Clear All** |
 | Close popup | <kbd>Escape</kbd> or click outside |
 
@@ -101,6 +111,7 @@ Click the gear icon to access settings:
 | **Max history** | Number of entries to keep (50–5000) |
 | **Theme** | Toggle between Dark and Light themes |
 | **Font color** | Choose from Default, Green, Peach, Mauve, Pink, or Teal presets |
+| **Data** | Backup or restore your clipboard database |
 
 Settings are saved automatically and persist across sessions.
 
@@ -121,8 +132,8 @@ clipman/
 ├── data/
 │   └── com.clipman.Clipman.desktop
 ├── tests/
-│   ├── test_database.py        # Database unit tests (41 tests)
-│   └── test_clipboard_monitor.py  # Monitor unit tests (15 tests)
+│   ├── test_database.py        # Database unit tests (50 tests)
+│   └── test_clipboard_monitor.py  # Monitor unit tests (24 tests)
 ├── launcher.sh                 # Environment wrapper for snap terminals
 ├── install.sh
 └── uninstall.sh
