@@ -65,7 +65,7 @@ class ClipmanWindow(Gtk.Window):
 
         self.set_title("Clipman")
         self.set_default_size(380, 500)
-        self.set_position(Gtk.WindowPosition.CENTER)
+        self.set_position(Gtk.WindowPosition.NONE)
         self.set_decorated(True)
         self.set_resizable(True)
         self.set_keep_above(True)
@@ -1651,10 +1651,29 @@ class ClipmanWindow(Gtk.Window):
 
     # -- Toggle ------------------------------------------------------------
 
+    def _position_near_cursor(self):
+        display = Gdk.Display.get_default()
+        seat = display.get_default_seat()
+        pointer = seat.get_pointer()
+        _, x, y = pointer.get_position()
+
+        monitor = display.get_monitor_at_point(x, y)
+        geom = monitor.get_geometry()
+
+        win_w, win_h = self.get_size()
+        # Place slightly offset from cursor, clamp to monitor bounds
+        win_x = min(x + 10, geom.x + geom.width - win_w)
+        win_y = min(y + 10, geom.y + geom.height - win_h)
+        win_x = max(geom.x, win_x)
+        win_y = max(geom.y, win_y)
+
+        self.move(win_x, win_y)
+
     def toggle(self):
         if self.get_visible():
             self.hide()
         else:
+            self._position_near_cursor()
             self.show_all()
             self.refresh()
             self.search_entry.grab_focus()
