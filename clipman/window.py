@@ -1651,12 +1651,25 @@ class ClipmanWindow(Gtk.Window):
 
     # -- Toggle ------------------------------------------------------------
 
+    def _move_to_cursor(self):
+        try:
+            import dbus
+            bus = dbus.SessionBus()
+            proxy = bus.get_object(
+                "com.clipman.Extension", "/com/clipman/Extension"
+            )
+            iface = dbus.Interface(proxy, "com.clipman.Extension")
+            iface.MoveWindowToCursor("Clipman")
+        except Exception:
+            pass
+        return False
+
     def toggle(self):
         if self.get_visible():
             self.hide()
         else:
-            self.set_position(Gtk.WindowPosition.MOUSE)
             self.show_all()
             self.refresh()
             self.search_entry.grab_focus()
             self.present()
+            GLib.timeout_add(50, self._move_to_cursor)

@@ -9,6 +9,9 @@ const PASTE_DBUS_IFACE = `
 <node>
   <interface name="com.clipman.Extension">
     <method name="SimulatePaste"/>
+    <method name="MoveWindowToCursor">
+      <arg type="s" direction="in" name="title"/>
+    </method>
   </interface>
 </node>`;
 
@@ -71,6 +74,26 @@ export default class ClipmanExtension extends Extension {
             Clutter.CURRENT_TIME,
             Clutter.KEY_Control_L, Clutter.KeyState.RELEASED
         );
+    }
+
+    MoveWindowToCursor(title) {
+        const [x, y] = global.get_pointer();
+        const monitor = global.display.get_current_monitor();
+        const workArea = global.display.get_workspace_manager()
+            .get_active_workspace().get_work_area_for_monitor(monitor);
+
+        for (const actor of global.get_window_actors()) {
+            const metaWin = actor.get_meta_window();
+            if (metaWin.get_title() === title) {
+                const rect = metaWin.get_frame_rect();
+                let winX = Math.min(x, workArea.x + workArea.width - rect.width);
+                let winY = Math.min(y, workArea.y + workArea.height - rect.height);
+                winX = Math.max(workArea.x, winX);
+                winY = Math.max(workArea.y, winY);
+                metaWin.move_frame(true, winX, winY);
+                break;
+            }
+        }
     }
 
     _onOwnerChanged(_selection, selectionType, _selectionSource) {
