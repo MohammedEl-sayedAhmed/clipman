@@ -8,7 +8,7 @@ Thank you for your interest in contributing to Clipman!
 2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/clipman.git`
 3. Install dependencies: `./install.sh`
 4. Log out and back in to activate the GNOME Shell extension
-5. Run the daemon: `python3 clipman.py`
+5. Start the daemon: `systemctl --user start clipman.service`
 
 ## Development
 
@@ -16,19 +16,39 @@ Thank you for your interest in contributing to Clipman!
 
 ```
 clipman/
-  clipman.py            # Entry point
-  clipman/
-    app.py              # GTK Application
-    window.py           # UI (GTK3 window, CSS, event handlers)
-    database.py         # SQLite storage layer
-    clipboard_monitor.py# Clipboard change handling
-    dbus_service.py     # D-Bus IPC
-  extension/
-    extension.js        # GNOME Shell extension (clipboard detection, paste simulation)
-    metadata.json       # Extension metadata
-  tests/
-    test_database.py    # Database tests
-    test_clipboard_monitor.py  # Monitor tests
+├── clipman.py                  # Entry point (start daemon / toggle popup)
+├── clipman/
+│   ├── __init__.py             # i18n/gettext setup
+│   ├── app.py                  # GTK Application lifecycle
+│   ├── clipboard_monitor.py    # Event-driven clipboard change handling
+│   ├── database.py             # SQLite storage layer
+│   ├── dbus_service.py         # D-Bus IPC (toggle, clipboard events)
+│   ├── window.py               # GTK3 popup window UI and event handlers
+│   └── style.css               # CSS theme template (Catppuccin, $variable syntax)
+├── extension/
+│   ├── extension.js            # GNOME Shell extension (clipboard detection, paste)
+│   └── metadata.json           # Extension metadata
+├── data/
+│   ├── com.clipman.Clipman.desktop
+│   ├── com.clipman.Clipman.svg
+│   ├── com.clipman.Clipman.metainfo.xml
+│   └── clipman.service         # Systemd user service
+├── po/
+│   ├── POTFILES.in             # Files with translatable strings
+│   └── clipman.pot             # Translation template (70 strings)
+├── tests/
+│   ├── test_database.py        # Database tests (70 tests)
+│   ├── test_clipboard_monitor.py  # Monitor tests (58 tests)
+│   └── test_window_utils.py    # URL detection & time formatting (22 tests)
+├── docs/
+│   ├── dark-theme.png          # Screenshot (dark theme)
+│   └── light-theme.png         # Screenshot (light theme)
+├── com.clipman.Clipman.json    # Flatpak manifest
+├── snap/
+│   └── snapcraft.yaml          # Snap packaging
+├── launcher.sh                 # Environment wrapper for snap terminals
+├── install.sh
+└── uninstall.sh
 ```
 
 ### Running Tests
@@ -37,6 +57,8 @@ clipman/
 python3 -m unittest discover -s tests
 ```
 
+All 150 tests should pass. Tests cover the database layer, clipboard monitor, URL detection, and time formatting — no GTK or D-Bus required.
+
 ### Key Constraints
 
 - **Wayland only** — no X11-specific APIs in the daemon
@@ -44,6 +66,39 @@ python3 -m unittest discover -s tests
 - **GNOME Shell extension** — runs inside the compositor; changes require logout/login to take effect
 - **No polling** — clipboard detection is event-driven via D-Bus
 - **Single-threaded** — all code runs on the GLib main loop
+
+### i18n (Translations)
+
+All user-visible strings in `window.py` are wrapped with `_()` for translation support:
+
+```python
+from clipman import _
+
+label.set_text(_("Search..."))
+status.set_text(_("{count} items").format(count=total))
+```
+
+- Import `_` from `clipman` (set up in `__init__.py`)
+- Wrap every user-visible string with `_()`
+- Use `.format()` for strings with variables — keep placeholders inside the translatable string
+- Translation template: `po/clipman.pot`
+- Source file list: `po/POTFILES.in`
+
+### CSS Theming
+
+The UI stylesheet lives in `clipman/style.css` as a `string.Template` file:
+
+```css
+.entry-row {
+    background-color: $bg_surface0;
+    font-size: ${font_size}px;
+}
+```
+
+- Theme colors use `$variable` syntax (e.g., `$bg_crust`, `$text_primary`, `$accent`)
+- Use `${variable}` when followed by letters/digits (e.g., `${font_size}px`)
+- Variables are substituted at runtime from the theme dictionary in `window.py`
+- Do **not** use CSS custom properties (`var(--name)`) — GTK3's CSS engine does not support them
 
 ## Submitting Changes
 

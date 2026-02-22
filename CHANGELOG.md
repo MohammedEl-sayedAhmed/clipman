@@ -9,18 +9,22 @@ All notable changes to Clipman are documented in this file.
 - Full-text search across all entries
 - Pin/unpin entries to keep them permanently
 - GNOME Shell extension for native Wayland clipboard detection
+- XWayland clipboard support via MIME type fallback chain (VSCode, Electron apps)
 - Super+V keyboard shortcut to toggle the popup
 - Dark and light themes (Catppuccin Mocha / Latte)
-- Configurable opacity, font size, and font color
+- Configurable opacity, font size, and font color (6 presets)
 - Incognito mode — pause history recording
 - Sensitive data detection (tokens, passwords) with 30-second auto-clear
 - Preview expansion for long entries
 - Inline editing of text entries
 - URL detection with one-click open in browser
-- Reusable text snippets
-- Database backup and restore
+- Reusable text snippets with dedicated tab
+- Database backup and restore from settings
 - Terminal-aware paste (Ctrl+Shift+V for terminal emulators)
 - Window appears near cursor position
-- XWayland clipboard support (VSCode, Electron apps)
-- Autostart on login via .desktop file
-- 74 automated tests (database + clipboard monitor)
+- Autostart on login via systemd user service with auto-restart
+- i18n/gettext framework with 70 translatable strings
+- CSS theming extracted to separate template file (Catppuccin)
+- Flatpak manifest for Flathub publishing
+- Snap packaging configuration
+- 150 automated tests (database, clipboard monitor, URL detection, time formatting)

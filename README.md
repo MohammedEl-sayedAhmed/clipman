@@ -73,16 +73,41 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 git clone https://github.com/MohammedEl-sayedAhmed/clipman.git
 cd clipman
 
-# Install dependencies, extension, keybinding, and autostart
+# Install dependencies, extension, keybinding, systemd service, and autostart
 ./install.sh
 
 # Log out and back in to activate the GNOME Shell extension
 
-# Start the daemon
-python3 clipman.py &
+# Start the daemon (runs automatically on next login)
+systemctl --user start clipman.service
 ```
 
-After your next login, the daemon starts automatically.
+The systemd service auto-restarts on crash and starts automatically on login.
+
+### Alternative Installation
+
+<details>
+<summary><strong>Flatpak</strong></summary>
+
+A Flatpak manifest (`com.clipman.Clipman.json`) is included for building with GNOME 46 runtime. To build locally:
+
+```bash
+flatpak-builder --user --install build com.clipman.Clipman.json
+```
+
+</details>
+
+<details>
+<summary><strong>Snap</strong></summary>
+
+A Snap configuration (`snap/snapcraft.yaml`) is included. To build locally:
+
+```bash
+snapcraft
+sudo snap install clipman_*.snap --classic
+```
+
+</details>
 
 ## Usage
 
@@ -122,32 +147,44 @@ Settings are saved automatically and persist across sessions.
 
 ```
 clipman/
-├── clipman.py                  # Entry point (start daemon / toggle popup)
+├── clipman.py                     # Entry point (start daemon / toggle popup)
 ├── clipman/
-│   ├── app.py                  # GTK Application lifecycle
-│   ├── clipboard_monitor.py    # Event-driven clipboard monitor
-│   ├── database.py             # SQLite storage with dedup/search/pin/snippets
-│   ├── dbus_service.py         # D-Bus IPC for toggle and clipboard events
-│   ├── window.py               # GTK3 popup window UI
-│   └── style.css               # Theming stylesheet (Catppuccin templates)
+│   ├── __init__.py                # i18n/gettext setup
+│   ├── app.py                     # GTK Application lifecycle
+│   ├── clipboard_monitor.py       # Event-driven clipboard monitor
+│   ├── database.py                # SQLite storage with dedup/search/pin/snippets
+│   ├── dbus_service.py            # D-Bus IPC for toggle and clipboard events
+│   ├── window.py                  # GTK3 popup window UI
+│   └── style.css                  # CSS theme template (Catppuccin, $variable syntax)
 ├── extension/
-│   ├── extension.js            # GNOME Shell extension (clipboard detection + paste)
-│   └── metadata.json           # Extension metadata
+│   ├── extension.js               # GNOME Shell extension (clipboard detection + paste)
+│   └── metadata.json              # Extension metadata
 ├── data/
 │   ├── com.clipman.Clipman.desktop
-│   ├── com.clipman.Clipman.svg           # App icon
+│   ├── com.clipman.Clipman.svg    # App icon
 │   ├── com.clipman.Clipman.metainfo.xml  # AppStream metadata
-│   └── clipman.service                   # Systemd user service
+│   └── clipman.service            # Systemd user service
 ├── po/
-│   ├── POTFILES.in             # Files with translatable strings
-│   └── clipman.pot             # Translation template (70 strings)
+│   ├── POTFILES.in                # Files with translatable strings
+│   └── clipman.pot                # Translation template (70 strings)
 ├── tests/
 │   ├── test_database.py           # Database unit tests (70 tests)
 │   ├── test_clipboard_monitor.py  # Monitor unit tests (58 tests)
 │   └── test_window_utils.py       # URL detection & time formatting (22 tests)
-├── launcher.sh                 # Environment wrapper for snap terminals
+├── docs/
+│   ├── dark-theme.png             # Screenshot (dark theme)
+│   └── light-theme.png            # Screenshot (light theme)
+├── com.clipman.Clipman.json       # Flatpak manifest
+├── snap/
+│   └── snapcraft.yaml             # Snap packaging
+├── .github/
+│   └── workflows/test.yml         # CI — runs 150 tests on Python 3.10–3.12
+├── launcher.sh                    # Environment wrapper for snap terminals
 ├── install.sh
-└── uninstall.sh
+├── uninstall.sh
+├── CONTRIBUTING.md
+├── CHANGELOG.md
+└── LICENSE / NOTICE
 ```
 
 ### How it works
@@ -165,7 +202,7 @@ clipman/
 ./uninstall.sh
 ```
 
-This removes the GNOME Shell extension, keybinding, autostart entry, and optionally your clipboard history data.
+This stops the systemd service and removes the GNOME Shell extension, keybinding, systemd service, app icon, and optionally your clipboard history data.
 
 ## License
 
