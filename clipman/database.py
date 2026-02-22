@@ -30,6 +30,7 @@ class ClipboardDB:
         # and GTK signal handlers both run on the main loop).
         self.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA journal_mode=WAL")
         self._create_table()
 
     def _create_table(self):
@@ -252,6 +253,7 @@ class ClipboardDB:
     def export_backup(self, path: str):
         import shutil
         self.conn.commit()
+        self.conn.execute("PRAGMA wal_checkpoint(FULL)")
         shutil.copy2(str(DB_PATH), path)
 
     def import_backup(self, path: str):
@@ -260,6 +262,8 @@ class ClipboardDB:
         shutil.copy2(path, str(DB_PATH))
         self.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
+        self.conn.execute("PRAGMA journal_mode=WAL")
+        self._create_table()
 
     # --- Snippets ---
 
