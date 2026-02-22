@@ -54,6 +54,17 @@ export default class ClipmanExtension extends Extension {
     }
 
     SimulatePaste() {
+        const TERMINAL_CLASSES = [
+            'gnome-terminal-server', 'tilix', 'kitty', 'alacritty',
+            'terminator', 'xterm', 'konsole', 'foot', 'wezterm',
+            'st', 'sakura', 'xfce4-terminal', 'mate-terminal',
+            'lxterminal', 'guake', 'tilda', 'cool-retro-term',
+        ];
+
+        const focusWin = global.display.get_focus_window();
+        const wmClass = focusWin?.get_wm_class()?.toLowerCase() ?? '';
+        const needShift = TERMINAL_CLASSES.some(c => wmClass.includes(c));
+
         const seat = Clutter.get_default_backend().get_default_seat();
         const vk = seat.create_virtual_device(
             Clutter.InputDeviceType.KEYBOARD_DEVICE
@@ -62,6 +73,12 @@ export default class ClipmanExtension extends Extension {
             Clutter.CURRENT_TIME,
             Clutter.KEY_Control_L, Clutter.KeyState.PRESSED
         );
+        if (needShift) {
+            vk.notify_keyval(
+                Clutter.CURRENT_TIME,
+                Clutter.KEY_Shift_L, Clutter.KeyState.PRESSED
+            );
+        }
         vk.notify_keyval(
             Clutter.CURRENT_TIME,
             Clutter.KEY_v, Clutter.KeyState.PRESSED
@@ -70,6 +87,12 @@ export default class ClipmanExtension extends Extension {
             Clutter.CURRENT_TIME,
             Clutter.KEY_v, Clutter.KeyState.RELEASED
         );
+        if (needShift) {
+            vk.notify_keyval(
+                Clutter.CURRENT_TIME,
+                Clutter.KEY_Shift_L, Clutter.KeyState.RELEASED
+            );
+        }
         vk.notify_keyval(
             Clutter.CURRENT_TIME,
             Clutter.KEY_Control_L, Clutter.KeyState.RELEASED
