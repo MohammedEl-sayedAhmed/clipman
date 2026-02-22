@@ -9,7 +9,7 @@
         "--socket=wayland",
         "--socket=fallback-x11",
         "--talk-name=org.gnome.Shell",
-        "--talk-name=com.clipman.Extension",
+        "--talk-name=org.gnome.Shell.Extensions.clipman",
         "--filesystem=xdg-data/clipman:create"
     ],
     "modules": [

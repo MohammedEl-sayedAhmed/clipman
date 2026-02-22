@@ -7,7 +7,7 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 const PASTE_DBUS_IFACE = `
 <node>
-  <interface name="com.clipman.Extension">
+  <interface name="org.gnome.Shell.Extensions.clipman">
     <method name="SimulatePaste"/>
     <method name="MoveWindowToCursor">
       <arg type="s" direction="in" name="title"/>
@@ -26,7 +26,7 @@ export default class ClipmanExtension extends Extension {
         // Own a bus name so the daemon can find us
         this._busNameId = Gio.bus_own_name_on_connection(
             Gio.DBus.session,
-            'com.clipman.Extension',
+            'org.gnome.Shell.Extensions.clipman',
             Gio.BusNameOwnerFlags.NONE,
             null, null
         );
@@ -35,7 +35,7 @@ export default class ClipmanExtension extends Extension {
         this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(
             PASTE_DBUS_IFACE, this
         );
-        this._dbusImpl.export(Gio.DBus.session, '/com/clipman/Extension');
+        this._dbusImpl.export(Gio.DBus.session, '/org/gnome/Shell/Extensions/clipman');
     }
 
     disable() {
@@ -170,21 +170,17 @@ export default class ClipmanExtension extends Extension {
     }
 
     _sendToDaemon(contentType, content) {
-        try {
-            Gio.DBus.session.call(
-                'com.clipman.Daemon',
-                '/com/clipman/Daemon',
-                'com.clipman.Daemon',
-                'NewEntry',
-                new GLib.Variant('(ss)', [contentType, content]),
-                null,
-                Gio.DBusCallFlags.NONE,
-                -1,
-                null,
-                null
-            );
-        } catch (e) {
-            // Daemon not running — ignore
-        }
+        Gio.DBus.session.call(
+            'com.clipman.Daemon',
+            '/com/clipman/Daemon',
+            'com.clipman.Daemon',
+            'NewEntry',
+            new GLib.Variant('(ss)', [contentType, content]),
+            null,
+            Gio.DBusCallFlags.NONE,
+            -1,
+            null,
+            null
+        );
     }
 }

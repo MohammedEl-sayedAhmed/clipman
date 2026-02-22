@@ -761,9 +761,9 @@ class ClipmanWindow(Gtk.Window):
             import dbus
             bus = dbus.SessionBus()
             proxy = bus.get_object(
-                "com.clipman.Extension", "/com/clipman/Extension"
+                "org.gnome.Shell.Extensions.clipman", "/org/gnome/Shell/Extensions/clipman"
             )
-            iface = dbus.Interface(proxy, "com.clipman.Extension")
+            iface = dbus.Interface(proxy, "org.gnome.Shell.Extensions.clipman")
             iface.SimulatePaste()
         except dbus.DBusException:
             pass
@@ -1217,9 +1217,9 @@ class ClipmanWindow(Gtk.Window):
             import dbus
             bus = dbus.SessionBus()
             proxy = bus.get_object(
-                "com.clipman.Extension", "/com/clipman/Extension"
+                "org.gnome.Shell.Extensions.clipman", "/org/gnome/Shell/Extensions/clipman"
             )
-            iface = dbus.Interface(proxy, "com.clipman.Extension")
+            iface = dbus.Interface(proxy, "org.gnome.Shell.Extensions.clipman")
             iface.MoveWindowToCursor("Clipman")
         except dbus.DBusException:
             pass
