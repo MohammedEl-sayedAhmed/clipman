@@ -142,8 +142,9 @@ clipman/
 │   ├── POTFILES.in             # Files with translatable strings
 │   └── clipman.pot             # Translation template (70 strings)
 ├── tests/
-│   ├── test_database.py        # Database unit tests (50 tests)
-│   └── test_clipboard_monitor.py  # Monitor unit tests (24 tests)
+│   ├── test_database.py           # Database unit tests (70 tests)
+│   ├── test_clipboard_monitor.py  # Monitor unit tests (58 tests)
+│   └── test_window_utils.py       # URL detection & time formatting (22 tests)
 ├── launcher.sh                 # Environment wrapper for snap terminals
 ├── install.sh
 └── uninstall.sh
