@@ -32,12 +32,14 @@ class TestClipboardMonitor(unittest.TestCase):
 
     def test_allows_duplicate_text(self):
         self.monitor.handle_new_text("same text")
+        self.monitor._last_event_time = 0  # reset rate limiter
         self.monitor.handle_new_text("same text")
 
         self.assertEqual(self.mock_db.add_entry.call_count, 2)
 
     def test_detects_changed_text(self):
         self.monitor.handle_new_text("first text")
+        self.monitor._last_event_time = 0  # reset rate limiter
         self.monitor.handle_new_text("second text")
 
         self.assertEqual(self.mock_db.add_entry.call_count, 2)
@@ -89,6 +91,7 @@ class TestClipboardMonitor(unittest.TestCase):
         )
 
         self.monitor.handle_new_image()
+        self.monitor._last_event_time = 0  # reset rate limiter
         self.monitor.handle_new_image()
 
         self.assertEqual(self.mock_db.add_entry.call_count, 2)

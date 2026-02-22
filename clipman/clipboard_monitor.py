@@ -1,8 +1,10 @@
 import string
 import subprocess
+import time
 
 MAX_TEXT_SIZE = 10 * 1024 * 1024   # 10 MB
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+MIN_EVENT_INTERVAL = 0.1  # seconds — ignore events faster than this
 
 _TOKEN_PREFIXES = ("ghp_", "gho_", "ghs_", "github_pat_", "sk-", "sk_live_",
                    "pk_live_", "Bearer ", "eyJ", "xox", "AKIA", "AIza")
@@ -46,6 +48,7 @@ class ClipboardMonitor:
         self.on_new_entry = on_new_entry
         self._self_copy = False
         self._incognito = False
+        self._last_event_time = 0.0
 
     def start(self):
         pass  # Event-driven — nothing to start
@@ -59,13 +62,21 @@ class ClipboardMonitor:
     def set_incognito(self, val: bool):
         self._incognito = val
 
+    def _rate_limited(self):
+        """Return True if this event arrived too fast (debounce)."""
+        now = time.monotonic()
+        if now - self._last_event_time < MIN_EVENT_INTERVAL:
+            return True
+        self._last_event_time = now
+        return False
+
     def handle_new_text(self, text):
         """Called from D-Bus when the extension detects a text copy."""
         if self._self_copy:
             self._self_copy = False
             return
 
-        if self._incognito:
+        if self._incognito or self._rate_limited():
             return
 
         if not text or len(text.encode("utf-8", errors="replace")) > MAX_TEXT_SIZE:
@@ -87,7 +98,7 @@ class ClipboardMonitor:
             self._self_copy = False
             return
 
-        if self._incognito:
+        if self._incognito or self._rate_limited():
             return
 
         try:
