@@ -1,0 +1,56 @@
+name: clipman
+version: '1.0.0'
+summary: Clipboard history manager for GNOME on Wayland
+description: |
+  A fast, native clipboard manager for Ubuntu/GNOME on Wayland.
+  Press Super+V to view your clipboard history, search entries,
+  pin favorites, and instantly paste previous copies.
+
+  Features include text and image support, full-text search,
+  incognito mode, sensitive data detection, Catppuccin themes,
+  reusable snippets, and backup/restore.
+
+base: core22
+grade: stable
+confinement: classic
+
+architectures:
+  - build-on: amd64
+
+apps:
+  clipman:
+    command: bin/clipman-wrapper
+    desktop: share/applications/com.clipman.Clipman.desktop
+
+parts:
+  wl-clipboard:
+    plugin: meson
+    source: https://github.com/bugaevc/wl-clipboard/releases/download/v2.2.1/wl-clipboard-2.2.1.tar.gz
+    build-packages:
+      - libwayland-dev
+      - wayland-protocols
+
+  clipman:
+    plugin: dump
+    source: .
+    after: [wl-clipboard]
+    stage-packages:
+      - python3
+      - python3-gi
+      - python3-dbus
+      - gir1.2-gtk-3.0
+    override-build: |
+      craftctl default
+      install -d $CRAFT_PART_INSTALL/share/clipman
+      cp -r clipman/ $CRAFT_PART_INSTALL/share/clipman/clipman/
+      cp clipman.py $CRAFT_PART_INSTALL/share/clipman/
+      cp launcher.sh $CRAFT_PART_INSTALL/share/clipman/
+      chmod +x $CRAFT_PART_INSTALL/share/clipman/launcher.sh
+      install -Dm644 data/com.clipman.Clipman.desktop $CRAFT_PART_INSTALL/share/applications/com.clipman.Clipman.desktop
+      install -Dm644 data/com.clipman.Clipman.svg $CRAFT_PART_INSTALL/share/icons/hicolor/scalable/apps/com.clipman.Clipman.svg
+      install -d $CRAFT_PART_INSTALL/bin
+      cat > $CRAFT_PART_INSTALL/bin/clipman-wrapper << 'EOF'
+      #!/bin/sh
+      exec python3 "$SNAP/share/clipman/clipman.py" "$@"
+      EOF
+      chmod +x $CRAFT_PART_INSTALL/bin/clipman-wrapper
