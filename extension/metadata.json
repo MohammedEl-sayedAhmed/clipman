@@ -3,7 +3,7 @@
     "name": "Clipman Clipboard Monitor",
     "description": "Native Wayland clipboard change detection for the Clipman clipboard manager. Listens to Meta.Selection owner-changed signals and forwards clipboard content to the Clipman daemon via D-Bus. Provides paste simulation and window positioning services. Requires the Clipman daemon (clipman.service) to be running.",
     "shell-version": ["46", "47", "48"],
-    "version": 2,
+    "version": 3,
     "url": "https://github.com/MohammedEl-sayedAhmed/clipman",
     "donations": {
         "paypal": "mohammedelsayedammar"
