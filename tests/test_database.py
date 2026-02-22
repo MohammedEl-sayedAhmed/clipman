@@ -520,7 +520,7 @@ class TestClipboardDB(unittest.TestCase):
     # ── Backup edge cases ─────────────────────────────────────────
 
     def test_import_nonexistent_backup_raises(self):
-        with self.assertRaises(FileNotFoundError):
+        with self.assertRaises((FileNotFoundError, ValueError)):
             self.db.import_backup("/nonexistent/path/backup.db")
 
     def test_export_backup_creates_valid_db(self):

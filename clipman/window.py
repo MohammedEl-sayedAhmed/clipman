@@ -5,6 +5,7 @@ import time
 import gi
 
 from clipman import _
+from clipman.database import _safe_image_path
 
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
@@ -528,7 +529,8 @@ class ClipmanWindow(Gtk.Window):
             row.preview_text = preview
             row.content_label = label
             content_box.pack_start(label, False, False, 0)
-        elif entry["content_type"] == "image" and entry["image_path"]:
+        elif (entry["content_type"] == "image" and entry["image_path"]
+              and _safe_image_path(entry["image_path"])):
             try:
                 pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
                     entry["image_path"], 48, 48, True
@@ -665,6 +667,8 @@ class ClipmanWindow(Gtk.Window):
 
     def _on_image_tooltip(self, widget, x, y, keyboard_mode, tooltip,
                           image_path):
+        if not _safe_image_path(image_path):
+            return False
         try:
             pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
                 image_path, 200, 200, True
@@ -701,7 +705,8 @@ class ClipmanWindow(Gtk.Window):
                 ["wl-copy"], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL
             )
             proc.communicate(input=entry["content_text"].encode("utf-8"))
-        elif entry["content_type"] == "image" and entry["image_path"]:
+        elif (entry["content_type"] == "image" and entry["image_path"]
+              and _safe_image_path(entry["image_path"])):
             with open(entry["image_path"], "rb") as img_file:
                 proc = subprocess.Popen(
                     ["wl-copy", "--type", "image/png"],
@@ -738,7 +743,7 @@ class ClipmanWindow(Gtk.Window):
                 ["wl-copy"], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL
             )
             proc.communicate(input=text.encode("utf-8"))
-        elif image_path:
+        elif image_path and _safe_image_path(image_path):
             with open(image_path, "rb") as img_file:
                 proc = subprocess.Popen(
                     ["wl-copy", "--type", "image/png"],

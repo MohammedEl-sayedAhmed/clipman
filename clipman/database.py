@@ -19,6 +19,17 @@ def _ensure_dirs():
     os.chmod(IMAGES_DIR, 0o700)
 
 
+def _safe_image_path(image_path: str) -> bool:
+    """Return True only if image_path resolves inside IMAGES_DIR."""
+    if not image_path:
+        return False
+    try:
+        resolved = Path(image_path).resolve()
+        return resolved.parent == IMAGES_DIR.resolve()
+    except (OSError, ValueError):
+        return False
+
+
 def content_hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -84,8 +95,11 @@ class ClipboardDB:
         elif content_type == "image" and image_data:
             h = content_hash(image_data)
             image_path = str(IMAGES_DIR / f"{h}.png")
-            with open(image_path, "wb") as f:
-                f.write(image_data)
+            fd = os.open(image_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            try:
+                os.write(fd, image_data)
+            finally:
+                os.close(fd)
         else:
             return -1
 
@@ -179,7 +193,7 @@ class ClipboardDB:
         row = self.conn.execute(
             "SELECT image_path FROM entries WHERE id = ?", (entry_id,)
         ).fetchone()
-        if row and row["image_path"]:
+        if row and row["image_path"] and _safe_image_path(row["image_path"]):
             try:
                 os.remove(row["image_path"])
             except FileNotFoundError:
@@ -192,10 +206,11 @@ class ClipboardDB:
             "SELECT image_path FROM entries WHERE pinned = 0 AND image_path IS NOT NULL"
         ).fetchall()
         for row in rows:
-            try:
-                os.remove(row["image_path"])
-            except FileNotFoundError:
-                pass
+            if _safe_image_path(row["image_path"]):
+                try:
+                    os.remove(row["image_path"])
+                except FileNotFoundError:
+                    pass
         self.conn.execute("DELETE FROM entries WHERE pinned = 0")
         self.conn.commit()
 
@@ -215,7 +230,7 @@ class ClipboardDB:
             (excess,)
         ).fetchall()
         for row in rows:
-            if row["image_path"]:
+            if row["image_path"] and _safe_image_path(row["image_path"]):
                 try:
                     os.remove(row["image_path"])
                 except FileNotFoundError:
@@ -231,7 +246,7 @@ class ClipboardDB:
             (cutoff,)
         ).fetchall()
         for row in rows:
-            if row["image_path"]:
+            if row["image_path"] and _safe_image_path(row["image_path"]):
                 try:
                     os.remove(row["image_path"])
                 except FileNotFoundError:
@@ -258,12 +273,34 @@ class ClipboardDB:
 
     def import_backup(self, path: str):
         import shutil
+        # Validate the backup is a real SQLite database with expected tables
+        try:
+            test_conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            tables = {r[0] for r in test_conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()}
+            test_conn.close()
+        except sqlite3.Error as e:
+            raise ValueError(f"Not a valid database: {e}")
+        if "entries" not in tables:
+            raise ValueError("Invalid backup: missing 'entries' table")
         self.conn.close()
         shutil.copy2(path, str(DB_PATH))
         self.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self._create_table()
+        # Sanitize any image_path values that point outside IMAGES_DIR
+        bad = self.conn.execute(
+            "SELECT id, image_path FROM entries WHERE image_path IS NOT NULL"
+        ).fetchall()
+        for row in bad:
+            if not _safe_image_path(row["image_path"]):
+                self.conn.execute(
+                    "UPDATE entries SET image_path = NULL WHERE id = ?",
+                    (row["id"],)
+                )
+        self.conn.commit()
 
     # --- Snippets ---
 

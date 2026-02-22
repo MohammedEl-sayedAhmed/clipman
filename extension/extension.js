@@ -129,6 +129,8 @@ export default class ClipmanExtension extends Extension {
             } else {
                 this._sendToDaemon('image', '');
             }
+        }).catch(() => {
+            // Clipboard read failed — ignore silently
         });
     }
 
