@@ -12,6 +12,8 @@ Like Windows `Win+V` — but for Linux.
 [![GNOME](https://img.shields.io/badge/GNOME-46--48-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
 [![Wayland](https://img.shields.io/badge/Wayland-native-yellow)](https://wayland.freedesktop.org)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![PyPI](https://img.shields.io/pypi/v/clipman-clipboard?label=PyPI&logo=pypi&logoColor=white)](https://pypi.org/project/clipman-clipboard/)
+[![GNOME Extensions](https://img.shields.io/badge/GNOME_Extensions-9407-4A86CF?logo=gnome&logoColor=white)](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/)
 
 ---
 
@@ -118,6 +120,26 @@ The systemd service auto-restarts on crash and starts automatically on login.
 ### Alternative Installation
 
 <details>
+<summary><strong>PyPI</strong></summary>
+
+```bash
+pip install clipman-clipboard
+```
+
+</details>
+
+<details>
+<summary><strong>GNOME Shell Extension</strong> (standalone, for clipboard monitoring only)</summary>
+
+Install from [GNOME Extensions](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/), or manually:
+
+```bash
+gnome-extensions install clipman-extension.zip
+```
+
+</details>
+
+<details>
 <summary><strong>Flatpak</strong></summary>
 
 A Flatpak manifest (`com.clipman.Clipman.json`) is included for building with GNOME 46 runtime. To build locally:
@@ -137,6 +159,13 @@ A Snap configuration (`snap/snapcraft.yaml`) is included. To build locally:
 snapcraft
 sudo snap install clipman_*.snap --classic
 ```
+
+</details>
+
+<details>
+<summary><strong>AUR (Arch Linux)</strong></summary>
+
+A PKGBUILD is available in the `aur/` directory.
 
 </details>
 
