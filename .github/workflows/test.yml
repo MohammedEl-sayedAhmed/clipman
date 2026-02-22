@@ -28,8 +28,9 @@ jobs:
             python3-gi \
             python3-dbus \
             wl-clipboard \
-            libgirepository1.0-dev \
-            libcairo2-dev
+            libcairo2-dev \
+            libgirepository-2.0-dev || \
+          sudo apt-get install -y libgirepository1.0-dev
 
       - name: Install Python dependencies
         run: pip install PyGObject pydbus
