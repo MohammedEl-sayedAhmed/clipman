@@ -7,8 +7,9 @@
 Like Windows `Win+V` — but for Linux.
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/github/actions/workflow/status/MohammedEl-sayedAhmed/clipman/test.yml?branch=main&label=tests)](https://github.com/MohammedEl-sayedAhmed/clipman/actions)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04+-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com)
-[![GNOME](https://img.shields.io/badge/GNOME-46-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
+[![GNOME](https://img.shields.io/badge/GNOME-46--48-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
 [![Wayland](https://img.shields.io/badge/Wayland-native-yellow)](https://wayland.freedesktop.org)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 
@@ -49,7 +50,9 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 | **Inline edit** | Edit any text entry directly from the clipboard history |
 | **URL detection** | URLs are auto-detected with a one-click open button |
 | **Backup & Restore** | Export and import your clipboard database from settings |
-| **Autostart** | Runs as a background daemon, starts on login |
+| **Terminal-aware paste** | Sends Ctrl+Shift+V in terminal emulators, Ctrl+V elsewhere |
+| **XWayland support** | Clipboard detection for VSCode, Electron, and other XWayland apps |
+| **Autostart** | Runs as a background daemon via systemd, auto-restarts on crash |
 | **Wayland native** | Zero polling — uses a GNOME Shell extension for flicker-free monitoring |
 | **Lightweight** | Python + GTK3 — no Electron, no heavy frameworks |
 | **Deduplication** | SHA256 hashing prevents duplicate entries; re-copying bumps to top |
@@ -125,12 +128,19 @@ clipman/
 │   ├── clipboard_monitor.py    # Event-driven clipboard monitor
 │   ├── database.py             # SQLite storage with dedup/search/pin/snippets
 │   ├── dbus_service.py         # D-Bus IPC for toggle and clipboard events
-│   └── window.py               # GTK3 popup window UI with theming
+│   ├── window.py               # GTK3 popup window UI
+│   └── style.css               # Theming stylesheet (Catppuccin templates)
 ├── extension/
-│   ├── extension.js            # GNOME Shell extension (clipboard detection)
+│   ├── extension.js            # GNOME Shell extension (clipboard detection + paste)
 │   └── metadata.json           # Extension metadata
 ├── data/
-│   └── com.clipman.Clipman.desktop
+│   ├── com.clipman.Clipman.desktop
+│   ├── com.clipman.Clipman.svg           # App icon
+│   ├── com.clipman.Clipman.metainfo.xml  # AppStream metadata
+│   └── clipman.service                   # Systemd user service
+├── po/
+│   ├── POTFILES.in             # Files with translatable strings
+│   └── clipman.pot             # Translation template (70 strings)
 ├── tests/
 │   ├── test_database.py        # Database unit tests (50 tests)
 │   └── test_clipboard_monitor.py  # Monitor unit tests (24 tests)
