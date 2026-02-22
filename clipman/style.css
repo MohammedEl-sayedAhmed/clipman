@@ -1,0 +1,488 @@
+/* Clipman GTK3 Stylesheet
+ *
+ * This is a template — variables like $bg_crust are substituted at
+ * runtime with theme colors and the user's font size preference.
+ */
+
+/* Base window */
+.clipman-window {
+    background-color: $bg_crust;
+    border-radius: 12px;
+}
+
+/* Title bar (CSD headerbar) */
+.clipman-window headerbar {
+    background-color: $bg_crust;
+    background-image: none;
+    color: $text_primary;
+    border-bottom: 1px solid $bg_overlay;
+    min-height: 28px;
+    padding: 2px 6px;
+}
+.clipman-window headerbar .title {
+    color: $text_primary;
+    font-size: 12px;
+    font-weight: bold;
+}
+.clipman-window headerbar button {
+    background-color: transparent;
+    background-image: none;
+    color: $headerbar_btn;
+    border: none;
+    min-height: 20px;
+    min-width: 20px;
+    padding: 2px;
+}
+.clipman-window headerbar button:hover {
+    background-color: $bg_overlay;
+    background-image: none;
+    color: $text_primary;
+    border-radius: 4px;
+}
+
+/* Search bar */
+.clipman-header {
+    background-color: $bg_base;
+    padding: 6px 8px;
+}
+.clipman-search {
+    background-color: $bg_overlay;
+    color: $text_primary;
+    border: 1px solid $border;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: ${font_size}px;
+    min-height: 0;
+}
+.clipman-search:focus {
+    border-color: $accent;
+}
+
+/* Gear button */
+.gear-button {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    border-radius: 6px;
+    color: $headerbar_btn;
+    padding: 2px 6px;
+    min-height: 24px;
+    min-width: 24px;
+    font-size: 17px;
+}
+.gear-button:hover {
+    background-color: $bg_overlay;
+    background-image: none;
+    color: $text_primary;
+}
+
+/* Filter tabs */
+.filter-bar {
+    background-color: $bg_base;
+    padding: 2px 8px 4px 8px;
+}
+.filter-tab {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    border-radius: 12px;
+    color: $text_secondary;
+    font-size: 11px;
+    padding: 1px 10px;
+    min-height: 20px;
+    margin: 0 1px;
+}
+.filter-tab:hover {
+    color: $text_primary;
+    background-color: $bg_overlay;
+    background-image: none;
+}
+.filter-tab-active {
+    background-color: $bg_overlay;
+    background-image: none;
+    border: none;
+    border-radius: 12px;
+    color: $accent;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 1px 10px;
+    min-height: 20px;
+    margin: 0 1px;
+}
+
+/* Settings panel */
+.settings-panel {
+    background-color: $bg_base;
+    padding: 8px 12px;
+    border-top: 1px solid $bg_overlay;
+    border-bottom: 1px solid $bg_overlay;
+}
+.settings-title {
+    color: $accent;
+    font-size: 10px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+.settings-label {
+    color: $text_secondary;
+    font-size: 11px;
+    min-width: 80px;
+}
+.settings-value {
+    color: $text_muted;
+    font-size: 10px;
+    min-width: 32px;
+}
+.settings-panel scale trough {
+    background-color: $border;
+    min-height: 4px;
+    border-radius: 2px;
+}
+.settings-panel scale highlight {
+    background-color: $accent;
+    min-height: 4px;
+    border-radius: 2px;
+}
+.settings-panel scale slider {
+    background-color: $text_primary;
+    min-height: 12px;
+    min-width: 12px;
+    border-radius: 6px;
+}
+
+/* Theme toggle buttons */
+.theme-btn {
+    background-color: transparent;
+    background-image: none;
+    border: 1px solid $border;
+    border-radius: 6px;
+    color: $text_muted;
+    font-size: 10px;
+    padding: 1px 10px;
+    min-height: 18px;
+    margin: 0 2px;
+}
+.theme-btn:hover {
+    color: $text_secondary;
+    background-color: $bg_overlay;
+    background-image: none;
+}
+.theme-btn-active {
+    background-color: $accent;
+    background-image: none;
+    border: none;
+    border-radius: 6px;
+    color: $accent_on;
+    font-size: 10px;
+    font-weight: bold;
+    padding: 1px 10px;
+    min-height: 18px;
+    margin: 0 2px;
+}
+
+/* Font color swatches */
+.color-swatch {
+    min-height: 18px;
+    min-width: 18px;
+    border-radius: 9px;
+    border: 2px solid transparent;
+    padding: 0;
+    margin: 0 1px;
+    background-image: none;
+}
+.color-swatch:hover {
+    border-color: $text_muted;
+    background-image: none;
+}
+.swatch-active {
+    border-color: $text_primary;
+}
+.swatch-default {
+    background-color: transparent;
+    border: 2px solid $text_muted;
+    color: $text_muted;
+    font-size: 9px;
+    font-weight: bold;
+}
+.swatch-green {
+    background-color: #40a02b;
+}
+.swatch-peach {
+    background-color: #fe640b;
+}
+.swatch-mauve {
+    background-color: #8839ef;
+}
+.swatch-pink {
+    background-color: #ea76cb;
+}
+.swatch-teal {
+    background-color: #179299;
+}
+
+/* Section headers */
+.section-header {
+    color: $text_muted;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1px;
+    padding: 6px 12px 2px 12px;
+}
+
+/* Listbox background */
+.clipman-window list {
+    background-color: $bg_crust;
+}
+.clipman-window list row {
+    background-color: transparent;
+}
+
+/* Clipboard entry rows */
+.clip-row {
+    background-color: $bg_base;
+    border-radius: 6px;
+    padding: 5px 10px;
+    margin: 1px 4px;
+}
+.clip-row:hover {
+    background-color: $bg_surface;
+}
+row:selected .clip-row {
+    background-color: $selected_bg;
+    border-left: 2px solid $accent;
+}
+.clip-text {
+    color: $text_primary;
+    font-size: ${font_size}px;
+}
+.clip-time {
+    color: $text_muted;
+    font-size: 9px;
+}
+.clip-chars {
+    color: $text_faint;
+    font-size: 9px;
+}
+.clip-type-badge {
+    color: $accent;
+    font-size: 8px;
+    font-weight: bold;
+}
+
+/* Row action buttons */
+.pin-button, .delete-button, .edit-button, .expand-button, .url-button {
+    background: none;
+    background-image: none;
+    border: none;
+    padding: 0;
+    min-height: 16px;
+    min-width: 16px;
+    font-size: 11px;
+}
+.pin-button:hover, .delete-button:hover, .edit-button:hover,
+.expand-button:hover, .url-button:hover {
+    background-color: $hover_overlay;
+    background-image: none;
+    border-radius: 4px;
+}
+.expand-button {
+    color: $text_muted;
+}
+.url-button {
+    color: $accent;
+}
+.pinned {
+    color: $pin_color;
+}
+.unpinned {
+    color: $text_muted;
+}
+.delete-button {
+    color: $text_muted;
+}
+.delete-button:hover {
+    color: $danger;
+}
+
+/* Snippet name */
+.snippet-name {
+    color: $text_primary;
+    font-size: ${font_size}px;
+    font-weight: bold;
+}
+
+/* Empty state */
+.empty-label {
+    color: $text_muted;
+    font-size: 13px;
+}
+
+/* Bottom status bar */
+.status-bar {
+    background-color: $bg_base;
+    padding: 4px 10px;
+    border-top: 1px solid $bg_overlay;
+}
+.status-count {
+    color: $text_muted;
+    font-size: 10px;
+}
+.action-button {
+    background-color: transparent;
+    background-image: none;
+    border: 1px solid $border;
+    border-radius: 6px;
+    color: $text_secondary;
+    font-size: 10px;
+    padding: 1px 8px;
+    min-height: 18px;
+}
+.action-button:hover {
+    background-color: $bg_overlay;
+    background-image: none;
+    color: $text_primary;
+}
+.action-button-danger {
+    background-color: transparent;
+    background-image: none;
+    border: 1px solid $border;
+    border-radius: 6px;
+    color: $danger;
+    font-size: 10px;
+    padding: 1px 8px;
+    min-height: 18px;
+}
+.action-button-danger:hover {
+    background-color: $danger_bg;
+    background-image: none;
+    border-color: $danger;
+    color: $danger;
+}
+
+/* Incognito button */
+.incognito-btn {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    border-radius: 6px;
+    color: $text_muted;
+    font-size: 14px;
+    padding: 1px 4px;
+    min-height: 18px;
+    min-width: 18px;
+}
+.incognito-btn:hover {
+    background-color: $bg_overlay;
+    background-image: none;
+}
+.incognito-active {
+    background-color: $danger_bg;
+    background-image: none;
+    border: 1px solid $danger;
+    border-radius: 6px;
+    color: $danger;
+    font-size: 14px;
+    padding: 1px 4px;
+    min-height: 18px;
+    min-width: 18px;
+}
+.incognito-active:hover {
+    background-color: $danger;
+    background-image: none;
+    color: $accent_on;
+}
+
+/* Sensitive entries */
+.sensitive-badge {
+    color: $danger;
+    font-size: 9px;
+}
+.sensitive-row {
+    opacity: 0.7;
+}
+
+/* Backup/Restore buttons */
+.backup-btn {
+    background-color: transparent;
+    background-image: none;
+    border: 1px solid $border;
+    border-radius: 6px;
+    color: $text_secondary;
+    font-size: 10px;
+    padding: 1px 10px;
+    min-height: 18px;
+    margin: 0 2px;
+}
+.backup-btn:hover {
+    background-color: $bg_overlay;
+    background-image: none;
+    color: $text_primary;
+}
+
+/* Snippet dialog */
+.snippet-dialog {
+    background-color: $bg_base;
+}
+.snippet-dialog-content {
+    background-color: $bg_base;
+}
+.snippet-dialog-label {
+    color: $text_secondary;
+    font-size: 12px;
+    font-weight: bold;
+}
+.snippet-dialog-entry {
+    background-color: $bg_overlay;
+    color: $text_primary;
+    border: 1px solid $border;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+}
+.snippet-dialog-entry:focus {
+    border-color: $accent;
+}
+.snippet-dialog-textview {
+    background-color: $bg_overlay;
+    color: $text_primary;
+    font-size: 12px;
+    border-radius: 6px;
+}
+.snippet-dialog-textview text {
+    background-color: $bg_overlay;
+    color: $text_primary;
+}
+.snippet-dialog .dialog-action-area button {
+    background-color: $bg_overlay;
+    background-image: none;
+    color: $text_secondary;
+    border: 1px solid $border;
+    border-radius: 6px;
+    padding: 4px 14px;
+    font-size: 12px;
+}
+.snippet-dialog .dialog-action-area button:hover {
+    background-color: $border;
+    background-image: none;
+    color: $text_primary;
+}
+.snippet-dialog .dialog-action-area button:last-child {
+    background-color: $accent;
+    background-image: none;
+    color: $accent_on;
+    border: none;
+    font-weight: bold;
+}
+.snippet-dialog .dialog-action-area button:last-child:hover {
+    background-color: $accent_hover;
+    background-image: none;
+}
+.snippet-dialog headerbar {
+    background-color: $bg_crust;
+    background-image: none;
+    color: $text_primary;
+    border-bottom: 1px solid $bg_overlay;
+}
+.snippet-dialog headerbar .title {
+    color: $text_primary;
+}
