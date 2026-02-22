@@ -618,6 +618,7 @@ class ClipmanWindow(Gtk.Window):
         gear_btn = Gtk.Button(label="\u2699")
         gear_btn.get_style_context().add_class("gear-button")
         gear_btn.set_tooltip_text("Settings")
+        gear_btn.get_accessible().set_name("Settings")
         gear_btn.connect("clicked", self._on_gear_clicked)
         header.pack_end(gear_btn, False, False, 0)
 
@@ -709,6 +710,7 @@ class ClipmanWindow(Gtk.Window):
         for name, hex_val in FONT_COLOR_PRESETS:
             btn = Gtk.Button(label="A" if hex_val is None else "")
             btn.set_tooltip_text(name)
+            btn.get_accessible().set_name(f"Font color: {name}")
             btn.get_style_context().add_class("color-swatch")
             btn.get_style_context().add_class(f"swatch-{name.lower()}")
             current = self._font_color or None
@@ -776,6 +778,7 @@ class ClipmanWindow(Gtk.Window):
         self.incognito_btn = Gtk.Button(label="\U0001f441")
         self.incognito_btn.get_style_context().add_class("incognito-btn")
         self.incognito_btn.set_tooltip_text("Incognito mode: OFF")
+        self.incognito_btn.get_accessible().set_name("Toggle incognito mode")
         self.incognito_btn.connect("clicked", self._on_incognito_toggle)
         self.status_bar.pack_start(self.incognito_btn, False, False, 0)
 
@@ -1027,12 +1030,14 @@ class ClipmanWindow(Gtk.Window):
             "pinned" if entry["pinned"] else "unpinned"
         )
         pin_btn.set_tooltip_text("Unpin" if entry["pinned"] else "Pin")
+        pin_btn.get_accessible().set_name("Unpin entry" if entry["pinned"] else "Pin entry")
         pin_btn.connect("clicked", self._on_pin_click, entry["id"])
         btn_box.pack_start(pin_btn, False, False, 0)
 
         del_btn = Gtk.Button(label="\u2715")
         del_btn.get_style_context().add_class("delete-button")
         del_btn.set_tooltip_text("Delete")
+        del_btn.get_accessible().set_name("Delete entry")
         del_btn.connect("clicked", self._on_delete_click, entry["id"])
         btn_box.pack_start(del_btn, False, False, 0)
 
@@ -1041,6 +1046,7 @@ class ClipmanWindow(Gtk.Window):
             edit_btn.get_style_context().add_class("edit-button")
             edit_btn.get_style_context().add_class("unpinned")
             edit_btn.set_tooltip_text("Edit")
+            edit_btn.get_accessible().set_name("Edit entry")
             edit_btn.connect("clicked", self._on_edit_entry_click, entry)
             btn_box.pack_start(edit_btn, False, False, 0)
 
@@ -1048,6 +1054,7 @@ class ClipmanWindow(Gtk.Window):
                 expand_btn = Gtk.Button(label="\u25BC")
                 expand_btn.get_style_context().add_class("expand-button")
                 expand_btn.set_tooltip_text("Expand")
+                expand_btn.get_accessible().set_name("Expand entry text")
                 expand_btn.connect("clicked", self._on_expand_click, row)
                 btn_box.pack_start(expand_btn, False, False, 0)
 
@@ -1056,6 +1063,7 @@ class ClipmanWindow(Gtk.Window):
                 url_btn = Gtk.Button(label="\u2197")
                 url_btn.get_style_context().add_class("url-button")
                 url_btn.set_tooltip_text("Open URL")
+                url_btn.get_accessible().set_name("Open URL in browser")
                 url_btn.connect("clicked", self._on_open_url_click, url)
                 btn_box.pack_start(url_btn, False, False, 0)
 
@@ -1110,12 +1118,14 @@ class ClipmanWindow(Gtk.Window):
         edit_btn.get_style_context().add_class("edit-button")
         edit_btn.get_style_context().add_class("unpinned")
         edit_btn.set_tooltip_text("Edit")
+        edit_btn.get_accessible().set_name("Edit snippet")
         edit_btn.connect("clicked", self._on_snippet_edit_click, snippet)
         btn_box.pack_start(edit_btn, False, False, 0)
 
         del_btn = Gtk.Button(label="\u2715")
         del_btn.get_style_context().add_class("delete-button")
         del_btn.set_tooltip_text("Delete")
+        del_btn.get_accessible().set_name("Delete snippet")
         del_btn.connect("clicked", self._on_snippet_delete_click, snippet["id"])
         btn_box.pack_start(del_btn, False, False, 0)
 
@@ -1363,6 +1373,7 @@ class ClipmanWindow(Gtk.Window):
             row.content_label.set_ellipsize(Pango.EllipsizeMode.END)
             button.set_label("\u25BC")
             button.set_tooltip_text("Expand")
+            button.get_accessible().set_name("Expand entry text")
             row._is_expanded = False
         else:
             show = row.full_text[:2000]
@@ -1373,6 +1384,7 @@ class ClipmanWindow(Gtk.Window):
             row.content_label.set_ellipsize(Pango.EllipsizeMode.NONE)
             button.set_label("\u25B2")
             button.set_tooltip_text("Collapse")
+            button.get_accessible().set_name("Collapse entry text")
             row._is_expanded = True
 
     def _on_edit_entry_click(self, button, entry):
