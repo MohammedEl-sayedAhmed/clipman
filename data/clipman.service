@@ -1,0 +1,13 @@
+[Unit]
+Description=Clipman Clipboard Manager
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=CLIPMAN_PATH_PLACEHOLDER/launcher.sh
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

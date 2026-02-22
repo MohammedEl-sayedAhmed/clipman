@@ -11,16 +11,16 @@ EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
 echo "=== Installing Clipman ==="
 
 # Step 1: Install system dependencies
-echo "[1/5] Installing dependencies..."
+echo "[1/6] Installing dependencies..."
 sudo apt install -y wl-clipboard python3-gi python3-dbus gir1.2-gtk-3.0
 
 # Step 2: Create data directories
-echo "[2/5] Creating data directories..."
+echo "[2/6] Creating data directories..."
 mkdir -p "$DATA_DIR/images"
 mkdir -p "$AUTOSTART_DIR"
 
 # Step 3: Install GNOME Shell extension for native clipboard monitoring
-echo "[3/5] Installing GNOME Shell clipboard extension..."
+echo "[3/6] Installing GNOME Shell clipboard extension..."
 mkdir -p "$EXTENSION_DIR"
 cp "$SCRIPT_DIR/extension/metadata.json" "$EXTENSION_DIR/"
 cp "$SCRIPT_DIR/extension/extension.js" "$EXTENSION_DIR/"
@@ -28,14 +28,14 @@ gnome-extensions enable "$EXTENSION_UUID" 2>/dev/null || true
 echo "  Extension installed. You may need to log out and back in to activate it."
 
 # Step 4: Generate and install autostart desktop file + icon
-echo "[4/5] Setting up autostart..."
+echo "[4/6] Setting up autostart..."
 sed "s|CLIPMAN_PATH_PLACEHOLDER|$SCRIPT_DIR|g" "$SCRIPT_DIR/data/com.clipman.Clipman.desktop" > "$AUTOSTART_DIR/com.clipman.Clipman.desktop"
 ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
 mkdir -p "$ICON_DIR"
 cp "$SCRIPT_DIR/data/com.clipman.Clipman.svg" "$ICON_DIR/"
 
 # Step 5: Register Super+V keybinding
-echo "[5/5] Registering Super+V keyboard shortcut..."
+echo "[5/6] Registering Super+V keyboard shortcut..."
 
 CUSTOM_KEYS_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"
 CLIPMAN_KEY_PATH="$CUSTOM_KEYS_PATH/clipman/"
@@ -68,6 +68,15 @@ fi
 gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${CLIPMAN_KEY_PATH}" name "Clipman Toggle"
 gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${CLIPMAN_KEY_PATH}" command "$SCRIPT_DIR/launcher.sh toggle"
 gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:${CLIPMAN_KEY_PATH}" binding "<Super>v"
+
+# Step 6: Install systemd user service (auto-restart on crash)
+echo "[6/6] Installing systemd user service..."
+SYSTEMD_DIR="$HOME/.config/systemd/user"
+mkdir -p "$SYSTEMD_DIR"
+sed "s|CLIPMAN_PATH_PLACEHOLDER|$SCRIPT_DIR|g" "$SCRIPT_DIR/data/clipman.service" > "$SYSTEMD_DIR/clipman.service"
+systemctl --user daemon-reload
+systemctl --user enable clipman.service 2>/dev/null || true
+echo "  Service installed. It will start automatically on login."
 
 echo ""
 echo "=== Installation Complete ==="
