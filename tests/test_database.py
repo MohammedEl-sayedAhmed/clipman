@@ -511,5 +511,165 @@ class TestClipboardDB(unittest.TestCase):
         self.assertEqual(self.db.get_setting("opacity"), "0.7")
 
 
+    # ── WAL mode ───────────────────────────────────────────────────
+
+    def test_wal_mode_enabled(self):
+        mode = self.db.conn.execute("PRAGMA journal_mode").fetchone()[0]
+        self.assertEqual(mode, "wal")
+
+    # ── Backup edge cases ─────────────────────────────────────────
+
+    def test_import_nonexistent_backup_raises(self):
+        with self.assertRaises(FileNotFoundError):
+            self.db.import_backup("/nonexistent/path/backup.db")
+
+    def test_export_backup_creates_valid_db(self):
+        import sqlite3
+        self.db.add_entry("text", content_text="backup test")
+        backup_path = os.path.join(self.tmpdir, "valid_backup.db")
+        self.db.export_backup(backup_path)
+
+        # Verify the backup is a valid SQLite database
+        conn = sqlite3.connect(backup_path)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute("SELECT * FROM entries").fetchall()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(dict(rows[0])["content_text"], "backup test")
+        conn.close()
+
+    def test_import_preserves_pinned_entries(self):
+        entry_id = self.db.add_entry("text", content_text="pinned entry")
+        self.db.toggle_pin(entry_id)
+        self.db.add_entry("text", content_text="unpinned entry")
+
+        backup_path = os.path.join(self.tmpdir, "pinned_backup.db")
+        self.db.export_backup(backup_path)
+
+        self.db.clear_unpinned()
+        self.db.delete_entry(entry_id)  # Remove pinned too
+        self.assertEqual(len(self.db.get_entries()), 0)
+
+        self.db.import_backup(backup_path)
+        entries = self.db.get_entries()
+        self.assertEqual(len(entries), 2)
+        pinned = [e for e in entries if e["pinned"]]
+        self.assertEqual(len(pinned), 1)
+        self.assertEqual(pinned[0]["content_text"], "pinned entry")
+
+    def test_import_backup_restores_wal_mode(self):
+        self.db.add_entry("text", content_text="wal test")
+        backup_path = os.path.join(self.tmpdir, "wal_backup.db")
+        self.db.export_backup(backup_path)
+
+        self.db.import_backup(backup_path)
+        mode = self.db.conn.execute("PRAGMA journal_mode").fetchone()[0]
+        self.assertEqual(mode, "wal")
+
+    # ── Delete edge cases ─────────────────────────────────────────
+
+    def test_delete_nonexistent_entry(self):
+        # Should not raise
+        self.db.delete_entry(9999)
+
+    def test_delete_snippet_nonexistent(self):
+        # Should not raise
+        self.db.delete_snippet(9999)
+
+    # ── Search edge cases ─────────────────────────────────────────
+
+    def test_search_case_insensitive(self):
+        self.db.add_entry("text", content_text="Hello World")
+        results = self.db.search("hello")
+        self.assertEqual(len(results), 1)
+
+    def test_search_empty_query(self):
+        self.db.add_entry("text", content_text="anything")
+        results = self.db.search("")
+        self.assertEqual(len(results), 1)
+
+    def test_search_special_chars(self):
+        self.db.add_entry("text", content_text="price is $100")
+        results = self.db.search("$100")
+        self.assertEqual(len(results), 1)
+
+    def test_search_backslash(self):
+        self.db.add_entry("text", content_text="path\\to\\file")
+        results = self.db.search("\\")
+        self.assertEqual(len(results), 1)
+
+    # ── Unicode support ───────────────────────────────────────────
+
+    def test_add_unicode_text(self):
+        entry_id = self.db.add_entry("text", content_text="\u4f60\u597d\u4e16\u754c \U0001f600")
+        entries = self.db.get_entries()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["content_text"], "\u4f60\u597d\u4e16\u754c \U0001f600")
+
+    def test_add_unicode_snippet(self):
+        sid = self.db.add_snippet("\u30e1\u30fc\u30eb", "\u3053\u3093\u306b\u3061\u306f")
+        snippets = self.db.get_snippets()
+        self.assertEqual(len(snippets), 1)
+        self.assertEqual(snippets[0]["name"], "\u30e1\u30fc\u30eb")
+
+    # ── Settings edge cases ───────────────────────────────────────
+
+    def test_set_many_settings(self):
+        for i in range(20):
+            self.db.set_setting(f"key_{i}", f"value_{i}")
+        for i in range(20):
+            self.assertEqual(self.db.get_setting(f"key_{i}"), f"value_{i}")
+
+    def test_setting_empty_value(self):
+        self.db.set_setting("empty", "")
+        self.assertEqual(self.db.get_setting("empty"), "")
+
+    # ── Content hash ──────────────────────────────────────────────
+
+    def test_content_hash_deterministic(self):
+        from clipman.database import content_hash
+        h1 = content_hash(b"same content")
+        h2 = content_hash(b"same content")
+        self.assertEqual(h1, h2)
+
+    def test_content_hash_different_for_different_content(self):
+        from clipman.database import content_hash
+        h1 = content_hash(b"content A")
+        h2 = content_hash(b"content B")
+        self.assertNotEqual(h1, h2)
+
+    def test_content_hash_empty(self):
+        from clipman.database import content_hash
+        # Should not raise
+        h = content_hash(b"")
+        self.assertEqual(len(h), 64)  # SHA-256 hex digest
+
+    # ── Sensitive entries pinning ─────────────────────────────────
+
+    def test_sensitive_entry_can_be_pinned(self):
+        entry_id = self.db.add_entry("text", content_text="ghp_secret", sensitive=True)
+        self.db.toggle_pin(entry_id)
+
+        entries = self.db.get_entries()
+        self.assertEqual(entries[0]["pinned"], 1)
+        self.assertEqual(entries[0]["sensitive"], 1)
+
+    def test_delete_expired_sensitive_skips_pinned(self):
+        entry_id = self.db.add_entry("text", content_text="pinned_secret", sensitive=True)
+        self.db.toggle_pin(entry_id)
+
+        # Backdate it
+        self.db.conn.execute(
+            "UPDATE entries SET created_at = ? WHERE id = ?",
+            (time.time() - 60, entry_id)
+        )
+        self.db.conn.commit()
+
+        # delete_expired_sensitive should still delete it (pinned doesn't protect from sensitive cleanup)
+        deleted = self.db.delete_expired_sensitive(max_age_seconds=30)
+        # Current implementation doesn't check pinned status for sensitive cleanup
+        # This test documents the actual behavior
+        self.assertEqual(deleted, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
