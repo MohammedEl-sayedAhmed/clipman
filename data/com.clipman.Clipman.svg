@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- Clipboard board -->
+  <rect x="24" y="20" width="80" height="96" rx="8" fill="#585b70"/>
+  <rect x="28" y="36" width="72" height="76" rx="4" fill="#313244"/>
+  <!-- Clip at top -->
+  <rect x="44" y="12" width="40" height="20" rx="6" fill="#89b4fa"/>
+  <rect x="50" y="8" width="28" height="12" rx="4" fill="#89b4fa"/>
+  <!-- Text lines -->
+  <rect x="38" y="48" width="52" height="5" rx="2" fill="#a6adc8"/>
+  <rect x="38" y="60" width="40" height="5" rx="2" fill="#a6adc8"/>
+  <rect x="38" y="72" width="48" height="5" rx="2" fill="#a6adc8"/>
+  <rect x="38" y="84" width="32" height="5" rx="2" fill="#a6adc8"/>
+  <!-- History stack indicator -->
+  <rect x="20" y="24" width="80" height="96" rx="8" fill="none" stroke="#7f849c" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5" transform="translate(-4,-4)"/>
+</svg>

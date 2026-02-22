@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.clipman.Clipman</id>
+  <name>Clipman</name>
+  <summary>Clipboard history manager for GNOME on Wayland</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <developer id="com.github.MohammedEl-sayedAhmed">
+    <name>Mohammed El-sayed Ahmed</name>
+  </developer>
+
+  <description>
+    <p>
+      Clipman is a clipboard history manager for Ubuntu/GNOME on Wayland.
+      Press Super+V to view your clipboard history, search entries, pin
+      favorites, and instantly paste previous copies — like Windows Win+V,
+      but for Linux.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>Clipboard history with text and image support</li>
+      <li>Full-text search across all entries</li>
+      <li>Pin important entries to keep them permanently</li>
+      <li>Inline editing and preview expansion</li>
+      <li>Incognito mode to pause history recording</li>
+      <li>Sensitive data detection with auto-clear</li>
+      <li>URL detection with one-click open</li>
+      <li>Reusable text snippets</li>
+      <li>Dark and light themes (Catppuccin)</li>
+      <li>Database backup and restore</li>
+      <li>Terminal-aware paste (Ctrl+Shift+V)</li>
+    </ul>
+  </description>
+
+  <url type="homepage">https://github.com/MohammedEl-sayedAhmed/clipman</url>
+  <url type="bugtracker">https://github.com/MohammedEl-sayedAhmed/clipman/issues</url>
+  <url type="vcs-browser">https://github.com/MohammedEl-sayedAhmed/clipman</url>
+
+  <launchable type="desktop-id">com.clipman.Clipman.desktop</launchable>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#dce0e8</color>
+    <color type="primary" scheme_preference="dark">#1e1e2e</color>
+  </branding>
+
+  <content_rating type="oars-1.1"/>
+
+  <requires>
+    <display_length compare="ge">360</display_length>
+  </requires>
+
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+
+  <releases>
+    <release version="1.0.0" date="2026-02-22">
+      <description>
+        <p>Initial public release.</p>
+        <ul>
+          <li>Clipboard history with text and image support</li>
+          <li>GNOME Shell extension for native Wayland clipboard detection</li>
+          <li>Incognito mode, sensitive data auto-clear, inline edit</li>
+          <li>URL detection, snippet manager, backup/restore</li>
+          <li>Terminal-aware paste and cursor-positioned window</li>
+          <li>XWayland clipboard support (VSCode, Electron apps)</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+</component>

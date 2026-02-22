@@ -27,9 +27,12 @@ cp "$SCRIPT_DIR/extension/extension.js" "$EXTENSION_DIR/"
 gnome-extensions enable "$EXTENSION_UUID" 2>/dev/null || true
 echo "  Extension installed. You may need to log out and back in to activate it."
 
-# Step 4: Generate and install autostart desktop file
+# Step 4: Generate and install autostart desktop file + icon
 echo "[4/5] Setting up autostart..."
 sed "s|CLIPMAN_PATH_PLACEHOLDER|$SCRIPT_DIR|g" "$SCRIPT_DIR/data/com.clipman.Clipman.desktop" > "$AUTOSTART_DIR/com.clipman.Clipman.desktop"
+ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+mkdir -p "$ICON_DIR"
+cp "$SCRIPT_DIR/data/com.clipman.Clipman.svg" "$ICON_DIR/"
 
 # Step 5: Register Super+V keybinding
 echo "[5/5] Registering Super+V keyboard shortcut..."
