@@ -1,4 +1,5 @@
 import datetime
+import sqlite3
 import subprocess
 import time
 import gi
@@ -1222,7 +1223,7 @@ class ClipmanWindow(Gtk.Window):
             )
             iface = dbus.Interface(proxy, "com.clipman.Extension")
             iface.SimulatePaste()
-        except Exception:
+        except dbus.DBusException:
             pass
         return False
 
@@ -1471,8 +1472,16 @@ class ClipmanWindow(Gtk.Window):
             path = dialog.get_filename()
             try:
                 self.db.export_backup(path)
-            except Exception:
-                pass
+            except (OSError, sqlite3.Error) as e:
+                err = Gtk.MessageDialog(
+                    transient_for=self, modal=True,
+                    message_type=Gtk.MessageType.ERROR,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="Backup failed",
+                )
+                err.format_secondary_text(str(e))
+                err.run()
+                err.destroy()
         dialog.destroy()
         self._ignore_focus_out = False
 
@@ -1502,8 +1511,16 @@ class ClipmanWindow(Gtk.Window):
             try:
                 self.db.import_backup(path)
                 self.refresh()
-            except Exception:
-                pass
+            except (OSError, sqlite3.Error) as e:
+                err = Gtk.MessageDialog(
+                    transient_for=self, modal=True,
+                    message_type=Gtk.MessageType.ERROR,
+                    buttons=Gtk.ButtonsType.OK,
+                    text="Restore failed",
+                )
+                err.format_secondary_text(str(e))
+                err.run()
+                err.destroy()
         dialog.destroy()
         self._ignore_focus_out = False
 
@@ -1660,7 +1677,7 @@ class ClipmanWindow(Gtk.Window):
             )
             iface = dbus.Interface(proxy, "com.clipman.Extension")
             iface.MoveWindowToCursor("Clipman")
-        except Exception:
+        except dbus.DBusException:
             pass
         return False
 
