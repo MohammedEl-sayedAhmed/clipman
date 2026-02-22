@@ -100,15 +100,48 @@ export default class ClipmanExtension extends Extension {
         if (selectionType !== Meta.SelectionType.SELECTION_CLIPBOARD)
             return;
 
-        const clipboard = St.Clipboard.get_default();
-
-        clipboard.get_text(St.ClipboardType.CLIPBOARD, (_cb, text) => {
-            if (text && text.length > 0) {
+        this._getClipboardText().then(text => {
+            if (text) {
                 this._sendToDaemon('text', text);
             } else {
                 this._sendToDaemon('image', '');
             }
         });
+    }
+
+    _getClipboardText() {
+        const clipboard = St.Clipboard.get_default();
+        const mimeTypes = [
+            'text/plain;charset=utf-8',
+            'UTF8_STRING',
+            'text/plain',
+            'STRING',
+        ];
+
+        const tryType = (index) => {
+            if (index >= mimeTypes.length)
+                return Promise.resolve(null);
+
+            return new Promise(resolve => {
+                clipboard.get_content(
+                    St.ClipboardType.CLIPBOARD,
+                    mimeTypes[index],
+                    (_cb, bytes) => {
+                        if (bytes && bytes.get_size() > 0) {
+                            let data = bytes.get_data();
+                            // Trim trailing null byte (some X11 apps include it)
+                            if (data.length > 0 && data[data.length - 1] === 0)
+                                data = data.slice(0, -1);
+                            resolve(new TextDecoder().decode(data));
+                        } else {
+                            resolve(null);
+                        }
+                    }
+                );
+            }).then(text => text || tryType(index + 1));
+        };
+
+        return tryType(0);
     }
 
     _sendToDaemon(contentType, content) {

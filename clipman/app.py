@@ -34,7 +34,6 @@ class ClipmanApp(Gtk.Application):
         # Keep the app running even when the window is hidden
         self.hold()
 
-        self.monitor.start()
         self.dbus_service = ClipmanDBusService(self.window, self, self.monitor)
 
         # Handle SIGINT/SIGTERM gracefully
