@@ -1,0 +1,226 @@
+# Clipman translation template.
+# Copyright (C) 2026 Clipman Contributors
+# This file is distributed under the Apache-2.0 license.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Clipman 1.0.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-22 00:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "+ Add"
+msgstr ""
+
+msgid "Add Snippet"
+msgstr ""
+
+msgid "Add a new snippet"
+msgstr ""
+
+msgid "All"
+msgstr ""
+
+msgid "All files"
+msgstr ""
+
+msgid "Backup"
+msgstr ""
+
+msgid "Backup Clipboard Database"
+msgstr ""
+
+msgid "Backup failed"
+msgstr ""
+
+msgid "Cancel"
+msgstr ""
+
+msgid "Clear All"
+msgstr ""
+
+msgid "Clear all unpinned entries"
+msgstr ""
+
+msgid "Click to paste"
+msgstr ""
+
+msgid "Collapse"
+msgstr ""
+
+msgid "Collapse entry text"
+msgstr ""
+
+msgid "Content"
+msgstr ""
+
+msgid "Dark"
+msgstr ""
+
+msgid "Data"
+msgstr ""
+
+msgid "Database files"
+msgstr ""
+
+msgid "Delete"
+msgstr ""
+
+msgid "Delete entry"
+msgstr ""
+
+msgid "Delete snippet"
+msgstr ""
+
+msgid "Edit"
+msgstr ""
+
+msgid "Edit Entry"
+msgstr ""
+
+msgid "Edit Snippet"
+msgstr ""
+
+msgid "Edit entry"
+msgstr ""
+
+msgid "Edit snippet"
+msgstr ""
+
+msgid "Expand"
+msgstr ""
+
+msgid "Expand entry text"
+msgstr ""
+
+msgid "Export clipboard database"
+msgstr ""
+
+msgid "Font color"
+msgstr ""
+
+msgid "Font size"
+msgstr ""
+
+msgid "Images"
+msgstr ""
+
+msgid "Import clipboard database"
+msgstr ""
+
+msgid "Incognito mode: OFF"
+msgstr ""
+
+msgid "Incognito mode: ON — clipboard not recorded"
+msgstr ""
+
+msgid "Light"
+msgstr ""
+
+msgid "Max history"
+msgstr ""
+
+msgid "Name"
+msgstr ""
+
+msgid "No results found."
+msgstr ""
+
+msgid "OLDER"
+msgstr ""
+
+msgid "Opacity"
+msgstr ""
+
+msgid "Open"
+msgstr ""
+
+msgid "Open URL"
+msgstr ""
+
+msgid "Open URL in browser"
+msgstr ""
+
+msgid "PINNED"
+msgstr ""
+
+msgid "Pin"
+msgstr ""
+
+msgid "Pin entry"
+msgstr ""
+
+msgid "Restore"
+msgstr ""
+
+msgid "Restore Clipboard Database"
+msgstr ""
+
+msgid "Restore failed"
+msgstr ""
+
+msgid "SETTINGS"
+msgstr ""
+
+msgid "Save"
+msgstr ""
+
+msgid "Search..."
+msgstr ""
+
+msgid "Settings"
+msgstr ""
+
+msgid "Snippets"
+msgstr ""
+
+msgid "TODAY"
+msgstr ""
+
+msgid "Text"
+msgstr ""
+
+msgid "Theme"
+msgstr ""
+
+msgid "Toggle incognito mode"
+msgstr ""
+
+msgid "Unpin"
+msgstr ""
+
+msgid "Unpin entry"
+msgstr ""
+
+msgid "YESTERDAY"
+msgstr ""
+
+msgid "e.g., Email signature"
+msgstr ""
+
+msgid "just now"
+msgstr ""
+
+msgid "{count} items"
+msgstr ""
+
+msgid "{count} results"
+msgstr ""
+
+msgid "{count} snippets"
+msgstr ""
+
+msgid "{n}d ago"
+msgstr ""
+
+msgid "{n}h ago"
+msgstr ""
+
+msgid "{n}m ago"
+msgstr ""
