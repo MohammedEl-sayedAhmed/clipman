@@ -249,6 +249,9 @@ gnome-extensions list --enabled | grep clipman
 ```
 If missing, enable it with `gnome-extensions enable clipman@clipman.com` and log out/in.
 
+**Pasting shows `^V` in VSCode/Electron integrated terminals**
+Clipman auto-pastes with Ctrl+V, which standalone terminals interpret correctly. However, integrated terminals inside editors (VSCode, Cursor) expect Ctrl+Shift+V. Use **Shift+Enter** in Clipman to copy without auto-pasting, then manually Ctrl+Shift+V in the terminal.
+
 **Daemon not starting**
 Check the service status:
 ```bash
