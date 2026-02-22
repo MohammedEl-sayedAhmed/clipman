@@ -1,5 +1,5 @@
 [project]
-name = "clipman"
+name = "clipman-clipboard"
 version = "1.0.0"
 description = "A clipboard history manager for Ubuntu/GNOME on Wayland"
 readme = "README.md"
