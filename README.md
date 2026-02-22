@@ -25,42 +25,73 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 
 ---
 
+Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extension — no polling, no subprocesses, no screen flicker. It detects clipboard changes through `Meta.Selection` signals and communicates over D-Bus, making it fundamentally different from tools that rely on `wl-paste --watch` or timer-based polling. Privacy is built in: incognito mode, automatic sensitive data detection with 30-second auto-clear, and restrictive file permissions. The entire app is Python + GTK3 — no Electron, no heavy frameworks.
+
+---
+
 ## Features
 
-| Feature | Description |
-|---------|-------------|
-| **Text & Image support** | Stores both text and image clipboard entries |
-| **Instant paste** | Click or press Enter to paste directly into the focused app |
-| **Pin favorites** | Keep important entries permanently — exempt from pruning |
-| **Search** | Instantly filter clipboard history by text content |
-| **Filter tabs** | Switch between All, Text, Images, and Snippets views |
-| **Snippet templates** | Save reusable text snippets for quick pasting |
-| **Date grouping** | Entries organized into Today, Yesterday, and Older sections |
-| **Keyboard shortcuts** | Arrow keys to navigate, Del to delete, P to pin, Shift+Enter to copy only |
-| **Dark & Light themes** | Switch between dark (Catppuccin Mocha) and light (Catppuccin Latte) themes |
-| **Font customization** | Adjustable font size and 6 font color presets |
-| **Window opacity** | Configurable transparency from 30% to 100% |
-| **Configurable history** | Adjust max history size from 50 to 5000 entries |
-| **Character count** | Text entries show character count badge |
-| **Image preview** | Hover over image entries for a larger preview tooltip |
-| **Super+V shortcut** | Toggle the popup with a familiar keyboard shortcut |
-| **Incognito mode** | Pause clipboard recording — nothing is saved while active |
-| **Sensitive data protection** | Passwords and tokens auto-detected and auto-cleared after 30 seconds |
-| **Preview expansion** | Expand long text entries inline to see the full content |
-| **Inline edit** | Edit any text entry directly from the clipboard history |
-| **URL detection** | URLs are auto-detected with a one-click open button |
-| **Backup & Restore** | Export and import your clipboard database from settings |
-| **Terminal-aware paste** | Sends Ctrl+Shift+V in terminal emulators, Ctrl+V elsewhere |
-| **XWayland support** | Clipboard detection for VSCode, Electron, and other XWayland apps |
-| **Autostart** | Runs as a background daemon via systemd, auto-restarts on crash |
-| **Wayland native** | Zero polling — uses a GNOME Shell extension for flicker-free monitoring |
-| **Lightweight** | Python + GTK3 — no Electron, no heavy frameworks |
-| **Deduplication** | SHA256 hashing prevents duplicate entries; re-copying bumps to top |
-| **Auto-pruning** | History capped at configurable limit (pinned entries are exempt) |
+### Clipboard
+
+- **Text and image support** — stores both content types with SHA256 deduplication
+- **Full-text search** — instantly filter history by content
+- **Pin favorites** — keep important entries permanently, exempt from pruning
+- **Filter tabs** — switch between All, Text, Images, and Snippets views
+- **Snippet templates** — save reusable text blocks for quick pasting
+- **Date grouping** — entries organized into Today, Yesterday, and Older sections
+- **Inline editing** — edit any text entry directly from the history
+- **Preview expansion** — expand long entries inline to see full content
+- **URL detection** — auto-detected with a one-click open button
+- **Character count** — text entries show a character count badge
+- **Image preview** — hover for a larger tooltip preview
+- **Auto-pruning** — history capped at a configurable limit (pinned entries exempt)
+
+### Keyboard
+
+| Key | Action |
+|-----|--------|
+| <kbd>Super</kbd> + <kbd>V</kbd> | Toggle the popup |
+| <kbd>Arrow</kbd> keys | Navigate entries |
+| <kbd>Enter</kbd> | Paste selected entry |
+| <kbd>Shift</kbd> + <kbd>Enter</kbd> | Copy without pasting |
+| <kbd>P</kbd> | Pin / unpin selected entry |
+| <kbd>Delete</kbd> | Delete selected entry |
+| <kbd>Escape</kbd> | Close popup |
+
+### Appearance
+
+- **Dark and light themes** — Catppuccin Mocha and Catppuccin Latte
+- **Font customization** — adjustable size (8–20px) and 6 color presets (Green, Peach, Mauve, Pink, Teal)
+- **Window opacity** — configurable transparency from 30% to 100%
+
+### Privacy and Security
+
+- **Incognito mode** — pause clipboard recording entirely
+- **Sensitive data detection** — tokens and passwords auto-detected and cleared after 30 seconds
+- **Restrictive permissions** — data directory `0o700`, image files `0o600`
+- **Path traversal protection** — all image paths validated before file operations
+- **Backup validation** — imported databases checked for schema integrity and sanitized
+- **Parameterized SQL** — no injection vectors
+- **No shell execution** — all subprocesses use argument lists, never `shell=True`
+
+### Integration
+
+- **Terminal-aware paste** — sends <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> in terminal emulators, <kbd>Ctrl</kbd>+<kbd>V</kbd> elsewhere
+- **XWayland support** — clipboard detection for VSCode, Electron, and other XWayland apps via MIME type fallback
+- **Systemd autostart** — runs as a background daemon, auto-restarts on crash
+- **Backup and restore** — export and import your clipboard database from settings
+- **GNOME Shell extension** — native clipboard monitoring with zero overhead
+
+### Performance
+
+- **Zero polling** — event-driven via `Meta.Selection` signals and D-Bus
+- **SHA256 deduplication** — copying the same content bumps it to the top without creating duplicates
+- **Configurable history** — 50 to 5,000 entries
+- **Lightweight** — Python + GTK3, no Electron or heavy frameworks
 
 ## Requirements
 
-- Ubuntu 22.04+ with GNOME 46 and Wayland
+- Ubuntu 22.04+ with GNOME 46–48 and Wayland
 - Python 3.10+
 - GTK 3
 
@@ -114,16 +145,16 @@ sudo snap install clipman_*.snap --classic
 | Action | How |
 |--------|-----|
 | Open clipboard history | <kbd>Super</kbd> + <kbd>V</kbd> |
-| Paste an entry | Click on it or navigate with <kbd>Arrow</kbd> keys and press <kbd>Enter</kbd> |
+| Paste an entry | Click on it or press <kbd>Enter</kbd> |
 | Copy without pasting | <kbd>Shift</kbd> + <kbd>Enter</kbd> |
 | Pin / unpin an entry | Click the star icon or press <kbd>P</kbd> |
 | Delete an entry | Click the X icon or press <kbd>Delete</kbd> |
 | Filter by type | Click **All**, **Text**, **Images**, or **Snippets** tabs |
 | Create a snippet | Switch to **Snippets** tab and click **+ Add** |
 | Search history | Type in the search bar |
-| Edit a text entry | Click the edit icon (✎) on any text entry |
-| Expand long text | Click the expand icon (▼) to see full content |
-| Open a URL | Click the arrow icon (↗) on URL entries |
+| Edit a text entry | Click the edit icon on any text entry |
+| Expand long text | Click the expand icon to see full content |
+| Open a URL | Click the arrow icon on URL entries |
 | Toggle incognito | Click the eye icon in the status bar |
 | Clear all unpinned | Click **Clear All** |
 | Close popup | <kbd>Escape</kbd> or click outside |
@@ -136,14 +167,24 @@ Click the gear icon to access settings:
 |---------|-------------|
 | **Opacity** | Window transparency (30%–100%) |
 | **Font size** | Text size for entries (8–20px) |
-| **Max history** | Number of entries to keep (50–5000) |
+| **Max history** | Number of entries to keep (50–5,000) |
 | **Theme** | Toggle between Dark and Light themes |
-| **Font color** | Choose from Default, Green, Peach, Mauve, Pink, or Teal presets |
+| **Font color** | Choose from Default, Green, Peach, Mauve, Pink, or Teal |
 | **Data** | Backup or restore your clipboard database |
 
 Settings are saved automatically and persist across sessions.
 
-## Architecture
+## How It Works
+
+1. A **GNOME Shell extension** detects clipboard changes natively via `Meta.Selection`'s `owner-changed` signal — no polling, no subprocesses, no screen flicker
+2. The extension reads the content using a **MIME type fallback chain** (`text/plain;charset=utf-8` → `UTF8_STRING` → `text/plain` → `STRING`) and sends it to the daemon over **D-Bus**
+3. The daemon stores entries in an **SQLite database** (WAL mode) at `~/.local/share/clipman/`
+4. Duplicates are detected via **SHA256 hashing** — copying the same content updates the timestamp and bumps it to the top
+5. Pressing **Super+V** sends a **D-Bus toggle** to the daemon, which shows the popup window near the cursor
+6. Clicking an entry copies it via `wl-copy`, hides the popup, and the extension simulates a **paste keystroke** using a Clutter virtual keyboard
+
+<details>
+<summary><strong>Project structure</strong></summary>
 
 ```
 clipman/
@@ -187,14 +228,37 @@ clipman/
 └── LICENSE / NOTICE
 ```
 
-### How it works
+</details>
 
-1. A **GNOME Shell extension** detects clipboard changes natively via `Meta.Selection`'s `owner-changed` signal — no polling, no subprocesses, no screen flicker
-2. The extension reads the clipboard content and sends it to the **daemon** over **D-Bus**
-3. The daemon stores entries in an **SQLite database** at `~/.local/share/clipman/`
-4. Duplicates are detected via **SHA256 hashing** — copying the same content updates the timestamp and bumps it to the top
-5. Pressing **Super+V** sends a **D-Bus toggle** to the daemon, showing the popup window
-6. Clicking an entry copies it via `wl-copy`, hides the popup, and the extension simulates **Ctrl+V** using a Clutter virtual keyboard to paste it into the focused app
+## Troubleshooting
+
+**Extension not loading after install**
+Log out and back in. GNOME Shell extensions require a session restart to activate.
+
+**Super+V doesn't open Clipman**
+The install script reassigns Super+V from GNOME's message tray. Check for conflicts:
+```bash
+gsettings get org.gnome.shell.keybindings toggle-message-tray
+```
+If it still shows `<Super>v`, the keybinding wasn't reassigned. Re-run `./install.sh`.
+
+**XWayland apps (VSCode, Electron) not detected**
+Verify the extension is enabled:
+```bash
+gnome-extensions list --enabled | grep clipman
+```
+If missing, enable it with `gnome-extensions enable clipman@clipman.com` and log out/in.
+
+**Daemon not starting**
+Check the service status:
+```bash
+systemctl --user status clipman.service
+journalctl --user -u clipman.service -n 20
+```
+
+## Contributing
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite (150 tests, no GTK or D-Bus required).
 
 ## Uninstall
 
@@ -215,3 +279,7 @@ Licensed under the **Apache License, Version 2.0**. You may use, modify, and dis
 - State any changes you made
 
 See the [LICENSE](LICENSE) and [NOTICE](NOTICE) files for full details.
+
+## Acknowledgements
+
+- Theme palette by [Catppuccin](https://github.com/catppuccin/catppuccin)
