@@ -463,6 +463,98 @@ class TestClipboardMonitor(unittest.TestCase):
         self.assertEqual(self.mock_db.add_entry.call_count, 2)
 
 
+class TestDebounce(unittest.TestCase):
+    """Tests for the debounce / rate-limiting behaviour.
+
+    The GNOME Shell extension debounces owner-changed signals with a 150ms
+    GLib timeout (cancel-and-restart).  The Python daemon applies a second
+    layer of rate-limiting via MIN_EVENT_INTERVAL so that bursts of D-Bus
+    NewEntry calls are collapsed.
+    """
+
+    def setUp(self):
+        self.mock_db = MagicMock()
+        from clipman.clipboard_monitor import ClipboardMonitor
+        self.monitor = ClipboardMonitor(self.mock_db)
+
+    def test_min_event_interval_value(self):
+        """MIN_EVENT_INTERVAL must be at least 100ms to complement the
+        extension's 150ms debounce."""
+        from clipman.clipboard_monitor import MIN_EVENT_INTERVAL
+        self.assertGreaterEqual(MIN_EVENT_INTERVAL, 0.1)
+
+    def test_burst_text_events_only_first_recorded(self):
+        """A burst of text events with no delay records only the first."""
+        for i in range(5):
+            self.monitor.handle_new_text(f"burst-{i}")
+        self.assertEqual(self.mock_db.add_entry.call_count, 1)
+        self.mock_db.add_entry.assert_called_with(
+            "text", content_text="burst-0", sensitive=False
+        )
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_burst_image_events_only_first_recorded(self, mock_run):
+        """A burst of image events with no delay records only the first."""
+        mock_run.return_value = FakeCompletedProcess(
+            returncode=0, stdout=b"\x89PNGdata"
+        )
+        for _ in range(5):
+            self.monitor.handle_new_image()
+        self.assertEqual(self.mock_db.add_entry.call_count, 1)
+
+    def test_burst_mixed_events_only_first_recorded(self):
+        """Mixed text/image burst with no delay records only the first."""
+        self.monitor.handle_new_text("text-first")
+        with patch("clipman.clipboard_monitor.subprocess.run") as mock_run:
+            mock_run.return_value = FakeCompletedProcess(
+                returncode=0, stdout=b"\x89PNGdata"
+            )
+            self.monitor.handle_new_image()
+        self.monitor.handle_new_text("text-third")
+        self.assertEqual(self.mock_db.add_entry.call_count, 1)
+
+    def test_events_accepted_after_interval_passes(self):
+        """Each event is accepted when enough time has passed."""
+        self.monitor.handle_new_text("first")
+        self.assertEqual(self.mock_db.add_entry.call_count, 1)
+
+        self.monitor._last_event_time = time.monotonic() - 0.2
+        self.monitor.handle_new_text("second")
+        self.assertEqual(self.mock_db.add_entry.call_count, 2)
+
+        self.monitor._last_event_time = time.monotonic() - 0.2
+        self.monitor.handle_new_text("third")
+        self.assertEqual(self.mock_db.add_entry.call_count, 3)
+
+    def test_rate_limiter_does_not_update_time_on_drop(self):
+        """Dropped events must not reset the cooldown timer."""
+        self.monitor.handle_new_text("accepted")
+        saved_time = self.monitor._last_event_time
+
+        # These should all be dropped
+        self.monitor.handle_new_text("dropped-1")
+        self.monitor.handle_new_text("dropped-2")
+
+        # Timer should still reflect the accepted event
+        self.assertEqual(self.monitor._last_event_time, saved_time)
+
+    def test_first_event_always_accepted(self):
+        """The very first event is never rate-limited."""
+        self.monitor.handle_new_text("very first")
+        self.assertEqual(self.mock_db.add_entry.call_count, 1)
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_image_after_text_accepted_after_interval(self, mock_run):
+        """Image event accepted after text when interval has elapsed."""
+        mock_run.return_value = FakeCompletedProcess(
+            returncode=0, stdout=b"\x89PNGdata"
+        )
+        self.monitor.handle_new_text("text")
+        self.monitor._last_event_time = time.monotonic() - 0.2
+        self.monitor.handle_new_image()
+        self.assertEqual(self.mock_db.add_entry.call_count, 2)
+
+
 class TestIsSensitiveFunction(unittest.TestCase):
     """Direct tests for the _is_sensitive() function."""
 
