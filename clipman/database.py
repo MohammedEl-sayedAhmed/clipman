@@ -93,6 +93,10 @@ class ClipboardDB:
             h = content_hash(content_text.encode("utf-8"))
             image_path = None
         elif content_type == "image" and image_data:
+            # Validate image magic bytes (PNG, JPEG, GIF, BMP, WebP)
+            _MAGIC = (b"\x89PNG", b"\xff\xd8\xff", b"GIF8", b"BM", b"RIFF")
+            if not any(image_data[:8].startswith(m) for m in _MAGIC):
+                return -1
             h = content_hash(image_data)
             image_path = str(IMAGES_DIR / f"{h}.png")
             fd = os.open(image_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -273,17 +277,31 @@ class ClipboardDB:
 
     def import_backup(self, path: str):
         import shutil
+        from urllib.parse import quote
         # Validate the backup is a real SQLite database with expected tables
         try:
-            test_conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-            tables = {r[0] for r in test_conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table'"
+            # URL-encode path to prevent SQLite URI parameter injection
+            # (a filename containing '?' could inject mode=rw, etc.)
+            safe_uri = "file:" + quote(str(path), safe="/") + "?mode=ro"
+            test_conn = sqlite3.connect(safe_uri, uri=True)
+            schema = {(r[0], r[1]) for r in test_conn.execute(
+                "SELECT type, name FROM sqlite_master"
             ).fetchall()}
             test_conn.close()
         except sqlite3.Error as e:
             raise ValueError(f"Not a valid database: {e}")
+        tables = {name for typ, name in schema if typ == "table"}
         if "entries" not in tables:
             raise ValueError("Invalid backup: missing 'entries' table")
+        # Reject backups containing triggers or views (could execute
+        # arbitrary SQL on INSERT/UPDATE/DELETE after import)
+        dangerous = {name for typ, name in schema
+                     if typ in ("trigger", "view")}
+        if dangerous:
+            raise ValueError(
+                f"Invalid backup: contains disallowed objects: "
+                f"{', '.join(sorted(dangerous))}"
+            )
         self.conn.close()
         shutil.copy2(path, str(DB_PATH))
         self.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)

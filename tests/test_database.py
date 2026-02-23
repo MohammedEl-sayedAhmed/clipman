@@ -815,6 +815,73 @@ class TestClipboardDB(unittest.TestCase):
         self.db.update_entry_text(99999, "ghost update")
         self.assertEqual(self.db.count_entries(), 0)
 
+    # ── Security: image magic bytes validation ─────────────────────
+
+    def test_rejects_non_image_data(self):
+        """Non-image data should be rejected by magic bytes check."""
+        result = self.db.add_entry("image", image_data=b"not an image at all")
+        self.assertEqual(result, -1)
+        self.assertEqual(self.db.count_entries(content_type="image"), 0)
+
+    def test_accepts_png_image(self):
+        fake_png = b"\x89PNG\r\n\x1a\nvalid_png"
+        result = self.db.add_entry("image", image_data=fake_png)
+        self.assertGreater(result, 0)
+
+    def test_accepts_jpeg_image(self):
+        fake_jpeg = b"\xff\xd8\xff\xe0fake_jpeg_data"
+        result = self.db.add_entry("image", image_data=fake_jpeg)
+        self.assertGreater(result, 0)
+
+    def test_rejects_html_as_image(self):
+        result = self.db.add_entry("image", image_data=b"<html>not an image</html>")
+        self.assertEqual(result, -1)
+
+    def test_rejects_script_as_image(self):
+        result = self.db.add_entry("image", image_data=b"#!/bin/bash\nrm -rf /")
+        self.assertEqual(result, -1)
+
+    # ── Security: backup with triggers rejected ────────────────────
+
+    def test_import_backup_rejects_triggers(self):
+        """Backups containing SQL triggers must be rejected."""
+        import sqlite3 as _sqlite
+        backup_path = os.path.join(self.tmpdir, "backup_trigger.db")
+        conn = _sqlite.connect(backup_path)
+        conn.execute("""CREATE TABLE entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_type TEXT NOT NULL, content_text TEXT, image_path TEXT,
+            content_hash TEXT NOT NULL UNIQUE, pinned INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL, accessed_at REAL NOT NULL,
+            sensitive INTEGER NOT NULL DEFAULT 0)""")
+        conn.execute("""CREATE TRIGGER evil_trigger AFTER INSERT ON entries
+            BEGIN DELETE FROM entries; END""")
+        conn.commit()
+        conn.close()
+
+        with self.assertRaises(ValueError) as ctx:
+            self.db.import_backup(backup_path)
+        self.assertIn("disallowed objects", str(ctx.exception))
+
+    def test_import_backup_rejects_views(self):
+        """Backups containing SQL views must be rejected."""
+        import sqlite3 as _sqlite
+        backup_path = os.path.join(self.tmpdir, "backup_view.db")
+        conn = _sqlite.connect(backup_path)
+        conn.execute("""CREATE TABLE entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_type TEXT NOT NULL, content_text TEXT, image_path TEXT,
+            content_hash TEXT NOT NULL UNIQUE, pinned INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL, accessed_at REAL NOT NULL,
+            sensitive INTEGER NOT NULL DEFAULT 0)""")
+        conn.execute("CREATE VIEW evil_view AS SELECT * FROM entries")
+        conn.commit()
+        conn.close()
+
+        with self.assertRaises(ValueError) as ctx:
+            self.db.import_backup(backup_path)
+        self.assertIn("disallowed objects", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

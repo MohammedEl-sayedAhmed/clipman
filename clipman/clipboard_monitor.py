@@ -7,16 +7,28 @@ MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
 MIN_EVENT_INTERVAL = 0.1  # seconds — ignore events faster than this
 
 _TOKEN_PREFIXES = ("ghp_", "gho_", "ghs_", "github_pat_", "sk-", "sk_live_",
-                   "pk_live_", "Bearer ", "eyJ", "xox", "AKIA", "AIza")
+                   "pk_live_", "Bearer ", "eyJ", "xox", "AKIA", "AIza",
+                   "npm_", "-----BEGIN ")
+
+_SENSITIVE_INFIXES = ("postgresql://", "mysql://", "mongodb://", "redis://",
+                      "ssh-rsa ", "ssh-ed25519 ")
 
 
 def _is_sensitive(text: str) -> bool:
     if "\n" in text.strip():
+        # Still check multiline text for private keys and connection strings
+        t = text.strip()
+        if any(t.startswith(p) for p in _TOKEN_PREFIXES):
+            return True
+        if any(infix in t for infix in _SENSITIVE_INFIXES):
+            return True
         return False
     t = text.strip()
     if not t or len(t) < 8 or len(t) > 128:
         return False
     if any(t.startswith(p) for p in _TOKEN_PREFIXES):
+        return True
+    if any(infix in t for infix in _SENSITIVE_INFIXES):
         return True
     if " " in t:
         return False

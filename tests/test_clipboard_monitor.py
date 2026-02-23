@@ -605,6 +605,44 @@ class TestIsSensitiveFunction(unittest.TestCase):
         self.assertEqual(len(text), 129)
         self.assertFalse(self.is_sensitive(text))
 
+    # ── Extended sensitive detection (SEC-05 fixes) ────────────────
+
+    def test_sensitive_npm_token(self):
+        self.assertTrue(self.is_sensitive("npm_abcdef1234567890"))
+
+    def test_sensitive_private_key_header(self):
+        key = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg..."
+        self.assertTrue(self.is_sensitive(key))
+
+    def test_sensitive_rsa_private_key(self):
+        key = "-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA..."
+        self.assertTrue(self.is_sensitive(key))
+
+    def test_sensitive_postgresql_connection_string(self):
+        self.assertTrue(self.is_sensitive("postgresql://user:pass@host/db"))
+
+    def test_sensitive_mongodb_connection_string(self):
+        self.assertTrue(self.is_sensitive("mongodb://admin:secret@cluster.example.com"))
+
+    def test_sensitive_redis_connection_string(self):
+        self.assertTrue(self.is_sensitive("redis://default:password@redis.example.com:6379"))
+
+    def test_sensitive_ssh_rsa_key(self):
+        key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC..."
+        self.assertTrue(self.is_sensitive(key))
+
+    def test_sensitive_ssh_ed25519_key(self):
+        key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG..."
+        self.assertTrue(self.is_sensitive(key))
+
+    def test_multiline_private_key_detected(self):
+        key = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg\nkqhkiG9w0BAQ..."
+        self.assertTrue(self.is_sensitive(key))
+
+    def test_multiline_connection_string_detected(self):
+        text = "DB_URL=postgresql://user:pass@host/db\nextra line"
+        self.assertTrue(self.is_sensitive(text))
+
 
 if __name__ == "__main__":
     unittest.main()

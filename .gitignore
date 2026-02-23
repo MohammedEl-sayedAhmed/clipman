@@ -18,7 +18,11 @@ build/
 
 # Environment
 .env
+.venv/
 clipman-extension.zip
+
+# Media
+Demo.webm
 
 # Flatpak build artifacts
 .flatpak-builder/
