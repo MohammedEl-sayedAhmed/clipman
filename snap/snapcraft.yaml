@@ -21,7 +21,7 @@ slots:
   clipman-dbus:
     interface: dbus
     bus: session
-    name: com.clipman.Clipman
+    name: com.clipman.Daemon
 
 apps:
   clipman:
