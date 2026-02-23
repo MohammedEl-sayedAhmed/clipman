@@ -39,6 +39,10 @@ export default class ClipmanExtension extends Extension {
     }
 
     disable() {
+        if (this._clipboardTimeout) {
+            GLib.source_remove(this._clipboardTimeout);
+            this._clipboardTimeout = null;
+        }
         if (this._ownerChangedId) {
             this._selection.disconnect(this._ownerChangedId);
             this._ownerChangedId = null;
@@ -123,15 +127,26 @@ export default class ClipmanExtension extends Extension {
         if (selectionType !== Meta.SelectionType.SELECTION_CLIPBOARD)
             return;
 
-        this._getClipboardText().then(text => {
-            if (text) {
-                this._sendToDaemon('text', text);
-            } else {
-                this._sendToDaemon('image', '');
+        // Debounce: wait 150ms for the new clipboard owner to make
+        // content available. Rapid copies cancel the previous read.
+        if (this._clipboardTimeout) {
+            GLib.source_remove(this._clipboardTimeout);
+            this._clipboardTimeout = null;
+        }
+
+        this._clipboardTimeout = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT, 150, () => {
+                this._clipboardTimeout = null;
+                this._getClipboardText().then(text => {
+                    if (text) {
+                        this._sendToDaemon('text', text);
+                    } else {
+                        this._sendToDaemon('image', '');
+                    }
+                }).catch(() => {});
+                return GLib.SOURCE_REMOVE;
             }
-        }).catch(() => {
-            // Clipboard read failed — ignore silently
-        });
+        );
     }
 
     _getClipboardText() {
