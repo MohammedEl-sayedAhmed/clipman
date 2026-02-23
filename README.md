@@ -137,9 +137,9 @@ pip install clipman-clipboard
 </details>
 
 <details>
-<summary><strong>GNOME Shell Extension</strong> (standalone, for clipboard monitoring only)</summary>
+<summary><strong>GNOME Shell Extension</strong> (installed automatically by install.sh)</summary>
 
-Install from [GNOME Extensions](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/), or manually:
+The companion extension is required for clipboard detection. It is installed automatically by the install script, but can also be installed manually from [GNOME Extensions](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/):
 
 ```bash
 gnome-extensions install clipman-extension.zip
