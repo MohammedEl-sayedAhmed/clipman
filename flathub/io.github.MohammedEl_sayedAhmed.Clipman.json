@@ -1,5 +1,5 @@
 {
-    "id": "io.github.MohammedEl_sayedAhmed.Clipman",
+    "app-id": "io.github.MohammedEl_sayedAhmed.Clipman",
     "runtime": "org.gnome.Platform",
     "runtime-version": "47",
     "sdk": "org.gnome.Sdk",
