@@ -57,7 +57,7 @@ clipman/
 python3 -m unittest discover -s tests
 ```
 
-All 150 tests should pass. Tests cover the database layer, clipboard monitor, URL detection, and time formatting — no GTK or D-Bus required.
+All 180 tests should pass. Tests cover the database layer, clipboard monitor, URL detection, and time formatting — no GTK or D-Bus required.
 
 ### Key Constraints
 

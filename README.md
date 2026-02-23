@@ -254,9 +254,9 @@ clipman/
 │   ├── POTFILES.in                # Files with translatable strings
 │   └── clipman.pot                # Translation template (70 strings)
 ├── tests/
-│   ├── test_database.py           # Database unit tests (70 tests)
-│   ├── test_clipboard_monitor.py  # Monitor unit tests (58 tests)
-│   └── test_window_utils.py       # URL detection & time formatting (22 tests)
+│   ├── test_database.py           # Database unit tests (83 tests)
+│   ├── test_clipboard_monitor.py  # Monitor unit tests (69 tests)
+│   └── test_window_utils.py       # URL detection & time formatting (28 tests)
 ├── docs/
 │   ├── dark-theme.png             # Screenshot (dark theme)
 │   └── light-theme.png            # Screenshot (light theme)
@@ -264,7 +264,7 @@ clipman/
 ├── snap/
 │   └── snapcraft.yaml             # Snap packaging
 ├── .github/
-│   └── workflows/test.yml         # CI — runs 150 tests on Python 3.10–3.12
+│   └── workflows/test.yml         # CI — runs 180 tests on Python 3.10–3.12
 ├── launcher.sh                    # Environment wrapper for snap terminals
 ├── install.sh
 ├── uninstall.sh
@@ -306,7 +306,7 @@ journalctl --user -u clipman.service -n 20
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite (150 tests, no GTK or D-Bus required).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite (180 tests, no GTK or D-Bus required).
 
 ## Uninstall
 
