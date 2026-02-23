@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>com.clipman.Clipman</id>
+  <id>io.github.MohammedEl_sayedAhmed.Clipman</id>
   <name>Clipman</name>
   <summary>Clipboard history manager for GNOME on Wayland</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
-  <developer id="com.github.MohammedEl-sayedAhmed">
+  <developer id="io.github.MohammedEl-sayedAhmed">
     <name>Mohammed El-sayed Ahmed</name>
   </developer>
 
@@ -37,7 +37,7 @@
   <url type="vcs-browser">https://github.com/MohammedEl-sayedAhmed/clipman</url>
   <url type="donation">https://github.com/sponsors/MohammedEl-sayedAhmed</url>
 
-  <launchable type="desktop-id">com.clipman.Clipman.desktop</launchable>
+  <launchable type="desktop-id">io.github.MohammedEl_sayedAhmed.Clipman.desktop</launchable>
 
   <branding>
     <color type="primary" scheme_preference="light">#dce0e8</color>

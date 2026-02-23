@@ -2,6 +2,18 @@
 
 All notable changes to Clipman are documented in this file.
 
+## [1.0.2] - 2026-02-23
+
+### Security
+- Hardened backup import against SQLite URI injection
+- Reject imported backups containing triggers or views
+- Added image magic bytes validation (PNG, JPEG, GIF, BMP, WebP)
+- Extended sensitive data detection (npm tokens, private keys, connection strings, SSH keys)
+
+### Changed
+- Added Flathub-compatible desktop and metainfo files
+- Bumped Flathub runtime to GNOME Platform 48
+
 ## [1.0.1] - 2026-02-23
 
 ### Fixed

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Clipman
+Comment=Clipboard Manager for GNOME/Wayland
+Exec=clipman
+Icon=io.github.MohammedEl_sayedAhmed.Clipman
+Terminal=false
+Categories=Utility;
+StartupNotify=false
