@@ -305,7 +305,7 @@ This stops the systemd service and removes the GNOME Shell extension, keybinding
 
 ## License
 
-Copyright 2025 Mohammed El-sayed Ahmed
+Copyright 2025–2026 Mohammed El-sayed Ahmed
 
 Licensed under the **Apache License, Version 2.0**. You may use, modify, and distribute this software, provided you:
 
