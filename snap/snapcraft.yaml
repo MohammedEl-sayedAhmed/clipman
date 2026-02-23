@@ -25,10 +25,13 @@ apps:
 parts:
   wl-clipboard:
     plugin: meson
-    source: https://github.com/bugaevc/wl-clipboard/releases/download/v2.2.1/wl-clipboard-2.2.1.tar.gz
+    source: https://github.com/bugaevc/wl-clipboard/archive/refs/tags/v2.2.1.tar.gz
     build-packages:
+      - meson
+      - ninja-build
       - libwayland-dev
       - wayland-protocols
+      - pkg-config
 
   clipman:
     plugin: dump
