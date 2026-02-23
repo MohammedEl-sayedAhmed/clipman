@@ -12,7 +12,7 @@ All notable changes to Clipman are documented in this file.
 
 ### Changed
 - Added Flathub-compatible desktop and metainfo files
-- Bumped Flathub runtime to GNOME Platform 48
+- Bumped Flathub runtime to GNOME Platform 49
 
 ## [1.0.1] - 2026-02-23
 
