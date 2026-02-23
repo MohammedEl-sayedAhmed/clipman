@@ -35,6 +35,7 @@
   <url type="homepage">https://github.com/MohammedEl-sayedAhmed/clipman</url>
   <url type="bugtracker">https://github.com/MohammedEl-sayedAhmed/clipman/issues</url>
   <url type="vcs-browser">https://github.com/MohammedEl-sayedAhmed/clipman</url>
+  <url type="donation">https://github.com/sponsors/MohammedEl-sayedAhmed</url>
 
   <launchable type="desktop-id">com.clipman.Clipman.desktop</launchable>
 
@@ -42,6 +43,17 @@
     <color type="primary" scheme_preference="light">#dce0e8</color>
     <color type="primary" scheme_preference="dark">#1e1e2e</color>
   </branding>
+
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/v1.0.0/docs/dark-theme.png</image>
+      <caption>Clipman dark theme</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/v1.0.0/docs/light-theme.png</image>
+      <caption>Clipman light theme</caption>
+    </screenshot>
+  </screenshots>
 
   <content_rating type="oars-1.1"/>
 
