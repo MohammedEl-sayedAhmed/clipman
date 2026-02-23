@@ -1,5 +1,5 @@
 name: clipman
-version: '1.0.0'
+version: '1.0.1'
 summary: Clipboard history manager for GNOME on Wayland
 description: |
   A fast, native clipboard manager for Ubuntu/GNOME on Wayland.

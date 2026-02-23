@@ -2,6 +2,18 @@
 
 All notable changes to Clipman are documented in this file.
 
+## [1.0.1] - 2026-02-23
+
+### Fixed
+- Unreliable clipboard detection — added 150ms debounce to extension's clipboard change handler
+- D-Bus slot name in Snap packaging now matches actual daemon bus name (`com.clipman.Daemon`)
+
+### Changed
+- Added AUR and Snap Store badges to README
+- Fixed Snap install instructions (strict confinement, not classic)
+- Added AUR install commands (`yay`/`paru`)
+- Added screenshots and donation URL to AppStream metadata
+
 ## [1.0.0] - 2026-02-22
 
 ### Added

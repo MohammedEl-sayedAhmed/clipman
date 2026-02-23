@@ -67,6 +67,16 @@
   </supports>
 
   <releases>
+    <release version="1.0.1" date="2026-02-23">
+      <description>
+        <p>Patch release with clipboard reliability fix.</p>
+        <ul>
+          <li>Fixed unreliable clipboard detection with 150ms debounce</li>
+          <li>Fixed D-Bus slot name in Snap packaging</li>
+          <li>Added screenshots and donation URL to AppStream metadata</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.0" date="2026-02-22">
       <description>
         <p>Initial public release.</p>
