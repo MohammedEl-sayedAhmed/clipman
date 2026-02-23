@@ -18,6 +18,7 @@ Like Windows `Win+V` — but for Linux.
 [![PyPI Downloads](https://img.shields.io/pypi/dm/clipman-clipboard?label=PyPI%20Downloads&logo=pypi&logoColor=white)](https://pypi.org/project/clipman-clipboard/)
 [![GNOME Extensions](https://img.shields.io/badge/GNOME_Extensions-9407-4A86CF?logo=gnome&logoColor=white)](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/MohammedEl-sayedAhmed?label=Sponsors&logo=github)](https://github.com/sponsors/MohammedEl-sayedAhmed)
+[![Donate](https://img.shields.io/badge/Donate-PayPal-0070BA?logo=paypal&logoColor=white)](https://www.paypal.com/paypalme/mohammedelsayedammar)
 [![GitHub Discussions](https://img.shields.io/github/discussions/MohammedEl-sayedAhmed/clipman?label=Discussions&logo=github)](https://github.com/MohammedEl-sayedAhmed/clipman/discussions)
 
 ---
