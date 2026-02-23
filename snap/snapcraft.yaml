@@ -12,15 +12,29 @@ description: |
 
 base: core22
 grade: stable
-confinement: classic
+confinement: strict
 
 architectures:
   - build-on: amd64
+
+slots:
+  clipman-dbus:
+    interface: dbus
+    bus: session
+    name: com.clipman.Clipman
 
 apps:
   clipman:
     command: bin/clipman-wrapper
     desktop: share/applications/com.clipman.Clipman.desktop
+    plugs:
+      - wayland
+      - x11
+      - desktop
+      - desktop-legacy
+      - home
+      - gsettings
+      - opengl
 
 parts:
   wl-clipboard:
