@@ -671,5 +671,150 @@ class TestClipboardDB(unittest.TestCase):
         self.assertEqual(deleted, 1)
 
 
+    # ── _safe_image_path (module-level function) ───────────────────
+
+    def test_safe_image_path_valid_file(self):
+        from clipman.database import _safe_image_path
+        path = str(self.images_dir / "abc123.png")
+        self.assertTrue(_safe_image_path(path))
+
+    def test_safe_image_path_empty_string(self):
+        from clipman.database import _safe_image_path
+        self.assertFalse(_safe_image_path(""))
+
+    def test_safe_image_path_traversal(self):
+        from clipman.database import _safe_image_path
+        self.assertFalse(_safe_image_path("/etc/passwd"))
+
+    def test_safe_image_path_relative_traversal(self):
+        from clipman.database import _safe_image_path
+        # Relative path resolves to CWD, not inside IMAGES_DIR
+        self.assertFalse(_safe_image_path("../../../etc/passwd"))
+
+    def test_safe_image_path_directory_itself(self):
+        from clipman.database import _safe_image_path
+        # IMAGES_DIR itself — its parent is DATA_DIR, not IMAGES_DIR
+        self.assertFalse(_safe_image_path(str(self.images_dir)))
+
+    def test_safe_image_path_nested_subdir(self):
+        from clipman.database import _safe_image_path
+        # File nested one level deeper — parent is subdir, not IMAGES_DIR
+        path = str(self.images_dir / "sub" / "abc.png")
+        self.assertFalse(_safe_image_path(path))
+
+    # ── image file permissions ──────────────────────────────────────
+
+    def test_image_file_permissions(self):
+        fake_png = b"\x89PNG\r\n\x1a\nperms_test"
+        self.db.add_entry("image", image_data=fake_png)
+        entries = self.db.get_entries(content_type="image")
+        path = entries[0]["image_path"]
+        self.assertTrue(os.path.exists(path))
+        mode = os.stat(path).st_mode & 0o777
+        self.assertEqual(mode, 0o600)
+
+    # ── enforce_max_entries edge cases ─────────────────────────────
+
+    def test_enforce_max_entries_zero_deletes_all_unpinned(self):
+        self.db.add_entry("text", content_text="alpha")
+        self.db.add_entry("text", content_text="beta")
+        self.db.add_entry("text", content_text="gamma")
+        self.assertEqual(self.db.count_entries(), 3)
+
+        self.db.set_setting("max_entries", "0")
+        self.db.enforce_max_entries()
+        self.assertEqual(self.db.count_entries(), 0)
+
+    def test_enforce_max_entries_idempotent(self):
+        self.db.add_entry("text", content_text="only entry")
+        self.db.set_setting("max_entries", "5")
+        self.db.enforce_max_entries()
+        self.db.enforce_max_entries()
+        self.assertEqual(self.db.count_entries(), 1)
+
+    # ── delete_expired_sensitive cleans up image files ─────────────
+
+    def test_delete_expired_sensitive_removes_image_file(self):
+        fake_png = b"\x89PNG\r\n\x1a\nsensitive_img_cleanup"
+        entry_id = self.db.add_entry("image", image_data=fake_png, sensitive=True)
+        entries = self.db.get_entries(content_type="image")
+        image_path = entries[0]["image_path"]
+        self.assertTrue(os.path.exists(image_path))
+
+        self.db.conn.execute(
+            "UPDATE entries SET created_at = ? WHERE id = ?",
+            (time.time() - 100, entry_id)
+        )
+        self.db.conn.commit()
+
+        deleted = self.db.delete_expired_sensitive(max_age_seconds=30)
+        self.assertEqual(deleted, 1)
+        self.assertFalse(os.path.exists(image_path))
+
+    # ── import_backup edge cases ────────────────────────────────────
+
+    def test_import_backup_missing_snippets_still_valid(self):
+        import sqlite3 as _sqlite
+        backup_path = os.path.join(self.tmpdir, "backup_no_snippets.db")
+        conn = _sqlite.connect(backup_path)
+        conn.execute("""CREATE TABLE entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_type TEXT NOT NULL, content_text TEXT, image_path TEXT,
+            content_hash TEXT NOT NULL UNIQUE, pinned INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL, accessed_at REAL NOT NULL,
+            sensitive INTEGER NOT NULL DEFAULT 0)""")
+        conn.execute(
+            "INSERT INTO entries "
+            "(content_type, content_text, content_hash, pinned, created_at, accessed_at, sensitive) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("text", "restored entry", "hashval001", 0, 1000.0, 1000.0, 0)
+        )
+        conn.commit()
+        conn.close()
+
+        self.db.import_backup(backup_path)
+        entries = self.db.get_entries()
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0]["content_text"], "restored entry")
+
+    def test_import_backup_sanitizes_traversal_image_path(self):
+        import sqlite3 as _sqlite
+        backup_path = os.path.join(self.tmpdir, "backup_traversal.db")
+        conn = _sqlite.connect(backup_path)
+        for stmt in [
+            """CREATE TABLE entries (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content_type TEXT NOT NULL, content_text TEXT, image_path TEXT,
+                content_hash TEXT NOT NULL UNIQUE, pinned INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL, accessed_at REAL NOT NULL,
+                sensitive INTEGER NOT NULL DEFAULT 0)""",
+            """CREATE TABLE snippets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL, content_text TEXT NOT NULL,
+                created_at REAL NOT NULL)""",
+            """CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)""",
+        ]:
+            conn.execute(stmt)
+        conn.execute(
+            "INSERT INTO entries "
+            "(content_type, image_path, content_hash, pinned, created_at, accessed_at, sensitive) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("image", "/etc/passwd", "traversal_hash", 0, 1000.0, 1000.0, 0)
+        )
+        conn.commit()
+        conn.close()
+
+        self.db.import_backup(backup_path)
+        entries = self.db.get_entries()
+        self.assertEqual(len(entries), 1)
+        self.assertIsNone(entries[0]["image_path"])
+
+    # ── update_entry_text on non-existent id ───────────────────────
+
+    def test_update_entry_text_nonexistent_is_noop(self):
+        self.db.update_entry_text(99999, "ghost update")
+        self.assertEqual(self.db.count_entries(), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

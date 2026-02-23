@@ -418,6 +418,50 @@ class TestClipboardMonitor(unittest.TestCase):
         # Whitespace-only is not empty, should be recorded
         self.mock_db.add_entry.assert_called_once()
 
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_rate_limiter_drops_image_after_text(self, mock_run):
+        """Image event arriving within MIN_EVENT_INTERVAL after text is dropped."""
+        image_data = b"\x89PNG\r\n\x1a\nimage_after_text"
+        mock_run.return_value = FakeCompletedProcess(returncode=0, stdout=image_data)
+
+        self.monitor.handle_new_text("some text")
+        # Do NOT reset _last_event_time — image arrives immediately after
+        self.monitor.handle_new_image()
+
+        # Only the text event was stored; image was rate-limited
+        self.assertEqual(self.mock_db.add_entry.call_count, 1)
+        self.mock_db.add_entry.assert_called_once_with(
+            "text", content_text="some text", sensitive=False
+        )
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_rate_limiter_drops_text_after_image(self, mock_run):
+        """Text event arriving within MIN_EVENT_INTERVAL after image is dropped."""
+        image_data = b"\x89PNG\r\n\x1a\nimage_before_text"
+        mock_run.return_value = FakeCompletedProcess(returncode=0, stdout=image_data)
+
+        self.monitor.handle_new_image()
+        # Do NOT reset _last_event_time — text arrives immediately after
+        self.monitor.handle_new_text("text after image")
+
+        # Only the image event was stored; text was rate-limited
+        self.assertEqual(self.mock_db.add_entry.call_count, 1)
+        self.mock_db.add_entry.assert_called_once_with(
+            "image", image_data=image_data
+        )
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_rate_limiter_allows_both_after_interval(self, mock_run):
+        """Both text and image are accepted if separated by MIN_EVENT_INTERVAL."""
+        image_data = b"\x89PNG\r\n\x1a\nimage_after_interval"
+        mock_run.return_value = FakeCompletedProcess(returncode=0, stdout=image_data)
+
+        self.monitor.handle_new_text("first")
+        self.monitor._last_event_time = 0  # simulate time passing
+        self.monitor.handle_new_image()
+
+        self.assertEqual(self.mock_db.add_entry.call_count, 2)
+
 
 class TestIsSensitiveFunction(unittest.TestCase):
     """Direct tests for the _is_sensitive() function."""

@@ -83,6 +83,22 @@ class TestDetectUrl(unittest.TestCase):
     def test_ftp_not_detected(self):
         self.assertIsNone(self._detect_url("ftp://files.example.com"))
 
+    def test_url_with_port(self):
+        self.assertEqual(
+            self._detect_url("https://localhost:8080/api"),
+            "https://localhost:8080/api"
+        )
+
+    def test_url_with_port_www(self):
+        self.assertEqual(
+            self._detect_url("www.example.com:8080"),
+            "https://www.example.com:8080"
+        )
+
+    def test_partial_protocol_is_returned(self):
+        # "http://" alone has no space and starts with http://
+        self.assertEqual(self._detect_url("http://"), "http://")
+
 
 class TestFormatTime(unittest.TestCase):
     """Tests for ClipmanWindow._format_time() logic."""
@@ -133,6 +149,18 @@ class TestFormatTime(unittest.TestCase):
     def test_many_days(self):
         result = self._format_time(time.time() - 86400 * 30)
         self.assertEqual(result, "30d ago")
+
+    def test_just_under_minute_is_just_now(self):
+        result = self._format_time(time.time() - 59)
+        self.assertEqual(result, "just now")
+
+    def test_just_under_hour_is_minutes(self):
+        result = self._format_time(time.time() - 3599)
+        self.assertEqual(result, "59m ago")
+
+    def test_just_under_day_is_hours(self):
+        result = self._format_time(time.time() - 86399)
+        self.assertEqual(result, "23h ago")
 
 
 if __name__ == "__main__":
