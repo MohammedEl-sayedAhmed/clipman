@@ -67,6 +67,16 @@
   </supports>
 
   <releases>
+    <release version="1.0.3" date="2026-02-24">
+      <description>
+        <p>Standalone clipboard monitoring fallback.</p>
+        <ul>
+          <li>Added wl-paste --watch fallback when GNOME Shell extension is absent</li>
+          <li>Clipman now works on any Wayland compositor (KDE, Sway, Hyprland, etc.)</li>
+          <li>Automatic crash recovery for the watcher subprocess</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.2" date="2026-02-23">
       <description>
         <p>Packaging and security hardening patch.</p>

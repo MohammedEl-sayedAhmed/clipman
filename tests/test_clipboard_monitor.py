@@ -1,6 +1,8 @@
+import os
+import subprocess
 import time
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, PropertyMock
 
 
 class FakeCompletedProcess:
@@ -137,9 +139,28 @@ class TestClipboardMonitor(unittest.TestCase):
         self.monitor.handle_new_image()
         self.assertTrue(self.new_entry_called)
 
-    def test_start_stop_are_noops(self):
-        # Should not raise
+    @patch("clipman.clipboard_monitor._WlPasteWatcher")
+    def test_start_creates_watcher(self, MockWatcher):
         self.monitor.start()
+        MockWatcher.assert_called_once_with(self.monitor)
+        MockWatcher.return_value.start.assert_called_once()
+        self.assertIsNotNone(self.monitor._watcher)
+
+    @patch("clipman.clipboard_monitor._WlPasteWatcher")
+    def test_stop_destroys_watcher(self, MockWatcher):
+        self.monitor.start()
+        self.monitor.stop()
+        MockWatcher.return_value.stop.assert_called_once()
+        self.assertIsNone(self.monitor._watcher)
+
+    @patch("clipman.clipboard_monitor._WlPasteWatcher")
+    def test_start_is_idempotent(self, MockWatcher):
+        self.monitor.start()
+        self.monitor.start()
+        MockWatcher.assert_called_once()
+
+    def test_stop_without_start(self):
+        # Should not raise
         self.monitor.stop()
 
     # ── Incognito mode ─────────────────────────────────────────────
@@ -642,6 +663,326 @@ class TestIsSensitiveFunction(unittest.TestCase):
     def test_multiline_connection_string_detected(self):
         text = "DB_URL=postgresql://user:pass@host/db\nextra line"
         self.assertTrue(self.is_sensitive(text))
+
+
+class TestWlPasteWatcher(unittest.TestCase):
+    """Tests for _WlPasteWatcher — the wl-paste --watch fallback."""
+
+    def setUp(self):
+        self.mock_monitor = MagicMock()
+        from clipman.clipboard_monitor import _WlPasteWatcher
+        self.WatcherClass = _WlPasteWatcher
+        self.watcher = _WlPasteWatcher(self.mock_monitor)
+
+    # ── Lifecycle ──────────────────────────────────────────────────
+
+    @patch("clipman.clipboard_monitor.GLib")
+    @patch("clipman.clipboard_monitor.os.set_blocking")
+    @patch("clipman.clipboard_monitor.subprocess.Popen")
+    def test_start_spawns_process(self, mock_popen, mock_set_blocking, mock_glib):
+        mock_proc = MagicMock()
+        mock_proc.stdout.fileno.return_value = 42
+        mock_popen.return_value = mock_proc
+
+        self.watcher.start()
+
+        mock_popen.assert_called_once_with(
+            ["wl-paste", "--watch", "echo", "CLIP_CHANGED"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        mock_set_blocking.assert_called_once_with(42, False)
+        mock_glib.io_add_watch.assert_called_once()
+        self.assertIsNotNone(self.watcher._proc)
+
+    @patch("clipman.clipboard_monitor.GLib")
+    @patch("clipman.clipboard_monitor.os.set_blocking")
+    @patch("clipman.clipboard_monitor.subprocess.Popen")
+    def test_stop_terminates_process(self, mock_popen, mock_set_blocking, mock_glib):
+        mock_proc = MagicMock()
+        mock_proc.stdout.fileno.return_value = 42
+        mock_popen.return_value = mock_proc
+        mock_glib.io_add_watch.return_value = 99
+
+        self.watcher.start()
+        self.watcher.stop()
+
+        mock_glib.source_remove.assert_called_once_with(99)
+        mock_proc.terminate.assert_called_once()
+        mock_proc.wait.assert_called_once_with(timeout=2)
+        self.assertIsNone(self.watcher._proc)
+        self.assertIsNone(self.watcher._io_watch_id)
+
+    @patch("clipman.clipboard_monitor.GLib")
+    @patch("clipman.clipboard_monitor.os.set_blocking")
+    @patch("clipman.clipboard_monitor.subprocess.Popen")
+    def test_start_is_idempotent(self, mock_popen, mock_set_blocking, mock_glib):
+        mock_proc = MagicMock()
+        mock_proc.stdout.fileno.return_value = 42
+        mock_popen.return_value = mock_proc
+
+        self.watcher.start()
+        self.watcher.start()  # second call should be no-op
+
+        mock_popen.assert_called_once()
+
+    def test_stop_without_start_is_safe(self):
+        self.watcher.stop()  # Should not raise
+
+    @patch("clipman.clipboard_monitor.subprocess.Popen")
+    def test_start_handles_missing_wl_paste(self, mock_popen):
+        mock_popen.side_effect = FileNotFoundError("wl-paste not found")
+
+        self.watcher.start()  # Should not raise
+
+        self.assertIsNone(self.watcher._proc)
+
+    @patch("clipman.clipboard_monitor.GLib")
+    @patch("clipman.clipboard_monitor.os.set_blocking")
+    @patch("clipman.clipboard_monitor.subprocess.Popen")
+    def test_stop_kills_on_timeout(self, mock_popen, mock_set_blocking, mock_glib):
+        mock_proc = MagicMock()
+        mock_proc.stdout.fileno.return_value = 42
+        mock_proc.wait.side_effect = subprocess.TimeoutExpired(cmd="wl-paste", timeout=2)
+        mock_popen.return_value = mock_proc
+
+        self.watcher.start()
+        self.watcher.stop()
+
+        mock_proc.kill.assert_called_once()
+
+    # ── Event dispatch ─────────────────────────────────────────────
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_text_event_dispatched(self, mock_run):
+        """Sentinel line with text MIME types dispatches handle_new_text."""
+        # First call: wl-paste --list-types returns text/plain
+        # Second call: wl-paste --no-newline returns the text
+        mock_run.side_effect = [
+            FakeCompletedProcess(returncode=0, stdout=b"text/plain\ntext/plain;charset=utf-8\n"),
+            FakeCompletedProcess(returncode=0, stdout=b"hello world"),
+        ]
+
+        self.watcher._on_clipboard_changed()
+
+        self.mock_monitor.handle_new_text.assert_called_once_with("hello world")
+        self.mock_monitor.handle_new_image.assert_not_called()
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_image_event_dispatched(self, mock_run):
+        """Sentinel line with image MIME type dispatches handle_new_image."""
+        mock_run.return_value = FakeCompletedProcess(
+            returncode=0, stdout=b"image/png\n"
+        )
+
+        self.watcher._on_clipboard_changed()
+
+        self.mock_monitor.handle_new_image.assert_called_once()
+        self.mock_monitor.handle_new_text.assert_not_called()
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_text_prioritized_over_image(self, mock_run):
+        """When both text and image MIME types present, text wins."""
+        mock_run.side_effect = [
+            FakeCompletedProcess(returncode=0, stdout=b"text/plain\nimage/png\n"),
+            FakeCompletedProcess(returncode=0, stdout=b"some text"),
+        ]
+
+        self.watcher._on_clipboard_changed()
+
+        self.mock_monitor.handle_new_text.assert_called_once_with("some text")
+        self.mock_monitor.handle_new_image.assert_not_called()
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_unknown_mime_ignored(self, mock_run):
+        """Unknown MIME types don't trigger any handler."""
+        mock_run.return_value = FakeCompletedProcess(
+            returncode=0, stdout=b"application/octet-stream\n"
+        )
+
+        self.watcher._on_clipboard_changed()
+
+        self.mock_monitor.handle_new_text.assert_not_called()
+        self.mock_monitor.handle_new_image.assert_not_called()
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_wl_paste_list_types_failure_ignored(self, mock_run):
+        """If wl-paste --list-types fails, event is silently ignored."""
+        mock_run.return_value = FakeCompletedProcess(returncode=1, stdout=b"")
+
+        self.watcher._on_clipboard_changed()
+
+        self.mock_monitor.handle_new_text.assert_not_called()
+        self.mock_monitor.handle_new_image.assert_not_called()
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_wl_paste_list_types_timeout_ignored(self, mock_run):
+        """If wl-paste --list-types times out, event is silently ignored."""
+        mock_run.side_effect = subprocess.TimeoutExpired(cmd="wl-paste", timeout=2)
+
+        self.watcher._on_clipboard_changed()
+
+        self.mock_monitor.handle_new_text.assert_not_called()
+        self.mock_monitor.handle_new_image.assert_not_called()
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_empty_text_not_dispatched(self, mock_run):
+        """If wl-paste --no-newline returns empty, nothing is dispatched."""
+        mock_run.side_effect = [
+            FakeCompletedProcess(returncode=0, stdout=b"text/plain\n"),
+            FakeCompletedProcess(returncode=0, stdout=b""),
+        ]
+
+        self.watcher._on_clipboard_changed()
+
+        self.mock_monitor.handle_new_text.assert_not_called()
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_utf8_string_mime_recognized(self, mock_run):
+        """UTF8_STRING MIME type is recognized as text."""
+        mock_run.side_effect = [
+            FakeCompletedProcess(returncode=0, stdout=b"UTF8_STRING\n"),
+            FakeCompletedProcess(returncode=0, stdout=b"utf8 content"),
+        ]
+
+        self.watcher._on_clipboard_changed()
+
+        self.mock_monitor.handle_new_text.assert_called_once_with("utf8 content")
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_string_mime_recognized(self, mock_run):
+        """STRING MIME type is recognized as text."""
+        mock_run.side_effect = [
+            FakeCompletedProcess(returncode=0, stdout=b"STRING\n"),
+            FakeCompletedProcess(returncode=0, stdout=b"string content"),
+        ]
+
+        self.watcher._on_clipboard_changed()
+
+        self.mock_monitor.handle_new_text.assert_called_once_with("string content")
+
+    # ── Stdout parsing ─────────────────────────────────────────────
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_sentinel_line_triggers_event(self, mock_run):
+        """A proper CLIP_CHANGED sentinel triggers _on_clipboard_changed."""
+        mock_run.side_effect = [
+            FakeCompletedProcess(returncode=0, stdout=b"text/plain\n"),
+            FakeCompletedProcess(returncode=0, stdout=b"from sentinel"),
+        ]
+
+        # Simulate data arriving on stdout
+        self.watcher._buf = b""
+        from clipman.clipboard_monitor import GLib
+        with patch.object(self.watcher, '_on_clipboard_changed', wraps=self.watcher._on_clipboard_changed) as mock_changed:
+            # Feed sentinel + newline
+            result = self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
+            # Need to inject data first — simulate os.read
+            pass
+
+        # Test directly: feed buffer with sentinel
+        mock_run.reset_mock()
+        mock_run.side_effect = [
+            FakeCompletedProcess(returncode=0, stdout=b"text/plain\n"),
+            FakeCompletedProcess(returncode=0, stdout=b"from sentinel"),
+        ]
+        with patch("clipman.clipboard_monitor.os.read", return_value=b"CLIP_CHANGED\n"):
+            result = self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
+
+        self.mock_monitor.handle_new_text.assert_called_with("from sentinel")
+
+    @patch("clipman.clipboard_monitor.os.read")
+    def test_non_sentinel_line_ignored(self, mock_read):
+        """Non-sentinel output lines are silently ignored."""
+        mock_read.return_value = b"some random output\n"
+        from clipman.clipboard_monitor import GLib
+
+        result = self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
+
+        self.assertEqual(result, GLib.SOURCE_CONTINUE)
+        self.mock_monitor.handle_new_text.assert_not_called()
+        self.mock_monitor.handle_new_image.assert_not_called()
+
+    @patch("clipman.clipboard_monitor.os.read")
+    def test_partial_read_buffered(self, mock_read):
+        """Partial sentinel data is buffered until newline arrives."""
+        from clipman.clipboard_monitor import GLib
+
+        # First read: partial sentinel
+        mock_read.return_value = b"CLIP_CHA"
+        self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
+        self.mock_monitor.handle_new_text.assert_not_called()
+
+        # Second read: rest of sentinel + newline
+        mock_read.return_value = b"NGED\n"
+        with patch("clipman.clipboard_monitor.subprocess.run") as mock_run:
+            mock_run.side_effect = [
+                FakeCompletedProcess(returncode=0, stdout=b"text/plain\n"),
+                FakeCompletedProcess(returncode=0, stdout=b"buffered text"),
+            ]
+            self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
+
+        self.mock_monitor.handle_new_text.assert_called_once_with("buffered text")
+
+    # ── Crash recovery ─────────────────────────────────────────────
+
+    @patch("clipman.clipboard_monitor.GLib")
+    def test_hup_schedules_restart(self, mock_glib):
+        """HUP condition schedules a restart after 1 second."""
+        result = self.watcher._on_stdout_ready(42, mock_glib.IOCondition.HUP)
+
+        mock_glib.timeout_add_seconds.assert_called_once_with(1, self.watcher._restart)
+        self.assertEqual(result, mock_glib.SOURCE_REMOVE)
+
+    @patch("clipman.clipboard_monitor.GLib")
+    def test_err_schedules_restart(self, mock_glib):
+        """ERR condition schedules a restart after 1 second."""
+        result = self.watcher._on_stdout_ready(42, mock_glib.IOCondition.ERR)
+
+        mock_glib.timeout_add_seconds.assert_called_once_with(1, self.watcher._restart)
+        self.assertEqual(result, mock_glib.SOURCE_REMOVE)
+
+    @patch("clipman.clipboard_monitor.GLib")
+    @patch("clipman.clipboard_monitor.os.read", return_value=b"")
+    def test_eof_schedules_restart(self, mock_read, mock_glib):
+        """Empty read (EOF) schedules a restart after 1 second."""
+        result = self.watcher._on_stdout_ready(42, mock_glib.IOCondition.IN)
+
+        mock_glib.timeout_add_seconds.assert_called_once_with(1, self.watcher._restart)
+        self.assertEqual(result, mock_glib.SOURCE_REMOVE)
+
+    @patch("clipman.clipboard_monitor.os.read", side_effect=OSError("fd error"))
+    def test_oserror_on_read_continues(self, mock_read):
+        """OSError during os.read returns SOURCE_CONTINUE (transient error)."""
+        from clipman.clipboard_monitor import GLib
+        result = self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
+
+        self.assertEqual(result, GLib.SOURCE_CONTINUE)
+
+    @patch("clipman.clipboard_monitor.GLib")
+    @patch("clipman.clipboard_monitor.os.set_blocking")
+    @patch("clipman.clipboard_monitor.subprocess.Popen")
+    def test_restart_stops_then_starts(self, mock_popen, mock_set_blocking, mock_glib):
+        """_restart() stops the current process and starts a new one."""
+        mock_proc = MagicMock()
+        mock_proc.stdout.fileno.return_value = 42
+        mock_popen.return_value = mock_proc
+
+        self.watcher.start()
+        mock_popen.reset_mock()
+
+        # Simulate restart
+        mock_proc2 = MagicMock()
+        mock_proc2.stdout.fileno.return_value = 43
+        mock_popen.return_value = mock_proc2
+
+        result = self.watcher._restart()
+
+        self.assertEqual(result, mock_glib.SOURCE_REMOVE)
+        # Original process should have been terminated
+        mock_proc.terminate.assert_called_once()
+        # New process should have been started
+        mock_popen.assert_called_once()
 
 
 if __name__ == "__main__":

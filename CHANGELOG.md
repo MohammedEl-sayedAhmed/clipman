@@ -2,6 +2,17 @@
 
 All notable changes to Clipman are documented in this file.
 
+## [1.0.3] - 2026-02-24
+
+### Added
+- `wl-paste --watch` fallback for clipboard monitoring when GNOME Shell extension is absent
+- Automatic extension detection at startup via D-Bus bus name check
+- Crash recovery with auto-restart for the wl-paste watcher subprocess
+- 26 new tests covering watcher lifecycle, event dispatch, MIME handling, and crash recovery
+
+### Changed
+- Clipman now works as a standalone app on any Wayland compositor (KDE, Sway, Hyprland, etc.)
+
 ## [1.0.2] - 2026-02-23
 
 ### Security

@@ -1,4 +1,5 @@
 import signal
+import dbus
 import gi
 import dbus.mainloop.glib
 
@@ -36,6 +37,10 @@ class ClipmanApp(Gtk.Application):
 
         self.dbus_service = ClipmanDBusService(self.window, self, self.monitor)
 
+        # Start wl-paste --watch fallback if GNOME Shell extension absent
+        if not self._extension_on_bus():
+            self.monitor.start()
+
         # Handle SIGINT/SIGTERM gracefully
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, self._shutdown)
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self._shutdown)
@@ -43,6 +48,14 @@ class ClipmanApp(Gtk.Application):
     def _on_new_entry(self):
         if self.window and self.window.get_visible():
             self.window.refresh()
+
+    def _extension_on_bus(self):
+        """Check if the GNOME Shell clipboard extension is running."""
+        try:
+            bus = dbus.SessionBus()
+            return bus.name_has_owner("org.gnome.Shell.Extensions.clipman")
+        except dbus.DBusException:
+            return False
 
     def _shutdown(self):
         if self.monitor:
