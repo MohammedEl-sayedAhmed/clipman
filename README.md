@@ -29,7 +29,7 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 
 <br>
 
-<img src="docs/dark-theme.png" alt="Dark theme" width="320">&nbsp;&nbsp;<img src="docs/light-theme.png" alt="Light theme" width="320">
+<img src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/dark-theme.png" alt="Dark theme" width="320">&nbsp;&nbsp;<img src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/light-theme.png" alt="Light theme" width="320">
 
 </div>
 

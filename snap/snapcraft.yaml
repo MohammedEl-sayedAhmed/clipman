@@ -1,10 +1,10 @@
 name: clipman
-version: '1.0.1'
-summary: Clipboard history manager for GNOME on Wayland
+version: '1.0.4'
+summary: Clipboard history manager for Wayland
 description: |
-  A fast, native clipboard manager for Ubuntu/GNOME on Wayland.
-  Press Super+V to view your clipboard history, search entries,
-  pin favorites, and instantly paste previous copies.
+  A fast, native clipboard manager for Wayland (GNOME, KDE, Sway,
+  Hyprland, and more). Press Super+V to view your clipboard history,
+  search entries, pin favorites, and instantly paste previous copies.
 
   Features include text and image support, full-text search,
   incognito mode, sensitive data detection, Catppuccin themes,
