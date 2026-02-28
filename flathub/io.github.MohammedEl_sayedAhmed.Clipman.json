@@ -41,8 +41,8 @@
             "sources": [
                 {
                     "type": "archive",
-                    "url": "https://github.com/MohammedEl-sayedAhmed/clipman/archive/refs/tags/v1.0.2.tar.gz",
-                    "sha256": "9343065632ed7341ae0303b9542880635d15dc4dea48bb464eadafbea67c4050"
+                    "url": "https://github.com/MohammedEl-sayedAhmed/clipman/archive/refs/tags/v1.0.4.tar.gz",
+                    "sha256": "bb5f2ccfb41eea1bf92bfe76fb1b786bb14f782782f155b2575f72d7859cc116"
                 },
                 {
                     "type": "script",
