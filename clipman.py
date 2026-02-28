@@ -5,6 +5,13 @@ import os
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# Must be called before ANY dbus operations so that the GLib main loop
+# is used for all connections, including cached ones created by the
+# toggle client.  Without this, _start_daemon() inherits a connection
+# with the wrong mainloop and D-Bus method calls never get dispatched.
+import dbus.mainloop.glib
+dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
+
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "toggle":
