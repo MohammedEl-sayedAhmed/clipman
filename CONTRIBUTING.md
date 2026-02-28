@@ -44,7 +44,6 @@ clipman/
 ├── docs/
 │   ├── dark-theme.png          # Screenshot (dark theme)
 │   └── light-theme.png         # Screenshot (light theme)
-├── com.clipman.Clipman.json    # Flatpak manifest
 ├── snap/
 │   └── snapcraft.yaml          # Snap packaging
 ├── launcher.sh                 # Environment wrapper for snap terminals

@@ -24,12 +24,9 @@ clipman-extension.zip
 # Media
 Demo.webm
 
-# Flatpak build artifacts
-.flatpak-builder/
-build-dir/
-flathub-build-dir/
-flathub-repo/
-
 # Snap build artifacts
 *.snap
 snapcraft-clipman-*.txt
+parts/
+prime/
+stage/
