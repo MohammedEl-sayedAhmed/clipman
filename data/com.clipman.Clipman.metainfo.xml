@@ -67,6 +67,11 @@
   </supports>
 
   <releases>
+    <release version="1.0.4" date="2026-02-28">
+      <description>
+        <p>Fix D-Bus mainloop race that caused toggle to become unresponsive.</p>
+      </description>
+    </release>
     <release version="1.0.3" date="2026-02-24">
       <description>
         <p>Standalone clipboard monitoring fallback.</p>

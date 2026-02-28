@@ -256,6 +256,7 @@ clipman/
 ├── tests/
 │   ├── test_database.py           # Database unit tests (90 tests)
 │   ├── test_clipboard_monitor.py  # Monitor unit tests (105 tests)
+│   ├── test_entry_point.py        # D-Bus mainloop init tests (3 tests)
 │   └── test_window_utils.py       # URL detection & time formatting (28 tests)
 ├── docs/
 │   ├── dark-theme.png             # Screenshot (dark theme)
@@ -264,7 +265,7 @@ clipman/
 ├── snap/
 │   └── snapcraft.yaml             # Snap packaging
 ├── .github/
-│   └── workflows/test.yml         # CI — runs 223 tests on Python 3.10–3.12
+│   └── workflows/test.yml         # CI — runs 226 tests on Python 3.10–3.12
 ├── launcher.sh                    # Environment wrapper for snap terminals
 ├── install.sh
 ├── uninstall.sh
@@ -306,7 +307,7 @@ journalctl --user -u clipman.service -n 20
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite (223 tests, no GTK or D-Bus required).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite (226 tests, no GTK or D-Bus required).
 
 ## Uninstall
 

@@ -39,6 +39,7 @@ clipman/
 ├── tests/
 │   ├── test_database.py        # Database tests (90 tests)
 │   ├── test_clipboard_monitor.py  # Monitor tests (105 tests)
+│   ├── test_entry_point.py     # D-Bus mainloop init tests (3 tests)
 │   └── test_window_utils.py    # URL detection & time formatting (28 tests)
 ├── docs/
 │   ├── dark-theme.png          # Screenshot (dark theme)
@@ -57,7 +58,7 @@ clipman/
 python3 -m unittest discover -s tests
 ```
 
-All 223 tests should pass. Tests cover the database layer, clipboard monitor, URL detection, and time formatting — no GTK or D-Bus required.
+All 226 tests should pass. Tests cover the database layer, clipboard monitor, URL detection, and time formatting — no GTK or D-Bus required.
 
 ### Key Constraints
 
