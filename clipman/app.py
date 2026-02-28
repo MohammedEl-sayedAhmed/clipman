@@ -1,3 +1,4 @@
+import os
 import signal
 import dbus
 import gi
@@ -37,8 +38,10 @@ class ClipmanApp(Gtk.Application):
 
         self.dbus_service = ClipmanDBusService(self.window, self, self.monitor)
 
-        # Start wl-paste --watch fallback if GNOME Shell extension absent
-        if not self._extension_on_bus():
+        # Start wl-paste --watch fallback if GNOME Shell extension absent.
+        # Skip in snap: wl-paste cannot monitor the clipboard from within
+        # strict confinement; snap users rely on the GNOME Shell extension.
+        if not self._extension_on_bus() and not os.environ.get("SNAP"):
             self.monitor.start()
 
         # Handle SIGINT/SIGTERM gracefully
