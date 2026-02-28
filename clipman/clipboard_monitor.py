@@ -60,12 +60,15 @@ class _WlPasteWatcher:
 
     _SENTINEL = "CLIP_CHANGED"
 
+    _MAX_RESTARTS = 5
+
     def __init__(self, monitor):
         self._monitor = monitor
         self._proc = None
         self._io_watch_id = None
         self._fd = -1
         self._buf = b""
+        self._restart_count = 0
 
     def start(self):
         if self._proc is not None:
@@ -92,7 +95,10 @@ class _WlPasteWatcher:
 
     def stop(self):
         if self._io_watch_id is not None:
-            GLib.source_remove(self._io_watch_id)
+            try:
+                GLib.source_remove(self._io_watch_id)
+            except Exception:
+                pass
             self._io_watch_id = None
         if self._proc is not None:
             try:
@@ -109,6 +115,7 @@ class _WlPasteWatcher:
 
     def _on_stdout_ready(self, fd, condition):
         if condition & (GLib.IOCondition.HUP | GLib.IOCondition.ERR):
+            self._io_watch_id = None
             GLib.timeout_add_seconds(1, self._restart)
             return GLib.SOURCE_REMOVE
 
@@ -118,6 +125,7 @@ class _WlPasteWatcher:
             return GLib.SOURCE_CONTINUE
 
         if not data:
+            self._io_watch_id = None
             GLib.timeout_add_seconds(1, self._restart)
             return GLib.SOURCE_REMOVE
 
@@ -125,11 +133,16 @@ class _WlPasteWatcher:
         while b"\n" in self._buf:
             line, self._buf = self._buf.split(b"\n", 1)
             if line.strip() == self._SENTINEL.encode():
+                self._restart_count = 0
                 self._on_clipboard_changed()
 
         return GLib.SOURCE_CONTINUE
 
     def _restart(self):
+        self._restart_count += 1
+        if self._restart_count > self._MAX_RESTARTS:
+            self.stop()
+            return GLib.SOURCE_REMOVE
         self.stop()
         self.start()
         return GLib.SOURCE_REMOVE
