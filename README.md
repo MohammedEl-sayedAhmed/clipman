@@ -18,7 +18,6 @@ Like Windows `Win+V` — but for Linux.
 [![PyPI Downloads](https://img.shields.io/pypi/dm/clipman-clipboard?label=PyPI%20Downloads&logo=pypi&logoColor=white)](https://pypi.org/project/clipman-clipboard/)
 [![GNOME Extensions](https://img.shields.io/badge/GNOME_Extensions-9407-4A86CF?logo=gnome&logoColor=white)](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/)
 [![AUR](https://img.shields.io/aur/version/clipman-clipboard?label=AUR&logo=archlinux&logoColor=white)](https://aur.archlinux.org/packages/clipman-clipboard)
-[![Snap Store](https://img.shields.io/badge/Snap_Store-clipman-82BEA0?logo=snapcraft&logoColor=white)](https://snapcraft.io/clipman)
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/MohammedEl-sayedAhmed?label=Sponsors&logo=github)](https://github.com/sponsors/MohammedEl-sayedAhmed)
 [![Donate](https://img.shields.io/badge/Donate-PayPal-0070BA?logo=paypal&logoColor=white)](https://www.paypal.com/paypalme/mohammedelsayedammar)
 [![GitHub Discussions](https://img.shields.io/github/discussions/MohammedEl-sayedAhmed/clipman?label=Discussions&logo=github)](https://github.com/MohammedEl-sayedAhmed/clipman/discussions)
@@ -148,33 +147,6 @@ gnome-extensions install clipman-extension.zip
 </details>
 
 <details>
-<summary><strong>Flatpak</strong></summary>
-
-A Flatpak manifest is included for building with GNOME 47 runtime. To build locally:
-
-```bash
-flatpak-builder --user --install build com.clipman.Clipman.json
-```
-
-</details>
-
-<details>
-<summary><strong>Snap</strong></summary>
-
-```bash
-sudo snap install clipman
-```
-
-Or build locally:
-
-```bash
-snapcraft
-sudo snap install clipman_*.snap --dangerous
-```
-
-</details>
-
-<details>
 <summary><strong>AUR (Arch Linux)</strong></summary>
 
 ```bash
@@ -261,7 +233,6 @@ clipman/
 ├── docs/
 │   ├── dark-theme.png             # Screenshot (dark theme)
 │   └── light-theme.png            # Screenshot (light theme)
-├── com.clipman.Clipman.json       # Flatpak manifest
 ├── snap/
 │   └── snapcraft.yaml             # Snap packaging
 ├── .github/

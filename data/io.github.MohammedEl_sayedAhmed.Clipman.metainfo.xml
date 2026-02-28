@@ -89,7 +89,6 @@
           <li>Hardened backup import against SQLite URI injection and malicious triggers</li>
           <li>Added image magic bytes validation</li>
           <li>Extended sensitive data detection patterns</li>
-          <li>Added Flathub-compatible desktop and metainfo files</li>
         </ul>
       </description>
     </release>

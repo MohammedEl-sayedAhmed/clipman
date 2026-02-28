@@ -29,10 +29,6 @@ All notable changes to Clipman are documented in this file.
 - Added image magic bytes validation (PNG, JPEG, GIF, BMP, WebP)
 - Extended sensitive data detection (npm tokens, private keys, connection strings, SSH keys)
 
-### Changed
-- Added Flathub-compatible desktop and metainfo files
-- Bumped Flathub runtime to GNOME Platform 49
-
 ## [1.0.1] - 2026-02-23
 
 ### Fixed
@@ -68,6 +64,5 @@ All notable changes to Clipman are documented in this file.
 - Autostart on login via systemd user service with auto-restart
 - i18n/gettext framework with 70 translatable strings
 - CSS theming extracted to separate template file (Catppuccin)
-- Flatpak manifest for Flathub publishing
 - Snap packaging configuration
 - 150 automated tests (database, clipboard monitor, URL detection, time formatting)
