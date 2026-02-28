@@ -1,6 +1,6 @@
 [project]
 name = "clipman-clipboard"
-version = "1.0.3"
+version = "1.0.4"
 description = "A clipboard history manager for Ubuntu/GNOME on Wayland"
 readme = "README.md"
 license = "Apache-2.0"

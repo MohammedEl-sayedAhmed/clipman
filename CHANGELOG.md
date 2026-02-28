@@ -2,6 +2,14 @@
 
 All notable changes to Clipman are documented in this file.
 
+## [1.0.4] - 2026-02-28
+
+### Fixed
+- D-Bus mainloop race condition: toggle path created a SessionBus connection before GLib mainloop was set, making the daemon unresponsive when started via Win+V
+
+### Added
+- 3 regression tests for D-Bus mainloop initialization order (226 total)
+
 ## [1.0.3] - 2026-02-24
 
 ### Added
