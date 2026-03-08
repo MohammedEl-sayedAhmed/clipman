@@ -130,8 +130,27 @@ The systemd service auto-restarts on crash and starts automatically on login.
 <summary><strong>PyPI</strong></summary>
 
 ```bash
+# System dependencies (pip can't install these)
+sudo apt install python3-gi python3-dbus gir1.2-gtk-3.0 wl-clipboard
+
 pip install clipman-clipboard
 ```
+
+After installing, set up the Super+V shortcut (the install script does this automatically, but pip doesn't):
+
+```bash
+# Remove GNOME's default Super+V binding (notification tray)
+gsettings set org.gnome.shell.keybindings toggle-message-tray "['<Super>m']"
+
+# Register Clipman toggle on Super+V
+CUSTOM_KEYS_PATH="/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings"
+gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "['$CUSTOM_KEYS_PATH/clipman/']"
+gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYS_PATH/clipman/" name "Clipman Toggle"
+gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYS_PATH/clipman/" command "clipman toggle"
+gsettings set "org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CUSTOM_KEYS_PATH/clipman/" binding "<Super>v"
+```
+
+For clipboard detection, install the [GNOME Shell extension](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/) or Clipman will fall back to `wl-paste --watch`.
 
 </details>
 

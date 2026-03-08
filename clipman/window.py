@@ -18,6 +18,7 @@ DEFAULT_FONT_SIZE = 12
 DEFAULT_MAX_HISTORY = 500
 DEFAULT_THEME = "dark"
 DEFAULT_FONT_COLOR = ""
+DEFAULT_SENSITIVE_TIMEOUT = 30
 
 THEME_DARK = {
     "bg_crust": "#181825", "bg_base": "#1e1e2e", "bg_surface": "#252536",
@@ -91,6 +92,10 @@ class ClipmanWindow(Gtk.Window):
         self._theme = saved_theme if saved_theme in THEMES else DEFAULT_THEME
 
         self._font_color = self.db.get_setting("font_color", DEFAULT_FONT_COLOR)
+
+        saved_sensitive = self.db.get_setting("sensitive_timeout",
+                                              str(DEFAULT_SENSITIVE_TIMEOUT))
+        self._sensitive_timeout = max(10, min(300, int(float(saved_sensitive))))
 
         self._apply_css()
         self._build_ui()
@@ -204,6 +209,14 @@ class ClipmanWindow(Gtk.Window):
             self.settings_panel, _("Max history"),
             50, 5000, 50, self._max_history,
             self._on_max_history_changed, self._max_value_label
+        )
+
+        # Sensitive data timeout row
+        self._sensitive_value_label = Gtk.Label(label=f"{self._sensitive_timeout}s")
+        self._build_setting_row(
+            self.settings_panel, _("Sensitive auto-clear"),
+            10, 300, 10, self._sensitive_timeout,
+            self._on_sensitive_timeout_changed, self._sensitive_value_label
         )
 
         # Theme toggle row
@@ -876,8 +889,13 @@ class ClipmanWindow(Gtk.Window):
         self._apply_css()
         self.refresh()
 
+    def _on_sensitive_timeout_changed(self, scale):
+        self._sensitive_timeout = int(scale.get_value())
+        self._sensitive_value_label.set_text(f"{self._sensitive_timeout}s")
+        self.db.set_setting("sensitive_timeout", str(self._sensitive_timeout))
+
     def _cleanup_sensitive(self):
-        deleted = self.db.delete_expired_sensitive()
+        deleted = self.db.delete_expired_sensitive(self._sensitive_timeout)
         if deleted > 0 and self.get_visible():
             self.refresh()
         return True
