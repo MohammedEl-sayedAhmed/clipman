@@ -1,9 +1,32 @@
 #!/usr/bin/env python3
 import sys
 import os
+import shutil
 
 # Ensure the project root is on the path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+_MISSING = []
+
+try:
+    import importlib
+    importlib.import_module("gi")
+except ImportError:
+    _MISSING.append("python3-gi gir1.2-gtk-3.0")
+
+try:
+    import dbus
+except ImportError:
+    _MISSING.append("python3-dbus")
+
+if shutil.which("wl-paste") is None:
+    _MISSING.append("wl-clipboard")
+
+if _MISSING:
+    print("Error: missing system dependencies: " + ", ".join(_MISSING))
+    print("Install them with:")
+    print(f"  sudo apt install {' '.join(_MISSING)}")
+    sys.exit(1)
 
 # Must be called before ANY dbus operations so that the GLib main loop
 # is used for all connections, including cached ones created by the

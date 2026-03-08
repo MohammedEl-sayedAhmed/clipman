@@ -446,6 +446,37 @@ class TestClipboardDB(unittest.TestCase):
         self.assertEqual(deleted, 0)
         self.assertEqual(len(self.db.get_entries()), 1)
 
+    def test_delete_expired_sensitive_custom_timeout(self):
+        """Sensitive entries should respect custom max_age_seconds."""
+        entry_id = self.db.add_entry("text", content_text="secret", sensitive=True)
+        # Backdate by 120 seconds
+        self.db.conn.execute(
+            "UPDATE entries SET created_at = ? WHERE id = ?",
+            (time.time() - 120, entry_id)
+        )
+        self.db.conn.commit()
+
+        # 200s timeout → entry is only 120s old, should survive
+        deleted = self.db.delete_expired_sensitive(max_age_seconds=200)
+        self.assertEqual(deleted, 0)
+        self.assertEqual(len(self.db.get_entries()), 1)
+
+        # 60s timeout → entry is 120s old, should be deleted
+        deleted = self.db.delete_expired_sensitive(max_age_seconds=60)
+        self.assertEqual(deleted, 1)
+        self.assertEqual(len(self.db.get_entries()), 0)
+
+    def test_settings_persist(self):
+        """Settings should survive get/set round-trip."""
+        self.db.set_setting("sensitive_timeout", "120")
+        val = self.db.get_setting("sensitive_timeout")
+        self.assertEqual(val, "120")
+
+    def test_settings_default(self):
+        """get_setting should return the default for missing keys."""
+        val = self.db.get_setting("nonexistent_key", "42")
+        self.assertEqual(val, "42")
+
     # ── Update entry text ─────────────────────────────────────────
 
     def test_update_entry_text(self):

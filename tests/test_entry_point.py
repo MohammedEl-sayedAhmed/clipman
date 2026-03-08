@@ -62,3 +62,39 @@ class TestDBusMainLoopInit(unittest.TestCase):
         self.assertLess(glib_import_pos, main_pos,
                         "dbus.mainloop.glib must be imported at module level, "
                         "before main() where 'import dbus' happens")
+
+
+class TestDependencyCheck(unittest.TestCase):
+    """Verify that clipman.py checks for system dependencies at startup."""
+
+    def test_dep_check_exists_before_main(self):
+        """Dependency check must run before main() is called."""
+        with open("clipman.py") as f:
+            source = f.read()
+        check_pos = source.find("_MISSING")
+        main_pos = source.find("def main():")
+        self.assertNotEqual(check_pos, -1,
+                            "Dependency check (_MISSING) not found in clipman.py")
+        self.assertLess(check_pos, main_pos,
+                        "Dependency check must happen before def main()")
+
+    def test_dep_check_covers_gi(self):
+        """clipman.py must check for gi (python3-gi)."""
+        with open("clipman.py") as f:
+            source = f.read()
+        self.assertIn("gi", source)
+        self.assertIn("python3-gi", source)
+
+    def test_dep_check_covers_dbus(self):
+        """clipman.py must check for dbus (python3-dbus)."""
+        with open("clipman.py") as f:
+            source = f.read()
+        self.assertIn("import dbus", source)
+        self.assertIn("python3-dbus", source)
+
+    def test_dep_check_covers_wl_clipboard(self):
+        """clipman.py must check for wl-paste (wl-clipboard)."""
+        with open("clipman.py") as f:
+            source = f.read()
+        self.assertIn("wl-paste", source)
+        self.assertIn("wl-clipboard", source)
