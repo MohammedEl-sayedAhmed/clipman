@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+PACKAGE_MANAGER=0
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLIPMAN_PY="$SCRIPT_DIR/clipman.py"
 AUTOSTART_DIR="$HOME/.config/autostart"
@@ -8,11 +9,20 @@ DATA_DIR="$HOME/.local/share/clipman"
 EXTENSION_UUID="clipman@clipman.com"
 EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
 
+if command -v dnf &> /dev/null; then
+    echo "Using DNF (Fedora/RHEL)"
+    PACKAGE_MANAGER=1
+fi
+
 echo "=== Installing Clipman ==="
 
 # Step 1: Install system dependencies
 echo "[1/6] Installing dependencies..."
-sudo apt install -y wl-clipboard python3-gi python3-dbus gir1.2-gtk-3.0
+if PACKAGE_MANAGER=0
+    sudo apt install -y wl-clipboard python3-gi python3-dbus gir1.2-gtk-3.0
+else    
+    sudo dnf install -y wl-clipboard python3-gobject gtk3 python3-dbus 
+fi
 
 # Step 2: Create data directories
 echo "[2/6] Creating data directories..."
@@ -52,7 +62,11 @@ else
         NEW_LIST="['$CLIPMAN_KEY_PATH']"
     else
         # Remove trailing ] and append
-        NEW_LIST=$(echo "$EXISTING" | sed "s/]$/, '$CLIPMAN_KEY_PATH']/")
+        if PACKAGE_MANAGER=0
+            NEW_LIST=$(echo "$EXISTING" | sed "s/]$/, '$CLIPMAN_KEY_PATH']/")
+        else
+            NEW_LIST=$(echo "$EXISTING" | sed "s|]$|, '$CLIPMAN_KEY_PATH']|")
+        fi
     fi
     gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$NEW_LIST"
 fi
