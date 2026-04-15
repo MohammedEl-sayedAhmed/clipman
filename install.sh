@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+PACKAGE_MANAGER=""
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLIPMAN_PY="$SCRIPT_DIR/clipman.py"
 AUTOSTART_DIR="$HOME/.config/autostart"
@@ -8,11 +9,24 @@ DATA_DIR="$HOME/.local/share/clipman"
 EXTENSION_UUID="clipman@clipman.com"
 EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
 
+if command -v dnf &> /dev/null; then
+    PKG_MANAGER="dnf"
+elif command -v apt &> /dev/null; then
+    PKG_MANAGER="apt"
+else
+    echo "Error: No supported package manager found (apt or dnf)"
+    exit 1
+fi
+
 echo "=== Installing Clipman ==="
 
 # Step 1: Install system dependencies
 echo "[1/6] Installing dependencies..."
-sudo apt install -y wl-clipboard python3-gi python3-dbus gir1.2-gtk-3.0
+if [ "$PKG_MANAGER" = "apt" ]; then
+    sudo apt install -y wl-clipboard python3-gi python3-dbus gir1.2-gtk-3.0
+else
+    sudo dnf install -y wl-clipboard python3-gobject gtk3 python3-dbus
+fi
 
 # Step 2: Create data directories
 echo "[2/6] Creating data directories..."
