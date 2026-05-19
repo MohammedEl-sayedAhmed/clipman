@@ -1,0 +1,167 @@
+# Repository labels (synced by .github/workflows/labels.yml).
+# Edit this file to change labels; the sync workflow will create/update/
+# delete labels to match on push to main.
+
+# ── Type ──────────────────────────────────────────────────────────
+- name: 'type:bug'
+  color: 'd73a4a'
+  description: Something isn't working as expected
+
+- name: 'type:feature'
+  color: 'a2eeef'
+  description: New capability or user-facing feature
+
+- name: 'type:enhancement'
+  color: '84b6eb'
+  description: Improvement to an existing feature
+
+- name: 'type:refactor'
+  color: 'fbca04'
+  description: Code cleanup with no behavior change
+
+- name: 'type:chore'
+  color: 'cccccc'
+  description: Housekeeping, build, or non-code maintenance
+
+- name: 'type:security'
+  color: 'b60205'
+  description: Security fix or vulnerability
+
+# ── Area (component) ──────────────────────────────────────────────
+- name: 'area:daemon'
+  color: '5319e7'
+  description: clipman/ Python core (database, monitor, dbus_service)
+
+- name: 'area:ui'
+  color: '1d76db'
+  description: UI surface (window.py, style.css, GTK)
+
+- name: 'area:extension'
+  color: 'f9d0c4'
+  description: GNOME Shell extension (extension/*)
+
+- name: 'area:packaging'
+  color: 'fef2c0'
+  description: pyproject, snap, flathub, aur
+
+- name: 'area:workflows'
+  color: '0e8a16'
+  description: GitHub Actions workflows / repo automation
+
+- name: 'area:docs'
+  color: '0075ca'
+  description: README, CHANGELOG, docs/
+
+- name: 'area:tests'
+  color: 'c5def5'
+  description: Test suite (tests/)
+
+- name: 'area:install'
+  color: 'bfd4f2'
+  description: install.sh, uninstall.sh, launcher.sh
+
+# ── Priority ──────────────────────────────────────────────────────
+- name: 'priority:critical'
+  color: 'b60205'
+  description: Drop everything; user impact or security
+
+- name: 'priority:high'
+  color: 'd93f0b'
+  description: Should ship in the next release
+
+- name: 'priority:medium'
+  color: 'fbca04'
+  description: Normal scheduling
+
+- name: 'priority:low'
+  color: '0e8a16'
+  description: Nice to have; backlog
+
+# ── Status ────────────────────────────────────────────────────────
+- name: 'status:in-progress'
+  color: 'fbca04'
+  description: Actively being worked on
+
+- name: 'status:blocked'
+  color: 'b60205'
+  description: Cannot proceed; waiting on external
+
+- name: 'status:needs-review'
+  color: '0075ca'
+  description: Ready for review
+
+- name: 'status:waiting-on-author'
+  color: 'd93f0b'
+  description: Awaiting changes from the author
+
+# ── Distribution channel ──────────────────────────────────────────
+- name: 'distribution:pypi'
+  color: '3572a5'
+  description: Affects the PyPI package
+
+- name: 'distribution:snap'
+  color: '82bea0'
+  description: Affects the Snap Store build
+
+- name: 'distribution:flathub'
+  color: '4a90d9'
+  description: Affects the Flathub manifest
+
+- name: 'distribution:aur'
+  color: '1793d1'
+  description: Affects the AUR PKGBUILD
+
+- name: 'distribution:gnome-extensions'
+  color: '4e0e69'
+  description: Affects the GNOME Extensions website listing
+
+# ── Community ─────────────────────────────────────────────────────
+- name: 'good first issue'
+  color: '7057ff'
+  description: Good entry point for new contributors
+
+- name: 'help wanted'
+  color: '008672'
+  description: Maintainer welcomes external help
+
+- name: 'duplicate'
+  color: 'cfd3d7'
+  description: Already tracked elsewhere
+
+- name: 'invalid'
+  color: 'e4e669'
+  description: Not actionable; missing info or out of scope
+
+- name: 'question'
+  color: 'd876e3'
+  description: Discussion / clarification
+
+# ── Dependabot (used by .github/dependabot.yml) ───────────────────
+- name: 'dependencies'
+  color: '0366d6'
+  description: Dependency update
+
+- name: 'python'
+  color: '3572a5'
+  description: Python ecosystem dependency
+
+- name: 'ci'
+  color: '0e8a16'
+  description: GitHub Actions / CI dependency
+
+# ── Specials ──────────────────────────────────────────────────────
+- name: 'regression'
+  color: 'b60205'
+  description: Behavior that worked before is now broken
+
+- name: 'performance'
+  color: 'fbca04'
+  description: Performance regression or improvement
+
+- name: 'breaking-change'
+  color: 'b60205'
+  description: Breaks backwards compatibility; needs major version bump
+
+- name: 'wayland'
+  color: '5319e7'
+  description: Wayland-specific behavior
