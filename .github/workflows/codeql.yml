@@ -40,7 +40,6 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
-          persist-credentials: false
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@6825d5659bf007b85a0866e2d0f434aacf50de94 # v3.27.5
