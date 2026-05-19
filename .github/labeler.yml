@@ -1,0 +1,87 @@
+# Path-based auto-labels for pull requests. Applied by
+# .github/workflows/labeler.yml using actions/labeler@v5.
+#
+# Only AREA labels are auto-applied here. Type / priority / status
+# labels are left to the maintainer to set manually because path
+# alone doesn't encode that intent.
+
+'area:daemon':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'clipman/app.py'
+      - 'clipman/clipboard_monitor.py'
+      - 'clipman/database.py'
+      - 'clipman/dbus_service.py'
+      - 'clipman/__init__.py'
+
+'area:ui':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'clipman/window.py'
+      - 'clipman/style.css'
+
+'area:extension':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'extension/**'
+
+'area:packaging':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'pyproject.toml'
+      - 'snap/**'
+      - 'flathub/**'
+      - 'aur/**'
+      - 'data/**'
+
+'area:workflows':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '.github/**'
+
+'area:docs':
+  - changed-files:
+    - any-glob-to-any-file:
+      - '**/*.md'
+      - 'docs/**'
+      - 'CHANGELOG.md'
+      - 'README.md'
+      - 'SECURITY.md'
+      - 'CONTRIBUTING.md'
+
+'area:tests':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'tests/**'
+
+'area:install':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'install.sh'
+      - 'uninstall.sh'
+      - 'launcher.sh'
+
+'distribution:pypi':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'pyproject.toml'
+
+'distribution:snap':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'snap/**'
+
+'distribution:flathub':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'flathub/**'
+
+'distribution:aur':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'aur/**'
+
+'distribution:gnome-extensions':
+  - changed-files:
+    - any-glob-to-any-file:
+      - 'extension/metadata.json'

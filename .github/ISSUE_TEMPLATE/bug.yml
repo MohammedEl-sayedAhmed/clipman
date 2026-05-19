@@ -1,0 +1,70 @@
+name: Bug report
+description: Report something that doesn't work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. Please fill in as much
+        detail as you can.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear and concise description of the bug.
+      placeholder: When I press Super+V, ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Clipman with Super+V
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: clipman-version
+    attributes:
+      label: Clipman version
+      placeholder: "e.g. 1.0.4 (PyPI) / Snap / Flathub / from source"
+    validations:
+      required: true
+
+  - type: input
+    id: gnome-version
+    attributes:
+      label: GNOME Shell version
+      description: Output of `gnome-shell --version`
+      placeholder: "e.g. GNOME Shell 47.0"
+    validations:
+      required: true
+
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution / desktop session
+      placeholder: "e.g. Ubuntu 24.04, Wayland session"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Relevant output from `journalctl --user -u clipman` or running
+        `python3 clipman.py` in a terminal.
+      render: shell

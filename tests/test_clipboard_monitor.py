@@ -1,8 +1,7 @@
-import os
 import subprocess
 import time
 import unittest
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import patch, MagicMock
 
 
 class FakeCompletedProcess:
@@ -874,9 +873,9 @@ class TestWlPasteWatcher(unittest.TestCase):
         # Simulate data arriving on stdout
         self.watcher._buf = b""
         from clipman.clipboard_monitor import GLib
-        with patch.object(self.watcher, '_on_clipboard_changed', wraps=self.watcher._on_clipboard_changed) as mock_changed:
+        with patch.object(self.watcher, '_on_clipboard_changed', wraps=self.watcher._on_clipboard_changed):
             # Feed sentinel + newline
-            result = self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
+            self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
             # Need to inject data first — simulate os.read
             pass
 
@@ -887,7 +886,7 @@ class TestWlPasteWatcher(unittest.TestCase):
             FakeCompletedProcess(returncode=0, stdout=b"from sentinel"),
         ]
         with patch("clipman.clipboard_monitor.os.read", return_value=b"CLIP_CHANGED\n"):
-            result = self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
+            self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
 
         self.mock_monitor.handle_new_text.assert_called_with("from sentinel")
 

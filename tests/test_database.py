@@ -68,7 +68,7 @@ class TestClipboardDB(unittest.TestCase):
         original_time = entries_before[0]["accessed_at"]
 
         time.sleep(0.05)
-        entry_id = self.db.add_entry("text", content_text="duplicate")
+        self.db.add_entry("text", content_text="duplicate")
 
         entries_after = self.db.get_entries()
         self.assertEqual(len(entries_after), 1)  # Still only one entry
@@ -102,7 +102,7 @@ class TestClipboardDB(unittest.TestCase):
         self.assertEqual(entries[2]["content_text"], "first")
 
     def test_pinned_entries_come_first(self):
-        id1 = self.db.add_entry("text", content_text="unpinned")
+        self.db.add_entry("text", content_text="unpinned")
         time.sleep(0.05)
         id2 = self.db.add_entry("text", content_text="will be pinned")
         time.sleep(0.05)
@@ -200,9 +200,9 @@ class TestClipboardDB(unittest.TestCase):
         self.assertFalse(os.path.exists(image_path))
 
     def test_clear_unpinned(self):
-        id1 = self.db.add_entry("text", content_text="unpinned 1")
+        self.db.add_entry("text", content_text="unpinned 1")
         id2 = self.db.add_entry("text", content_text="pinned 1")
-        id3 = self.db.add_entry("text", content_text="unpinned 2")
+        self.db.add_entry("text", content_text="unpinned 2")
 
         self.db.toggle_pin(id2)  # Pin entry 2
 
@@ -404,13 +404,13 @@ class TestClipboardDB(unittest.TestCase):
     # ── Sensitive entries ─────────────────────────────────────────
 
     def test_add_sensitive_entry(self):
-        entry_id = self.db.add_entry("text", content_text="ghp_secret", sensitive=True)
+        self.db.add_entry("text", content_text="ghp_secret", sensitive=True)
         entries = self.db.get_entries()
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0]["sensitive"], 1)
 
     def test_add_non_sensitive_entry(self):
-        entry_id = self.db.add_entry("text", content_text="normal text")
+        self.db.add_entry("text", content_text="normal text")
         entries = self.db.get_entries()
         self.assertEqual(entries[0]["sensitive"], 0)
 
@@ -428,7 +428,7 @@ class TestClipboardDB(unittest.TestCase):
         self.assertEqual(len(self.db.get_entries()), 0)
 
     def test_delete_expired_sensitive_preserves_recent(self):
-        entry_id = self.db.add_entry("text", content_text="fresh_secret", sensitive=True)
+        self.db.add_entry("text", content_text="fresh_secret", sensitive=True)
 
         deleted = self.db.delete_expired_sensitive(max_age_seconds=30)
         self.assertEqual(deleted, 0)
@@ -500,7 +500,6 @@ class TestClipboardDB(unittest.TestCase):
     # ── Backup / Restore ──────────────────────────────────────────
 
     def test_export_backup(self):
-        import tempfile
         self.db.add_entry("text", content_text="backup me")
 
         backup_path = os.path.join(self.tmpdir, "backup.db")
@@ -509,7 +508,6 @@ class TestClipboardDB(unittest.TestCase):
         self.assertGreater(os.path.getsize(backup_path), 0)
 
     def test_import_backup(self):
-        import tempfile
         # Create some entries and back up
         self.db.add_entry("text", content_text="entry one")
         self.db.add_entry("text", content_text="entry two")
@@ -631,13 +629,13 @@ class TestClipboardDB(unittest.TestCase):
     # ── Unicode support ───────────────────────────────────────────
 
     def test_add_unicode_text(self):
-        entry_id = self.db.add_entry("text", content_text="\u4f60\u597d\u4e16\u754c \U0001f600")
+        self.db.add_entry("text", content_text="\u4f60\u597d\u4e16\u754c \U0001f600")
         entries = self.db.get_entries()
         self.assertEqual(len(entries), 1)
         self.assertEqual(entries[0]["content_text"], "\u4f60\u597d\u4e16\u754c \U0001f600")
 
     def test_add_unicode_snippet(self):
-        sid = self.db.add_snippet("\u30e1\u30fc\u30eb", "\u3053\u3093\u306b\u3061\u306f")
+        self.db.add_snippet("\u30e1\u30fc\u30eb", "\u3053\u3093\u306b\u3061\u306f")
         snippets = self.db.get_snippets()
         self.assertEqual(len(snippets), 1)
         self.assertEqual(snippets[0]["name"], "\u30e1\u30fc\u30eb")
