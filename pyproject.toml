@@ -32,3 +32,12 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["clipman*"]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint.per-file-ignores]
+# gi.require_version() must run before `from gi.repository import ...`,
+# which legitimately puts those imports below the require_version() call.
+"clipman/app.py" = ["E402"]
+"clipman/window.py" = ["E402"]
