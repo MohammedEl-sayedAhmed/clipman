@@ -4,7 +4,7 @@ import subprocess
 import time
 import gi
 
-from clipman import _
+from clipman import _, keybindings
 from clipman.database import _safe_image_path
 
 gi.require_version("Gtk", "3.0")
@@ -19,6 +19,14 @@ DEFAULT_MAX_HISTORY = 500
 DEFAULT_THEME = "dark"
 DEFAULT_FONT_COLOR = ""
 DEFAULT_SENSITIVE_TIMEOUT = 30
+DEFAULT_PASTE_MODE = "auto"
+
+PASTE_MODES = [
+    ("auto", "Auto-detect"),
+    ("ctrl-v", "Ctrl+V"),
+    ("ctrl-shift-v", "Ctrl+Shift+V"),
+    ("shift-insert", "Shift+Insert"),
+]
 
 THEME_DARK = {
     "bg_crust": "#181825", "bg_base": "#1e1e2e", "bg_surface": "#252536",
@@ -96,6 +104,13 @@ class ClipmanWindow(Gtk.Window):
         saved_sensitive = self.db.get_setting("sensitive_timeout",
                                               str(DEFAULT_SENSITIVE_TIMEOUT))
         self._sensitive_timeout = max(10, min(300, int(float(saved_sensitive))))
+
+        self._toggle_shortcut = self.db.get_setting(
+            "toggle_shortcut", keybindings.DEFAULT_TOGGLE_BINDING
+        )
+        saved_paste = self.db.get_setting("paste_mode", DEFAULT_PASTE_MODE)
+        valid_modes = {m[0] for m in PASTE_MODES}
+        self._paste_mode = saved_paste if saved_paste in valid_modes else DEFAULT_PASTE_MODE
 
         self._apply_css()
         self._build_ui()
@@ -218,6 +233,41 @@ class ClipmanWindow(Gtk.Window):
             10, 300, 10, self._sensitive_timeout,
             self._on_sensitive_timeout_changed, self._sensitive_value_label
         )
+
+        # Toggle shortcut row
+        shortcut_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        shortcut_label = Gtk.Label(label=_("Toggle shortcut"))
+        shortcut_label.get_style_context().add_class("settings-label")
+        shortcut_label.set_halign(Gtk.Align.START)
+        shortcut_row.pack_start(shortcut_label, False, False, 0)
+        shortcut_spacer = Gtk.Box()
+        shortcut_spacer.set_hexpand(True)
+        shortcut_row.pack_start(shortcut_spacer, True, True, 0)
+        self._shortcut_button = Gtk.Button(
+            label=keybindings.format_binding_for_display(self._toggle_shortcut)
+        )
+        self._shortcut_button.set_tooltip_text(_("Click to set a new shortcut"))
+        self._shortcut_button.get_style_context().add_class("backup-btn")
+        self._shortcut_button.connect("clicked", self._on_shortcut_change)
+        shortcut_row.pack_start(self._shortcut_button, False, False, 0)
+        self.settings_panel.pack_start(shortcut_row, False, False, 0)
+
+        # Paste keystroke row
+        paste_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        paste_label = Gtk.Label(label=_("Paste keystroke"))
+        paste_label.get_style_context().add_class("settings-label")
+        paste_label.set_halign(Gtk.Align.START)
+        paste_row.pack_start(paste_label, False, False, 0)
+        paste_spacer = Gtk.Box()
+        paste_spacer.set_hexpand(True)
+        paste_row.pack_start(paste_spacer, True, True, 0)
+        self._paste_combo = Gtk.ComboBoxText()
+        for mode_id, mode_label in PASTE_MODES:
+            self._paste_combo.append(mode_id, _(mode_label))
+        self._paste_combo.set_active_id(self._paste_mode)
+        self._paste_combo.connect("changed", self._on_paste_mode_changed)
+        paste_row.pack_start(self._paste_combo, False, False, 0)
+        self.settings_panel.pack_start(paste_row, False, False, 0)
 
         # Theme toggle row
         theme_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -777,7 +827,12 @@ class ClipmanWindow(Gtk.Window):
                 "org.gnome.Shell.Extensions.clipman", "/org/gnome/Shell/Extensions/clipman"
             )
             iface = dbus.Interface(proxy, "org.gnome.Shell.Extensions.clipman")
-            iface.SimulatePaste()
+            mode = self._paste_mode or DEFAULT_PASTE_MODE
+            try:
+                iface.SimulatePaste(mode)
+            except dbus.DBusException:
+                # Older extension without the mode argument
+                iface.SimulatePaste()
         except dbus.DBusException:
             pass
         return False
@@ -893,6 +948,49 @@ class ClipmanWindow(Gtk.Window):
         self._sensitive_timeout = int(scale.get_value())
         self._sensitive_value_label.set_text(f"{self._sensitive_timeout}s")
         self.db.set_setting("sensitive_timeout", str(self._sensitive_timeout))
+
+    def _on_paste_mode_changed(self, combo):
+        mode_id = combo.get_active_id()
+        if not mode_id:
+            return
+        self._paste_mode = mode_id
+        self.db.set_setting("paste_mode", mode_id)
+
+    def _on_shortcut_change(self, button):
+        dialog = _ShortcutCaptureDialog(self)
+        response = dialog.run()
+        new_binding = dialog.captured_binding
+        dialog.destroy()
+        if response != Gtk.ResponseType.OK or not new_binding:
+            return
+        if new_binding == self._toggle_shortcut:
+            return
+        if keybindings.is_clipman_binding_registered():
+            ok = keybindings.set_toggle_binding(new_binding)
+        else:
+            ok = False
+        if not ok:
+            # gsettings unavailable or no clipman keybinding registered yet
+            self._show_shortcut_error()
+            return
+        self._toggle_shortcut = new_binding
+        self.db.set_setting("toggle_shortcut", new_binding)
+        button.set_label(keybindings.format_binding_for_display(new_binding))
+
+    def _show_shortcut_error(self):
+        msg = Gtk.MessageDialog(
+            transient_for=self,
+            modal=True,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.OK,
+            text=_("Couldn't update the GNOME shortcut."),
+        )
+        msg.format_secondary_text(_(
+            "The Clipman keybinding isn't registered with GNOME yet. "
+            "Run install.sh once to register it, then try again."
+        ))
+        msg.run()
+        msg.destroy()
 
     def _cleanup_sensitive(self):
         deleted = self.db.delete_expired_sensitive(self._sensitive_timeout)
@@ -1252,3 +1350,57 @@ class ClipmanWindow(Gtk.Window):
             self.search_entry.grab_focus()
             self.present()
             GLib.timeout_add(50, self._move_to_cursor)
+
+
+class _ShortcutCaptureDialog(Gtk.Dialog):
+    """Modal dialog that captures the next key combo for the toggle shortcut."""
+
+    def __init__(self, parent):
+        super().__init__(
+            title=_("Set toggle shortcut"),
+            transient_for=parent,
+            modal=True,
+        )
+        self.set_default_size(360, 140)
+        self.captured_binding = None
+
+        self.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
+        self._save_btn = self.add_button(_("Save"), Gtk.ResponseType.OK)
+        self._save_btn.set_sensitive(False)
+
+        box = self.get_content_area()
+        box.set_spacing(8)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        box.set_margin_start(16)
+        box.set_margin_end(16)
+
+        self._instruction = Gtk.Label()
+        self._instruction.set_text(
+            _("Press a key combination (must include Ctrl, Super, Alt, or Shift)")
+        )
+        self._instruction.set_line_wrap(True)
+        self._instruction.set_halign(Gtk.Align.START)
+        box.pack_start(self._instruction, False, False, 0)
+
+        self._preview = Gtk.Label(label=_("(no keys pressed yet)"))
+        self._preview.get_style_context().add_class("settings-value")
+        box.pack_start(self._preview, False, False, 0)
+
+        self.connect("key-press-event", self._on_key_press)
+        self.show_all()
+
+    def _on_key_press(self, _widget, event):
+        # Use defined values when available; treat keyval/state directly.
+        keyval = getattr(event, "keyval", None) or event.get_keyval()[1]
+        state = getattr(event, "state", None)
+        if state is None:
+            state = event.get_state()
+        binding = keybindings.keyval_to_binding(keyval, int(state))
+        if binding is None:
+            # Pure modifier or unusable key — keep waiting.
+            return True
+        self.captured_binding = binding
+        self._preview.set_text(keybindings.format_binding_for_display(binding))
+        self._save_btn.set_sensitive(True)
+        return True
