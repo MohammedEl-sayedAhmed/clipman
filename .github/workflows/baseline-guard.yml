@@ -1,0 +1,82 @@
+name: Baseline guard
+
+# Auto-reverts unauthorized pushes to the security-baseline branch
+# and opens a security issue. The branch is meant to be modified
+# only by the update-baseline job in codeql.yml.
+
+on:
+  push:
+    branches: [security-baseline]
+
+permissions: {}
+
+concurrency:
+  group: baseline-guard
+  cancel-in-progress: false
+
+jobs:
+  guard:
+    name: Validate baseline push
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout security-baseline (with previous commit)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: security-baseline
+          fetch-depth: 2
+
+      - name: Revert the unauthorized push
+        env:
+          GH_COMMIT_AUTHOR: github-actions[bot]
+          GH_COMMIT_EMAIL: github-actions[bot]@users.noreply.github.com
+        run: |
+          git config user.name "$GH_COMMIT_AUTHOR"
+          git config user.email "$GH_COMMIT_EMAIL"
+          git revert --no-edit HEAD
+          git push origin HEAD:security-baseline
+
+      - name: Open alert issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create \
+            --title "[security] Unauthorized push to security-baseline reverted" \
+            --label "type:security,priority:high" \
+            --body "$(cat <<EOF
+          ## Unauthorized baseline modification
+
+          | Field | Value |
+          |-------|-------|
+          | Actor | \`${{ github.actor }}\` |
+          | Commit | [\`${{ github.sha }}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |
+          | Timestamp | \`${{ github.event.head_commit.timestamp }}\` |
+
+          The push was **automatically reverted**.
+
+          The \`security-baseline\` branch is maintained exclusively by
+          the \`update-baseline\` job in \`.github/workflows/codeql.yml\`,
+          which runs after every push to \`main\`. Manual edits would
+          silently mask new CodeQL findings the ratchet check is meant
+          to catch.
+
+          ### Action required
+
+          - Investigate whether this was accidental or intentional.
+          - Review any recent merge for hidden regressions that would
+            now slip past the ratchet.
+          - If a baseline change is genuinely needed (e.g., a known
+            false positive needs whitelisting), do it via a PR that
+            modifies the rule set in \`.github/codeql/\` or the suppression
+            mechanism rather than rewriting the baseline directly.
+          EOF
+          )"
