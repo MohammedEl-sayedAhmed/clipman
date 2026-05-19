@@ -1,0 +1,391 @@
+name: Release
+
+# Tag-triggered release: builds and publishes to PyPI (via OIDC trusted
+# publishing), the Snap Store, and creates a GitHub Release with the
+# bundled GNOME Shell extension as an asset.
+#
+# Trigger by pushing a tag matching v*.*.* (e.g. v1.0.5). The workflow
+# verifies tag and pyproject.toml versions agree before publishing.
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (must already exist, e.g. v1.0.5)"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pre-flight:
+    name: Pre-flight checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      tag: ${{ steps.derive.outputs.tag }}
+      version: ${{ steps.derive.outputs.version }}
+      changelog: ${{ steps.changelog.outputs.notes }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout (with tag)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Derive tag/version
+        id: derive
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            tag="${{ inputs.tag }}"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          version="${tag#v}"
+          echo "tag=$tag"        >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check pyproject.toml version matches tag
+        env:
+          EXPECTED: ${{ steps.derive.outputs.version }}
+        run: |
+          actual=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "::error::pyproject.toml version ($actual) does not match tag ($EXPECTED)"
+            exit 1
+          fi
+          echo "OK: pyproject.toml $actual == tag $EXPECTED"
+
+      - name: Check snap/snapcraft.yaml version matches tag
+        env:
+          EXPECTED: ${{ steps.derive.outputs.version }}
+        run: |
+          actual=$(grep -m1 "^version: " snap/snapcraft.yaml | sed -E "s/version: ['\"]?([^'\"]+)['\"]?/\1/")
+          if [ "$actual" != "$EXPECTED" ]; then
+            echo "::error::snap/snapcraft.yaml version ($actual) does not match tag ($EXPECTED)"
+            exit 1
+          fi
+          echo "OK: snap version $actual == tag $EXPECTED"
+
+      - name: Extract release notes for this version from CHANGELOG.md
+        id: changelog
+        env:
+          VERSION: ${{ steps.derive.outputs.version }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, re
+          version = os.environ["VERSION"]
+          with open("CHANGELOG.md") as f:
+              text = f.read()
+          # Match "## [<version>]" then capture up to the next "## [" or EOF
+          pat = rf"(?ms)^##\s+\[{re.escape(version)}\][^\n]*\n(.*?)(?=^##\s+\[|\Z)"
+          m = re.search(pat, text)
+          notes = (m.group(1).strip() if m else
+                   f"Release v{version}. See CHANGELOG.md.")
+          print("notes<<EOF_NOTES")
+          print(notes)
+          print("EOF_NOTES")
+          PY
+
+  tests:
+    name: Tests (release verification)
+    needs: pre-flight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.pre-flight.outputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gir1.2-gtk-3.0 python3-gi python3-dbus wl-clipboard \
+            libcairo2-dev libgirepository-2.0-dev || \
+          sudo apt-get install -y libgirepository1.0-dev
+
+      - name: Install Python dependencies
+        run: pip install PyGObject pydbus
+
+      - name: Run tests
+        run: python -m unittest discover -s tests
+
+  build-pypi:
+    name: Build PyPI artifacts
+    needs: [pre-flight, tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.pre-flight.outputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2b # v5.3.0
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: pypi-dist
+          path: dist/*
+          retention-days: 14
+          if-no-files-found: error
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [pre-flight, build-pypi]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: pypi
+      url: https://pypi.org/project/clipman-clipboard/${{ needs.pre-flight.outputs.version }}
+    permissions:
+      id-token: write  # OIDC for trusted publishing
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
+      - name: Download artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: pypi-dist
+          path: dist
+
+      - name: Publish to PyPI (OIDC trusted publishing)
+        uses: pypa/gh-action-pypi-publish@ecb4c3dfd4790f14e30aaeac04855c7413ee9368 # v1.12.2
+
+  build-snap:
+    name: Build snap
+    needs: [pre-flight, tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      snap-file: ${{ steps.build.outputs.snap }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.pre-flight.outputs.tag }}
+          persist-credentials: false
+
+      - name: Build snap
+        id: build
+        uses: snapcore/action-build@d12445ae70c52b1ead8b8a0ac6635f0432af5c80 # v1.3.0
+
+      - name: Upload snap artifact
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: snap-release-${{ needs.pre-flight.outputs.tag }}
+          path: ${{ steps.build.outputs.snap }}
+          retention-days: 30
+          if-no-files-found: error
+
+  publish-snap:
+    name: Publish to Snap Store (stable)
+    needs: [pre-flight, build-snap]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
+      - name: Download snap artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: snap-release-${{ needs.pre-flight.outputs.tag }}
+          path: ./snap-out
+
+      - name: Check credentials present
+        id: creds
+        env:
+          STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: |
+          if [ -z "$STORE_CREDENTIALS" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SNAPCRAFT_STORE_CREDENTIALS not set; skipping snap publish"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve snap path
+        if: steps.creds.outputs.enabled == 'true'
+        id: resolve
+        run: |
+          snap_file=$(find ./snap-out -maxdepth 1 -name 'clipman_*.snap' -type f | head -n 1)
+          if [ -z "$snap_file" ]; then
+            echo "::error::No snap file found"
+            exit 1
+          fi
+          echo "snap=$snap_file" >> "$GITHUB_OUTPUT"
+
+      - name: Publish to Snap Store (stable channel)
+        if: steps.creds.outputs.enabled == 'true'
+        uses: snapcore/action-publish@d383e5c99f47316f8c8d74be837f6a77455ec5a6 # v1.2.0
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        with:
+          snap: ${{ steps.resolve.outputs.snap }}
+          release: stable
+
+  bundle-extension:
+    name: Bundle GNOME Shell extension
+    needs: [pre-flight, tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.pre-flight.outputs.tag }}
+          persist-credentials: false
+
+      - name: Install gnome-extensions tool
+        run: sudo apt-get update && sudo apt-get install -y gnome-shell-extensions
+
+      - name: Pack extension
+        run: |
+          gnome-extensions pack \
+            --force \
+            --out-dir=. \
+            extension
+          # Rename to a version-tagged file so GH Release asset is unambiguous.
+          built=$(ls clipman@clipman.com.shell-extension.zip)
+          mv "$built" "clipman-extension-${{ needs.pre-flight.outputs.tag }}.zip"
+
+      - name: Upload extension bundle
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: extension-bundle-${{ needs.pre-flight.outputs.tag }}
+          path: clipman-extension-${{ needs.pre-flight.outputs.tag }}.zip
+          retention-days: 30
+          if-no-files-found: error
+
+  github-release:
+    name: Create GitHub Release
+    needs: [pre-flight, publish-pypi, publish-snap, bundle-extension]
+    if: always() && needs.pre-flight.result == 'success' && needs.bundle-extension.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
+      - name: Download PyPI artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: pypi-dist
+          path: release-assets
+
+      - name: Download snap artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: snap-release-${{ needs.pre-flight.outputs.tag }}
+          path: release-assets
+
+      - name: Download extension bundle
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: extension-bundle-${{ needs.pre-flight.outputs.tag }}
+          path: release-assets
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@01570a1f39cb168c169c802c3bceb9e93fb10974 # v2.1.0
+        with:
+          tag_name: ${{ needs.pre-flight.outputs.tag }}
+          name: Clipman ${{ needs.pre-flight.outputs.tag }}
+          body: |
+            ${{ needs.pre-flight.outputs.changelog }}
+
+            ---
+
+            ### Install / upgrade
+
+            **PyPI:** `pip install --upgrade clipman-clipboard`
+            **Snap:** auto-refresh, or `snap refresh clipman`
+            **From source:** `git clone … && ./install.sh`
+
+            ### GNOME Shell extension (manual step until EGO API exists)
+
+            Download `clipman-extension-${{ needs.pre-flight.outputs.tag }}.zip` below and upload it at https://extensions.gnome.org/upload/ if this release bumps `extension/metadata.json`. Existing source installs pick up the new extension automatically via `install.sh`.
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: true
+          files: |
+            release-assets/clipman-extension-${{ needs.pre-flight.outputs.tag }}.zip
+            release-assets/clipman_*.snap
+            release-assets/clipman_clipboard-*.tar.gz
+            release-assets/clipman_clipboard-*.whl
