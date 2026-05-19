@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "updated": "2026-05-20",
-  "description": "Known-finding fingerprints from main. PR scans compare to this snapshot; new fingerprints fail the ratchet job. Maintained by the codeql-ratchet workflow on push to main; manual pushes are reverted by baseline-guard.yml.",
+  "updated": "2026-05-19",
+  "description": "Known-finding fingerprints from main. PR scans compare to this snapshot; new fingerprints fail the ratchet job. Maintained by the codeql update-baseline job on push to main; manual pushes are reverted by baseline-guard.yml.",
   "codeql": {
     "count": 18,
     "fingerprints": [
