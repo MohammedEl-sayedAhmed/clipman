@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "updated": "2026-05-20",
+  "description": "Known-finding fingerprints from main. PR scans compare to this snapshot; new fingerprints fail the ratchet job. Maintained by the codeql-ratchet workflow on push to main; manual pushes are reverted by baseline-guard.yml.",
+  "codeql": {
+    "count": 18,
+    "fingerprints": [
+      "py/cyclic-import:clipman.py:57",
+      "py/cyclic-import:clipman/app.py:12",
+      "py/cyclic-import:clipman/window.py:7",
+      "py/empty-except:clipman/clipboard_monitor.py:100",
+      "py/empty-except:clipman/clipboard_monitor.py:110",
+      "py/empty-except:clipman/clipboard_monitor.py:185",
+      "py/empty-except:clipman/clipboard_monitor.py:273",
+      "py/empty-except:clipman/database.py:203",
+      "py/empty-except:clipman/database.py:216",
+      "py/empty-except:clipman/database.py:240",
+      "py/empty-except:clipman/database.py:256",
+      "py/empty-except:clipman/window.py:1015",
+      "py/empty-except:clipman/window.py:1242",
+      "py/empty-except:clipman/window.py:781",
+      "py/print-during-import:clipman.py:26",
+      "py/print-during-import:clipman.py:27",
+      "py/print-during-import:clipman.py:28",
+      "py/unnecessary-pass:tests/test_clipboard_monitor.py:880"
+    ]
+  }
+}
