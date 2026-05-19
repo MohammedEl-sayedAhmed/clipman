@@ -52,6 +52,192 @@ jobs:
           queries: security-and-quality
 
       - name: Perform CodeQL Analysis
+        id: analyze
         uses: github/codeql-action/analyze@6825d5659bf007b85a0866e2d0f434aacf50de94 # v3.27.5
         with:
           category: "/language:${{ matrix.language }}"
+          output: ./codeql-results
+          upload: always
+
+      - name: Upload SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: codeql-sarif-${{ matrix.language }}
+          path: ./codeql-results
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Fetch security baseline
+        run: |
+          git fetch origin security-baseline --depth=1 2>/dev/null && \
+            git show origin/security-baseline:.github/security-baseline.json \
+              > /tmp/security-baseline.json || \
+            echo '{"codeql":{"fingerprints":[]}}' > /tmp/security-baseline.json
+          echo "::group::Loaded baseline"
+          cat /tmp/security-baseline.json
+          echo "::endgroup::"
+
+      - name: Ratchet against baseline (${{ matrix.language }})
+        env:
+          MATRIX_LANGUAGE: ${{ matrix.language }}
+        run: |
+          python3 <<'PYEOF'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          lang = os.environ["MATRIX_LANGUAGE"]
+
+          # 1. Load baseline
+          with open("/tmp/security-baseline.json") as f:
+              baseline = json.load(f)
+          known = set(baseline.get("codeql", {}).get("fingerprints", []))
+
+          # 2. Locate SARIF outputs
+          sarif_dir = Path("./codeql-results")
+          sarif_files = sorted(sarif_dir.glob("*.sarif"))
+          if not sarif_files:
+              print(f"::warning::No SARIF produced for {lang}; skipping ratchet")
+              sys.exit(0)
+
+          # 3. Extract fingerprints from current scan
+          current = set()
+          for sf in sarif_files:
+              with open(sf) as f:
+                  doc = json.load(f)
+              for run in doc.get("runs", []):
+                  for result in run.get("results", []):
+                      rule = result.get("ruleId", "?")
+                      for loc in result.get("locations", []):
+                          phys = loc.get("physicalLocation", {})
+                          path = phys.get("artifactLocation", {}).get("uri", "?")
+                          line = phys.get("region", {}).get("startLine", "?")
+                          current.add(f"{rule}:{path}:{line}")
+
+          # 4. Diff
+          new_findings = current - known
+          resolved = known - current
+
+          print(f"::notice::Language: {lang}")
+          print(f"::notice::Baseline known fingerprints: {len(known)}")
+          print(f"::notice::Current scan fingerprints:  {len(current)}")
+          print(f"::notice::New (this PR):              {len(new_findings)}")
+          print(f"::notice::Resolved/moved:             {len(resolved)}")
+
+          if new_findings:
+              print()
+              print("New CodeQL findings introduced by this change:")
+              for fp in sorted(new_findings):
+                  rule, path, line = fp.split(":", 2)
+                  print(f"  - [{rule}] {path}:{line}")
+                  print(
+                      f"::error file={path},line={line}::"
+                      f"[{rule}] New CodeQL finding (not in baseline)"
+                  )
+              print()
+              print(
+                  f"::error::This PR introduces {len(new_findings)} new "
+                  f"CodeQL finding(s) for {lang} beyond the security "
+                  f"baseline. Either fix the finding(s) or, if intentional, "
+                  f"have a maintainer update .github/security-baseline.json "
+                  f"on the security-baseline branch."
+              )
+              sys.exit(1)
+
+          print()
+          print("Ratchet PASS: no new findings beyond baseline.")
+          PYEOF
+
+  update-baseline:
+    name: Update baseline on push to main
+    needs: analyze
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@0080882f6c36860b6ba35c610c98ce87d4e2f26f # v2.10.2
+        with:
+          egress-policy: audit
+
+      - name: Checkout security-baseline
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: security-baseline
+          fetch-depth: 1
+
+      - name: Download Python SARIF
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: codeql-sarif-python
+          path: ./sarif-python
+
+      - name: Download JavaScript SARIF
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: codeql-sarif-javascript
+          path: ./sarif-javascript
+
+      - name: Rebuild baseline from current SARIF
+        run: |
+          python3 <<'PYEOF'
+          import json
+          from datetime import date
+          from pathlib import Path
+
+          fps = set()
+          for sf in list(Path("./sarif-python").rglob("*.sarif")) + \
+                   list(Path("./sarif-javascript").rglob("*.sarif")):
+              with open(sf) as f:
+                  doc = json.load(f)
+              for run in doc.get("runs", []):
+                  for result in run.get("results", []):
+                      rule = result.get("ruleId", "?")
+                      for loc in result.get("locations", []):
+                          phys = loc.get("physicalLocation", {})
+                          path = phys.get("artifactLocation", {}).get("uri", "?")
+                          line = phys.get("region", {}).get("startLine", "?")
+                          fps.add(f"{rule}:{path}:{line}")
+
+          out = {
+              "schema_version": 1,
+              "updated": date.today().isoformat(),
+              "description": (
+                  "Known-finding fingerprints from main. PR scans compare "
+                  "to this snapshot; new fingerprints fail the ratchet "
+                  "job. Maintained by the codeql update-baseline job on "
+                  "push to main; manual pushes are reverted by "
+                  "baseline-guard.yml."
+              ),
+              "codeql": {
+                  "count": len(fps),
+                  "fingerprints": sorted(fps),
+              },
+          }
+          with open(".github/security-baseline.json", "w") as f:
+              json.dump(out, f, indent=2)
+              f.write("\n")
+          PYEOF
+
+      - name: Commit and push if changed
+        env:
+          GH_COMMIT_AUTHOR: github-actions[bot]
+          GH_COMMIT_EMAIL: github-actions[bot]@users.noreply.github.com
+        run: |
+          if git diff --quiet .github/security-baseline.json; then
+            echo "Baseline unchanged; nothing to push."
+            exit 0
+          fi
+          git config user.name "$GH_COMMIT_AUTHOR"
+          git config user.email "$GH_COMMIT_EMAIL"
+          git add .github/security-baseline.json
+          git commit -m "chore(baseline): refresh from main @ ${GITHUB_SHA::7}
+
+          Auto-updated by codeql.yml update-baseline job after the
+          merge of ${{ github.event.head_commit.message }}.
+          "
+          git push origin HEAD:security-baseline
