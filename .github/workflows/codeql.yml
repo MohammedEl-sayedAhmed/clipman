@@ -69,6 +69,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Fetch security baseline
+        if: github.event_name == 'pull_request'
         run: |
           git fetch origin security-baseline --depth=1 2>/dev/null && \
             git show origin/security-baseline:.github/security-baseline.json \
@@ -79,6 +80,13 @@ jobs:
           echo "::endgroup::"
 
       - name: Ratchet against baseline (${{ matrix.language }})
+        # PR-only: on push to main, the update-baseline job downstream
+        # rebuilds the baseline from the fresh SARIF instead. Running
+        # the ratchet on push would fail when main itself shifts lines
+        # vs. the older baseline, which would in turn block update-baseline
+        # (it needs analyze to succeed) — a deadlock that traps the
+        # baseline on whatever state it was first written with.
+        if: github.event_name == 'pull_request'
         env:
           MATRIX_LANGUAGE: ${{ matrix.language }}
         run: |
@@ -90,7 +98,27 @@ jobs:
 
           lang = os.environ["MATRIX_LANGUAGE"]
 
-          # 1. Load baseline
+          # Fingerprint = "<rule-id>:<partial-fingerprint-hash>".
+          # CodeQL emits SARIF partialFingerprints.primaryLocationLineHash
+          # (a hash of the location's surrounding snippet, line-shift-stable).
+          # Falling back to "rule:file:line" only for runs where partial
+          # fingerprints are missing — rare on modern CodeQL.
+          def fingerprint(result):
+              rule = result.get("ruleId", "?")
+              pf = result.get("partialFingerprints", {})
+              h = pf.get("primaryLocationLineHash")
+              if h:
+                  return f"{rule}:{h}"
+              for loc in result.get("locations", []):
+                  phys = loc.get("physicalLocation", {})
+                  path = phys.get("artifactLocation", {}).get("uri", "?")
+                  line = phys.get("region", {}).get("startLine", "?")
+                  return f"{rule}:{path}:{line}"
+              return f"{rule}:?"
+
+          # 1. Load baseline (union of legacy line-based and new partial-
+          # fingerprint formats — both are accepted while the baseline
+          # transitions from one to the other).
           with open("/tmp/security-baseline.json") as f:
               baseline = json.load(f)
           known = set(baseline.get("codeql", {}).get("fingerprints", []))
@@ -102,19 +130,23 @@ jobs:
               print(f"::warning::No SARIF produced for {lang}; skipping ratchet")
               sys.exit(0)
 
-          # 3. Extract fingerprints from current scan
+          # 3. Extract fingerprints from current scan. Also keep a parallel
+          # location map so we can annotate new findings with file/line.
           current = set()
+          locations = {}  # fingerprint -> (path, line)
           for sf in sarif_files:
               with open(sf) as f:
                   doc = json.load(f)
               for run in doc.get("runs", []):
                   for result in run.get("results", []):
-                      rule = result.get("ruleId", "?")
+                      fp = fingerprint(result)
+                      current.add(fp)
                       for loc in result.get("locations", []):
                           phys = loc.get("physicalLocation", {})
                           path = phys.get("artifactLocation", {}).get("uri", "?")
                           line = phys.get("region", {}).get("startLine", "?")
-                          current.add(f"{rule}:{path}:{line}")
+                          locations[fp] = (path, line)
+                          break
 
           # 4. Diff
           new_findings = current - known
@@ -130,8 +162,9 @@ jobs:
               print()
               print("New CodeQL findings introduced by this change:")
               for fp in sorted(new_findings):
-                  rule, path, line = fp.split(":", 2)
-                  print(f"  - [{rule}] {path}:{line}")
+                  path, line = locations.get(fp, ("?", "?"))
+                  rule = fp.split(":", 1)[0]
+                  print(f"  - [{rule}] {path}:{line}  (fp={fp})")
                   print(
                       f"::error file={path},line={line}::"
                       f"[{rule}] New CodeQL finding (not in baseline)"
@@ -189,6 +222,23 @@ jobs:
           from datetime import date
           from pathlib import Path
 
+          # Same fingerprint strategy as the PR-side Ratchet step:
+          # prefer SARIF partialFingerprints.primaryLocationLineHash
+          # (line-shift-stable), fall back to rule:file:line only when
+          # missing.
+          def fingerprint(result):
+              rule = result.get("ruleId", "?")
+              pf = result.get("partialFingerprints", {})
+              h = pf.get("primaryLocationLineHash")
+              if h:
+                  return f"{rule}:{h}"
+              for loc in result.get("locations", []):
+                  phys = loc.get("physicalLocation", {})
+                  path = phys.get("artifactLocation", {}).get("uri", "?")
+                  line = phys.get("region", {}).get("startLine", "?")
+                  return f"{rule}:{path}:{line}"
+              return f"{rule}:?"
+
           fps = set()
           for sf in list(Path("./sarif-python").rglob("*.sarif")) + \
                    list(Path("./sarif-javascript").rglob("*.sarif")):
@@ -196,22 +246,18 @@ jobs:
                   doc = json.load(f)
               for run in doc.get("runs", []):
                   for result in run.get("results", []):
-                      rule = result.get("ruleId", "?")
-                      for loc in result.get("locations", []):
-                          phys = loc.get("physicalLocation", {})
-                          path = phys.get("artifactLocation", {}).get("uri", "?")
-                          line = phys.get("region", {}).get("startLine", "?")
-                          fps.add(f"{rule}:{path}:{line}")
+                      fps.add(fingerprint(result))
 
           out = {
-              "schema_version": 1,
+              "schema_version": 2,
               "updated": date.today().isoformat(),
               "description": (
                   "Known-finding fingerprints from main. PR scans compare "
                   "to this snapshot; new fingerprints fail the ratchet "
-                  "job. Maintained by the codeql update-baseline job on "
-                  "push to main; manual pushes are reverted by "
-                  "baseline-guard.yml."
+                  "job. Format: <rule-id>:<SARIF-partialFingerprint> "
+                  "(line-shift-stable). Maintained by the codeql "
+                  "update-baseline job on push to main; manual pushes are "
+                  "reverted by baseline-guard.yml."
               ),
               "codeql": {
                   "count": len(fps),
