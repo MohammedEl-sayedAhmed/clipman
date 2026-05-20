@@ -447,7 +447,9 @@ jobs:
       - name: Install python-appimage + FUSE2
         run: |
           sudo apt-get update
-          sudo apt-get install -y libfuse2
+          # Ubuntu 24.04 (noble) renamed libfuse2 -> libfuse2t64 (time_t transition).
+          # Prefer the t64 package; fall back to libfuse2 for older runners.
+          sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
           pip install python-appimage==1.4
 
       - name: Stage app recipe
