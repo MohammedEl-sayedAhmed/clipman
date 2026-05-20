@@ -450,7 +450,7 @@ jobs:
           # Ubuntu 24.04 (noble) renamed libfuse2 -> libfuse2t64 (time_t transition).
           # Prefer the t64 package; fall back to libfuse2 for older runners.
           sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
-          pip install python-appimage==1.4
+          pip install python-appimage==1.4.5
 
       - name: Stage app recipe
         env:
