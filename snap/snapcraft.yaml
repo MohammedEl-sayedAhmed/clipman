@@ -1,5 +1,5 @@
 name: clipman
-version: '1.0.4'
+version: '1.0.5'
 summary: Clipboard history manager for Wayland
 description: |
   A fast, native clipboard manager for Wayland (GNOME, KDE, Sway,
