@@ -70,7 +70,7 @@ Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extensi
 ### Appearance
 
 - **Dark and light themes** — Catppuccin Mocha and Catppuccin Latte
-- **Font customization** — adjustable size (8–20px) and 6 color presets (Green, Peach, Mauve, Pink, Teal)
+- **Font customization** — adjustable size (8–20px) and 6 color presets (Default, Green, Peach, Mauve, Pink, Teal)
 - **Window opacity** — configurable transparency from 30% to 100%
 
 ### Privacy and Security
@@ -130,6 +130,17 @@ The systemd service auto-restarts on crash and starts automatically on login.
 ### Alternative Installation
 
 <details>
+<summary><strong>Snap</strong> (Ubuntu, auto-refreshes)</summary>
+
+```bash
+sudo snap install clipman
+```
+
+Snap users still need the [GNOME Shell extension](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/) installed in the host session for clipboard detection — snap confinement blocks both the extension path and the `wl-paste --watch` fallback inside the sandbox.
+
+</details>
+
+<details>
 <summary><strong>PyPI</strong></summary>
 
 ```bash
@@ -158,6 +169,32 @@ For clipboard detection, install the [GNOME Shell extension](https://extensions.
 </details>
 
 <details>
+<summary><strong>.deb (Debian/Ubuntu)</strong></summary>
+
+Download `clipman_<version>_all.deb` from the [latest release](https://github.com/MohammedEl-sayedAhmed/clipman/releases/latest) and install:
+
+```bash
+sudo apt install ./clipman_*_all.deb
+```
+
+The package installs `/usr/bin/clipman`, the Python module, `.desktop` file, and icon. The per-user GNOME Shell extension and the Super+V keybinding are **not** registered by the package — after install, run `./install.sh` from a source checkout to enable them.
+
+</details>
+
+<details>
+<summary><strong>.rpm (Fedora/RHEL)</strong></summary>
+
+Download `clipman-<version>-1.noarch.rpm` from the [latest release](https://github.com/MohammedEl-sayedAhmed/clipman/releases/latest) and install:
+
+```bash
+sudo dnf install ./clipman-*-1.noarch.rpm
+```
+
+Same caveat as the `.deb`: the per-user extension + keybinding are not registered by the package; run `./install.sh` from a source checkout for the full setup.
+
+</details>
+
+<details>
 <summary><strong>GNOME Shell Extension</strong> (installed automatically by install.sh)</summary>
 
 The companion extension is required for clipboard detection. It is installed automatically by the install script, but can also be installed manually from [GNOME Extensions](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/):
@@ -176,6 +213,17 @@ yay -S clipman-clipboard
 ```
 
 Or with paru: `paru -S clipman-clipboard`
+
+</details>
+
+<details>
+<summary><strong>Flatpak / Flathub</strong> (manifest in repo, submission pending)</summary>
+
+A Flathub manifest is maintained at `flathub/io.github.MohammedEl_sayedAhmed.Clipman.json` for the upcoming Flathub submission. Once accepted, install with:
+
+```bash
+flatpak install flathub io.github.MohammedEl_sayedAhmed.Clipman
+```
 
 </details>
 
@@ -200,16 +248,20 @@ Or with paru: `paru -S clipman-clipboard`
 
 ### Settings
 
-Click the gear icon to access settings:
+Click the gear icon to access settings. The panel is organised into five sections:
 
-| Setting | Description |
-|---------|-------------|
-| **Opacity** | Window transparency (30%–100%) |
-| **Font size** | Text size for entries (8–20px) |
-| **Max history** | Number of entries to keep (50–5,000) |
-| **Theme** | Toggle between Dark and Light themes |
-| **Font color** | Choose from Default, Green, Peach, Mauve, Pink, or Teal |
-| **Data** | Backup or restore your clipboard database |
+| Section | Setting | Description |
+|---------|---------|-------------|
+| **APPEARANCE** | Theme | Segmented control: Dark (Catppuccin Mocha) / Light (Catppuccin Latte) |
+| | Font size | Text size for entries (8–20px) |
+| | Font color | Default, Green, Peach, Mauve, Pink, or Teal |
+| | Opacity | Window transparency (30%–100%) |
+| **HISTORY** | Max history | Number of entries to keep (50–5,000) |
+| **SHORTCUTS** | Toggle shortcut | Customize the popup-toggle keybinding (default Super+V) via an in-app capture dialog |
+| | Paste mode | How Clipman pastes after copy: **Auto-detect** (default — Ctrl+Shift+V in terminals, Ctrl+V elsewhere), **Ctrl+V**, **Ctrl+Shift+V**, or **Shift+Insert** |
+| **UPDATES** | Check for updates | Toggle the daily anonymous check against GitHub Releases. Default: ON for source / PyPI / AUR, OFF for Snap and Flatpak (they auto-refresh). See [ADR 0007](docs/adr/0007-in-app-update-notifications.md) |
+| | Check now | Manual check button — bypasses the 24h cooldown |
+| **DATA** | Backup / Restore | Export and import your clipboard database |
 
 Settings are saved automatically and persist across sessions.
 
@@ -279,11 +331,13 @@ The `wl-paste --watch` fallback only runs when the GNOME Shell extension is abse
 clipman/
 ├── clipman.py                     # Entry point (start daemon / toggle popup)
 ├── clipman/
-│   ├── __init__.py                # i18n/gettext setup
+│   ├── __init__.py                # __version__ + i18n/gettext setup
 │   ├── app.py                     # GTK Application lifecycle
 │   ├── clipboard_monitor.py       # Event-driven clipboard monitor
 │   ├── database.py                # SQLite storage with dedup/search/pin/snippets
 │   ├── dbus_service.py            # D-Bus IPC for toggle and clipboard events
+│   ├── keybindings.py             # gsettings helpers for Super+V customization
+│   ├── updates.py                 # Anonymous update-check against GitHub Releases
 │   ├── window.py                  # GTK3 popup window UI
 │   └── style.css                  # CSS theme template (Catppuccin, $variable syntax)
 ├── extension/
@@ -292,27 +346,42 @@ clipman/
 ├── data/
 │   ├── com.clipman.Clipman.desktop
 │   ├── com.clipman.Clipman.svg    # App icon
-│   ├── com.clipman.Clipman.metainfo.xml  # AppStream metadata
+│   ├── com.clipman.Clipman.metainfo.xml         # AppStream metadata
+│   ├── io.github.MohammedEl_sayedAhmed.Clipman.desktop      # Flatpak-namespaced
+│   ├── io.github.MohammedEl_sayedAhmed.Clipman.metainfo.xml # Flatpak AppStream
 │   └── clipman.service            # Systemd user service
 ├── po/
 │   ├── POTFILES.in                # Files with translatable strings
-│   └── clipman.pot                # Translation template (70 strings)
+│   └── clipman.pot                # Translation template (71 strings)
 ├── tests/
-│   ├── test_database.py           # Database unit tests (90 tests)
+│   ├── test_database.py           # Database unit tests (93 tests)
 │   ├── test_clipboard_monitor.py  # Monitor unit tests (105 tests)
-│   ├── test_entry_point.py        # D-Bus mainloop init tests (3 tests)
+│   ├── test_keybindings.py        # Keybinding-customization tests (32 tests)
+│   ├── test_updates.py            # Update-check tests (38 tests)
+│   ├── test_entry_point.py        # D-Bus mainloop init tests (7 tests)
 │   └── test_window_utils.py       # URL detection & time formatting (28 tests)
 ├── docs/
+│   ├── adr/                       # Architecture Decision Records
+│   ├── releases/                  # Per-release notes (mirrors GH Releases)
 │   ├── dark-theme.png             # Screenshot (dark theme)
 │   └── light-theme.png            # Screenshot (light theme)
 ├── snap/
 │   └── snapcraft.yaml             # Snap packaging
+├── flathub/
+│   └── io.github.MohammedEl_sayedAhmed.Clipman.json  # Flathub manifest
+├── aur/
+│   └── PKGBUILD                   # AUR packaging
+├── scripts/
+│   └── bump-version.sh            # Single command to bump version everywhere
 ├── .github/
-│   └── workflows/test.yml         # CI — runs 226 tests on Python 3.10–3.12
+│   └── workflows/                 # CI: tests, lint, CodeQL, Scorecard, secret-scan,
+│                                  #     release, snap-refresh, dependency-review, …
 ├── launcher.sh                    # Environment wrapper for snap terminals
 ├── install.sh
 ├── uninstall.sh
+├── CODE_OF_CONDUCT.md
 ├── CONTRIBUTING.md
+├── SECURITY.md
 ├── CHANGELOG.md
 └── LICENSE / NOTICE
 ```
@@ -350,7 +419,7 @@ journalctl --user -u clipman.service -n 20
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite (226 tests, no GTK or D-Bus required).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite (303 tests, no GTK or D-Bus required).
 
 ## Uninstall
 
