@@ -36,6 +36,11 @@ echo "Bumping $old -> $new"
 # pyproject.toml
 sed -i -E "s/^(version = )\"[^\"]+\"/\1\"$new\"/" pyproject.toml
 
+# clipman/__init__.py — daemon-side __version__ constant.
+if [ -f clipman/__init__.py ]; then
+    sed -i -E "s/^(__version__ = )\"[^\"]+\"/\1\"$new\"/" clipman/__init__.py
+fi
+
 # snap/snapcraft.yaml
 sed -i -E "s/^(version: )'?[^'\"]+'?/\1'$new'/" snap/snapcraft.yaml
 
