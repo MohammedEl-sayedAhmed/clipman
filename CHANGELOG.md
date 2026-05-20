@@ -2,6 +2,26 @@
 
 All notable changes to Clipman are documented in this file.
 
+## [Unreleased]
+
+### Added
+- Customizable toggle shortcut from the settings panel. Click the
+  shortcut button to capture a new key combination; the daemon writes
+  it to GNOME's custom keybinding via gsettings. Default unchanged
+  (`Super+V`). Closes #4.
+- Customizable paste keystroke from the settings panel: `Auto-detect`
+  (default — Ctrl+V, switches to Ctrl+Shift+V for terminals),
+  `Ctrl+V`, `Ctrl+Shift+V`, or `Shift+Insert`. Closes #7.
+- `clipman/keybindings.py` module with gsettings shell-out helpers
+  and a 30-test unit suite (`tests/test_keybindings.py`).
+
+### Changed
+- GNOME Shell extension D-Bus interface: `SimulatePaste()` now
+  accepts an optional `s mode` argument. The daemon falls back to
+  the no-arg signature for older extension builds, so the new
+  daemon remains compatible with an unupgraded extension.
+- `extension/metadata.json`: bumped to version 5.
+
 ## [1.0.4] - 2026-02-28
 
 ### Fixed
