@@ -214,19 +214,28 @@ class ClipmanWindow(Gtk.Window):
         main_box.pack_start(filter_box, False, False, 0)
 
         # -- Settings panel (hidden by default) -----------------------------
+        # Restructured into named sections (Appearance / History / Shortcuts /
+        # Updates / Data) instead of a single flat list of rows. Each section
+        # gets a small accent-coloured header label; the Updates section in
+        # particular splits its label+switch from its status+button so the
+        # row no longer feels crammed.
         self.settings_panel = Gtk.Box(
             orientation=Gtk.Orientation.VERTICAL, spacing=4
         )
         self.settings_panel.get_style_context().add_class("settings-panel")
         self.settings_panel.set_no_show_all(True)
 
-        # Title
+        # Top-level title
         title_label = Gtk.Label(label=_("SETTINGS"))
         title_label.get_style_context().add_class("settings-title")
         title_label.set_halign(Gtk.Align.START)
         self.settings_panel.pack_start(title_label, False, False, 0)
 
-        # Opacity row
+        # -------------------------------------------------------------------
+        # APPEARANCE
+        # -------------------------------------------------------------------
+        self._build_section_header(self.settings_panel, _("APPEARANCE"))
+
         self._opacity_value_label = Gtk.Label(
             label=f"{int(self._opacity * 100)}%"
         )
@@ -236,7 +245,6 @@ class ClipmanWindow(Gtk.Window):
             self._on_opacity_changed, self._opacity_value_label
         )
 
-        # Font size row
         self._font_value_label = Gtk.Label(label=f"{self._font_size}px")
         self._build_setting_row(
             self.settings_panel, _("Font size"),
@@ -244,83 +252,7 @@ class ClipmanWindow(Gtk.Window):
             self._on_font_size_changed, self._font_value_label
         )
 
-        # Max history row
-        self._max_value_label = Gtk.Label(label=str(self._max_history))
-        self._build_setting_row(
-            self.settings_panel, _("Max history"),
-            50, 5000, 50, self._max_history,
-            self._on_max_history_changed, self._max_value_label
-        )
-
-        # Sensitive data timeout row
-        self._sensitive_value_label = Gtk.Label(label=f"{self._sensitive_timeout}s")
-        self._build_setting_row(
-            self.settings_panel, _("Sensitive auto-clear"),
-            10, 300, 10, self._sensitive_timeout,
-            self._on_sensitive_timeout_changed, self._sensitive_value_label
-        )
-
-        # Toggle shortcut row
-        shortcut_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        shortcut_label = Gtk.Label(label=_("Toggle shortcut"))
-        shortcut_label.get_style_context().add_class("settings-label")
-        shortcut_label.set_halign(Gtk.Align.START)
-        shortcut_row.pack_start(shortcut_label, False, False, 0)
-        shortcut_spacer = Gtk.Box()
-        shortcut_spacer.set_hexpand(True)
-        shortcut_row.pack_start(shortcut_spacer, True, True, 0)
-        self._shortcut_button = Gtk.Button(
-            label=keybindings.format_binding_for_display(self._toggle_shortcut)
-        )
-        self._shortcut_button.set_tooltip_text(_("Click to set a new shortcut"))
-        self._shortcut_button.get_style_context().add_class("backup-btn")
-        self._shortcut_button.connect("clicked", self._on_shortcut_change)
-        shortcut_row.pack_start(self._shortcut_button, False, False, 0)
-        self.settings_panel.pack_start(shortcut_row, False, False, 0)
-
-        # Paste keystroke row
-        paste_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        paste_label = Gtk.Label(label=_("Paste keystroke"))
-        paste_label.get_style_context().add_class("settings-label")
-        paste_label.set_halign(Gtk.Align.START)
-        paste_row.pack_start(paste_label, False, False, 0)
-        paste_spacer = Gtk.Box()
-        paste_spacer.set_hexpand(True)
-        paste_row.pack_start(paste_spacer, True, True, 0)
-        self._paste_combo = Gtk.ComboBoxText()
-        for mode_id, mode_label in PASTE_MODES:
-            self._paste_combo.append(mode_id, _(mode_label))
-        self._paste_combo.set_active_id(self._paste_mode)
-        self._paste_combo.connect("changed", self._on_paste_mode_changed)
-        paste_row.pack_start(self._paste_combo, False, False, 0)
-        self.settings_panel.pack_start(paste_row, False, False, 0)
-
-        # Updates row — opt-in check + status label + manual trigger.
-        updates_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        updates_label = Gtk.Label(label=_("Updates"))
-        updates_label.get_style_context().add_class("settings-label")
-        updates_label.set_halign(Gtk.Align.START)
-        updates_row.pack_start(updates_label, False, False, 0)
-        self._update_status = Gtk.Label(label="")
-        self._update_status.get_style_context().add_class("settings-value")
-        self._update_status.set_halign(Gtk.Align.START)
-        updates_row.pack_start(self._update_status, False, False, 0)
-        updates_spacer = Gtk.Box()
-        updates_spacer.set_hexpand(True)
-        updates_row.pack_start(updates_spacer, True, True, 0)
-        self._updates_toggle = Gtk.Switch()
-        self._updates_toggle.set_tooltip_text(_("Check for new releases on GitHub"))
-        self._updates_toggle.set_active(updates._enabled(self.db))
-        self._updates_toggle.connect("notify::active", self._on_updates_toggle)
-        updates_row.pack_start(self._updates_toggle, False, False, 0)
-        self._check_now_btn = Gtk.Button(label=_("Check now"))
-        self._check_now_btn.get_style_context().add_class("backup-btn")
-        self._check_now_btn.connect("clicked", self._on_check_now_clicked)
-        updates_row.pack_start(self._check_now_btn, False, False, 0)
-        self.settings_panel.pack_start(updates_row, False, False, 0)
-        self._refresh_update_status_text()
-
-        # Theme toggle row
+        # Theme toggle row (dark / light)
         theme_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
         theme_label = Gtk.Label(label=_("Theme"))
         theme_label.get_style_context().add_class("settings-label")
@@ -365,9 +297,107 @@ class ClipmanWindow(Gtk.Window):
             self._color_buttons.append((btn, hex_val))
         self.settings_panel.pack_start(color_row, False, False, 0)
 
-        # Backup/Restore row
+        # -------------------------------------------------------------------
+        # HISTORY
+        # -------------------------------------------------------------------
+        self._build_section_header(self.settings_panel, _("HISTORY"))
+
+        self._max_value_label = Gtk.Label(label=str(self._max_history))
+        self._build_setting_row(
+            self.settings_panel, _("Max entries"),
+            50, 5000, 50, self._max_history,
+            self._on_max_history_changed, self._max_value_label
+        )
+
+        self._sensitive_value_label = Gtk.Label(label=f"{self._sensitive_timeout}s")
+        self._build_setting_row(
+            self.settings_panel, _("Sensitive auto-clear"),
+            10, 300, 10, self._sensitive_timeout,
+            self._on_sensitive_timeout_changed, self._sensitive_value_label
+        )
+
+        # -------------------------------------------------------------------
+        # SHORTCUTS
+        # -------------------------------------------------------------------
+        self._build_section_header(self.settings_panel, _("SHORTCUTS"))
+
+        shortcut_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        shortcut_label = Gtk.Label(label=_("Toggle"))
+        shortcut_label.get_style_context().add_class("settings-label")
+        shortcut_label.set_halign(Gtk.Align.START)
+        shortcut_row.pack_start(shortcut_label, False, False, 0)
+        shortcut_spacer = Gtk.Box()
+        shortcut_spacer.set_hexpand(True)
+        shortcut_row.pack_start(shortcut_spacer, True, True, 0)
+        self._shortcut_button = Gtk.Button(
+            label=keybindings.format_binding_for_display(self._toggle_shortcut)
+        )
+        self._shortcut_button.set_tooltip_text(_("Click to set a new shortcut"))
+        self._shortcut_button.get_style_context().add_class("backup-btn")
+        self._shortcut_button.connect("clicked", self._on_shortcut_change)
+        shortcut_row.pack_start(self._shortcut_button, False, False, 0)
+        self.settings_panel.pack_start(shortcut_row, False, False, 0)
+
+        paste_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        paste_label = Gtk.Label(label=_("Paste"))
+        paste_label.get_style_context().add_class("settings-label")
+        paste_label.set_halign(Gtk.Align.START)
+        paste_row.pack_start(paste_label, False, False, 0)
+        paste_spacer = Gtk.Box()
+        paste_spacer.set_hexpand(True)
+        paste_row.pack_start(paste_spacer, True, True, 0)
+        self._paste_combo = Gtk.ComboBoxText()
+        for mode_id, mode_label in PASTE_MODES:
+            self._paste_combo.append(mode_id, _(mode_label))
+        self._paste_combo.set_active_id(self._paste_mode)
+        self._paste_combo.connect("changed", self._on_paste_mode_changed)
+        paste_row.pack_start(self._paste_combo, False, False, 0)
+        self.settings_panel.pack_start(paste_row, False, False, 0)
+
+        # -------------------------------------------------------------------
+        # UPDATES — header row (label + switch) then status row (status text + Check now)
+        # -------------------------------------------------------------------
+        self._build_section_header(self.settings_panel, _("UPDATES"))
+
+        update_header_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        update_label = Gtk.Label(label=_("Check for updates"))
+        update_label.get_style_context().add_class("settings-label")
+        update_label.set_halign(Gtk.Align.START)
+        update_header_row.pack_start(update_label, False, False, 0)
+        update_header_spacer = Gtk.Box()
+        update_header_spacer.set_hexpand(True)
+        update_header_row.pack_start(update_header_spacer, True, True, 0)
+        self._updates_toggle = Gtk.Switch()
+        self._updates_toggle.set_tooltip_text(_("Check for new releases on GitHub"))
+        self._updates_toggle.set_active(updates._enabled(self.db))
+        self._updates_toggle.set_valign(Gtk.Align.CENTER)
+        self._updates_toggle.connect("notify::active", self._on_updates_toggle)
+        update_header_row.pack_start(self._updates_toggle, False, False, 0)
+        self.settings_panel.pack_start(update_header_row, False, False, 0)
+
+        update_status_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        update_status_row.set_margin_start(8)
+        self._update_status = Gtk.Label(label="")
+        self._update_status.get_style_context().add_class("settings-value")
+        self._update_status.set_halign(Gtk.Align.START)
+        update_status_row.pack_start(self._update_status, False, False, 0)
+        update_status_spacer = Gtk.Box()
+        update_status_spacer.set_hexpand(True)
+        update_status_row.pack_start(update_status_spacer, True, True, 0)
+        self._check_now_btn = Gtk.Button(label=_("Check now"))
+        self._check_now_btn.get_style_context().add_class("backup-btn")
+        self._check_now_btn.connect("clicked", self._on_check_now_clicked)
+        update_status_row.pack_start(self._check_now_btn, False, False, 0)
+        self.settings_panel.pack_start(update_status_row, False, False, 0)
+        self._refresh_update_status_text()
+
+        # -------------------------------------------------------------------
+        # DATA
+        # -------------------------------------------------------------------
+        self._build_section_header(self.settings_panel, _("DATA"))
+
         backup_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        backup_label = Gtk.Label(label=_("Data"))
+        backup_label = Gtk.Label(label=_("Backup / Restore"))
         backup_label.get_style_context().add_class("settings-label")
         backup_label.set_halign(Gtk.Align.START)
         backup_row.pack_start(backup_label, False, False, 0)
@@ -443,6 +473,18 @@ class ClipmanWindow(Gtk.Window):
         self.status_bar.pack_end(self.add_snippet_btn, False, False, 0)
 
         main_box.pack_end(self.status_bar, False, False, 0)
+
+    def _build_section_header(self, parent, text):
+        """Add a small accent-coloured section header into the settings panel.
+
+        Used to break the panel into APPEARANCE / HISTORY / SHORTCUTS /
+        UPDATES / DATA groups so the panel reads as structured sections
+        rather than a flat list of mixed controls.
+        """
+        label = Gtk.Label(label=text)
+        label.get_style_context().add_class("settings-section-header")
+        label.set_halign(Gtk.Align.START)
+        parent.pack_start(label, False, False, 0)
 
     def _build_setting_row(self, parent, label_text, min_val, max_val, step,
                            current, callback, value_label):
@@ -904,6 +946,21 @@ class ClipmanWindow(Gtk.Window):
 
     def _on_focus_out(self, widget, event):
         if self._ignore_focus_out:
+            return False
+        # On some Wayland compositors, clicking certain interactive
+        # widgets inside the popup (notably Gtk.Switch and combo-box
+        # popovers) briefly transfers keyboard focus to a transient
+        # surface, which sends a focus-out to the parent window. If
+        # we treat that as "the popup lost focus to another window"
+        # and hide ourselves, the original click event never reaches
+        # the widget — the user perceives the entire settings panel
+        # as unresponsive. Guard: only hide when the new focus owner
+        # is genuinely outside the popup tree.
+        try:
+            new_focus = self.get_focus()
+        except Exception:
+            new_focus = None
+        if new_focus is not None and new_focus.is_ancestor(self):
             return False
         self.hide()
         return False
