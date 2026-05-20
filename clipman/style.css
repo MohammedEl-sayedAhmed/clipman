@@ -1,10 +1,21 @@
-/* Clipman GTK3 Stylesheet
+/* Clipman GTK3 Stylesheet — visual design system v2.
  *
- * This is a template — variables like $bg_crust are substituted at
- * runtime with theme colors and the user's font size preference.
+ * Variables like $bg_crust, $accent, ${font_size} are substituted at
+ * runtime from the active theme (Catppuccin Mocha / Latte) and the
+ * user's preferences. Light + dark themes share this stylesheet
+ * verbatim; only the colour palette changes per theme.
+ *
+ * Design tokens
+ * -------------
+ * Spacing:  4 / 6 / 10 / 14 / 20 px
+ * Radius:   4 (badge)  6 (input)  8 (button/swatch)  12 (window/card)
+ * Type:     9 (caption)  10 (small)  11 (body)  12 (emphasis)  $font_size (content)
  */
 
-/* Base window */
+/* ------------------------------------------------------------------
+   Window shell
+   ------------------------------------------------------------------ */
+
 .clipman-window {
     background-color: $bg_crust;
     border-radius: 12px;
@@ -16,81 +27,89 @@
     background-image: none;
     color: $text_primary;
     border-bottom: 1px solid $bg_overlay;
-    min-height: 28px;
-    padding: 2px 6px;
+    min-height: 30px;
+    padding: 4px 8px;
 }
 .clipman-window headerbar .title {
     color: $text_primary;
     font-size: 12px;
-    font-weight: bold;
+    font-weight: 600;
+    letter-spacing: 0.3px;
 }
 .clipman-window headerbar button {
     background-color: transparent;
     background-image: none;
     color: $headerbar_btn;
     border: none;
-    min-height: 20px;
-    min-width: 20px;
+    min-height: 22px;
+    min-width: 22px;
     padding: 2px;
+    border-radius: 6px;
 }
 .clipman-window headerbar button:hover {
     background-color: $bg_overlay;
     background-image: none;
     color: $text_primary;
-    border-radius: 4px;
 }
 
-/* Search bar */
+/* ------------------------------------------------------------------
+   Search bar + gear
+   ------------------------------------------------------------------ */
+
 .clipman-header {
     background-color: $bg_base;
-    padding: 6px 8px;
+    padding: 8px 10px;
 }
 .clipman-search {
     background-color: $bg_overlay;
     color: $text_primary;
-    border: 1px solid $border;
+    border: 1px solid transparent;
     border-radius: 8px;
-    padding: 4px 8px;
+    padding: 6px 10px;
     font-size: ${font_size}px;
     min-height: 0;
 }
 .clipman-search:focus {
+    background-color: $bg_surface;
     border-color: $accent;
 }
-
-/* Gear button */
 .gear-button {
     background-color: transparent;
     background-image: none;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     color: $headerbar_btn;
-    padding: 2px 6px;
-    min-height: 24px;
-    min-width: 24px;
+    padding: 4px 8px;
+    min-height: 28px;
+    min-width: 28px;
     font-size: 17px;
 }
 .gear-button:hover {
     background-color: $bg_overlay;
     background-image: none;
-    color: $text_primary;
+    color: $accent;
 }
 
-/* Filter tabs */
+/* ------------------------------------------------------------------
+   Filter tabs (All / Text / Images / Snippets)
+   ------------------------------------------------------------------ */
+
 .filter-bar {
     background-color: $bg_base;
-    padding: 2px 8px 4px 8px;
+    padding: 2px 10px 6px 10px;
 }
-.filter-tab {
+.filter-tab,
+.filter-tab-active {
     background-color: transparent;
     background-image: none;
     border: none;
     border-radius: 12px;
     color: $text_secondary;
     font-size: 11px;
-    padding: 1px 10px;
-    min-height: 20px;
-    margin: 0 1px;
+    font-weight: 500;
+    padding: 3px 12px;
+    min-height: 22px;
+    margin: 0 2px;
 }
 .filter-tab:hover {
     color: $text_primary;
@@ -99,105 +118,211 @@
 }
 .filter-tab-active {
     background-color: $bg_overlay;
-    background-image: none;
-    border: none;
-    border-radius: 12px;
     color: $accent;
-    font-size: 11px;
-    font-weight: bold;
-    padding: 1px 10px;
-    min-height: 20px;
-    margin: 0 1px;
+    font-weight: 700;
 }
 
-/* Settings panel */
+/* ------------------------------------------------------------------
+   Settings panel — sectioned layout
+   ------------------------------------------------------------------ */
+
 .settings-panel {
     background-color: $bg_base;
-    padding: 8px 12px;
+    padding: 6px 14px 14px 14px;
     border-top: 1px solid $bg_overlay;
     border-bottom: 1px solid $bg_overlay;
 }
+
+/* Panel title at top */
 .settings-title {
-    color: $accent;
-    font-size: 10px;
-    font-weight: bold;
-    letter-spacing: 1px;
+    color: $text_muted;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+    padding: 4px 0;
 }
+
+/* Section headers between groups (APPEARANCE / HISTORY / SHORTCUTS / UPDATES / DATA) */
 .settings-section-header {
     color: $accent;
     font-size: 9px;
-    font-weight: bold;
-    letter-spacing: 1.5px;
-    margin-top: 10px;
-    margin-bottom: 2px;
-    padding-bottom: 2px;
-    border-bottom: 1px solid $bg_overlay;
+    font-weight: 700;
+    letter-spacing: 1.8px;
+    margin-top: 12px;
+    margin-bottom: 4px;
+    padding: 2px 0;
 }
+
+/* Row label / value */
 .settings-label {
     color: $text_secondary;
     font-size: 11px;
-    min-width: 80px;
+    font-weight: 500;
+    min-width: 90px;
+    padding-right: 4px;
 }
 .settings-value {
     color: $text_muted;
     font-size: 10px;
-    min-width: 32px;
+    min-width: 36px;
+}
+
+/* Slider — slim accent track, accent thumb with breathing room on hover */
+.settings-panel scale {
+    margin: 2px 4px;
+    min-height: 18px;
 }
 .settings-panel scale trough {
     background-color: $border;
-    min-height: 4px;
+    min-height: 3px;
     border-radius: 2px;
 }
 .settings-panel scale highlight {
     background-color: $accent;
-    min-height: 4px;
+    min-height: 3px;
     border-radius: 2px;
 }
 .settings-panel scale slider {
-    background-color: $text_primary;
-    min-height: 12px;
-    min-width: 12px;
-    border-radius: 6px;
+    background-color: $accent;
+    background-image: none;
+    min-height: 14px;
+    min-width: 14px;
+    border-radius: 7px;
+    border: 2px solid $bg_base;
+    box-shadow: none;
+    margin: -7px 0;
+}
+.settings-panel scale slider:hover {
+    background-color: $accent_hover;
+    min-height: 16px;
+    min-width: 16px;
+    border-radius: 8px;
+    margin: -8px 0;
 }
 
-/* Theme toggle buttons */
-.theme-btn {
+/* ------------------------------------------------------------------
+   Buttons — three weights
+   ------------------------------------------------------------------ */
+
+/* Ghost button (Backup, Restore, Toggle shortcut, Check now, etc.) */
+.backup-btn {
     background-color: transparent;
     background-image: none;
     border: 1px solid $border;
+    border-radius: 8px;
+    color: $text_secondary;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 4px 12px;
+    min-height: 22px;
+    margin: 0 2px;
+}
+.backup-btn:hover {
+    background-color: $bg_overlay;
+    background-image: none;
+    border-color: $accent;
+    color: $accent;
+}
+.backup-btn:active {
+    background-color: $bg_surface;
+    background-image: none;
+}
+
+/* Status-bar action buttons (Clear All / Add) */
+.action-button,
+.action-button-danger {
+    background-color: transparent;
+    background-image: none;
+    border: 1px solid $border;
+    border-radius: 8px;
+    color: $text_secondary;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 3px 12px;
+    min-height: 22px;
+}
+.action-button:hover {
+    background-color: $bg_overlay;
+    background-image: none;
+    color: $text_primary;
+    border-color: $accent;
+}
+.action-button-danger {
+    color: $danger;
+}
+.action-button-danger:hover {
+    background-color: $danger_bg;
+    background-image: none;
+    border-color: $danger;
+    color: $danger;
+}
+
+/* Theme segmented control (Dark | Light) */
+.theme-btn,
+.theme-btn-active {
+    background-color: $bg_overlay;
+    background-image: none;
+    border: none;
     border-radius: 6px;
     color: $text_muted;
     font-size: 10px;
-    padding: 1px 10px;
-    min-height: 18px;
-    margin: 0 2px;
+    font-weight: 500;
+    padding: 3px 14px;
+    min-height: 22px;
+    margin: 0 1px;
 }
 .theme-btn:hover {
-    color: $text_secondary;
-    background-color: $bg_overlay;
+    color: $text_primary;
+    background-color: $bg_surface;
     background-image: none;
 }
 .theme-btn-active {
     background-color: $accent;
     background-image: none;
-    border: none;
-    border-radius: 6px;
     color: $accent_on;
-    font-size: 10px;
-    font-weight: bold;
-    padding: 1px 10px;
-    min-height: 18px;
-    margin: 0 2px;
+    font-weight: 700;
 }
 
-/* Font color swatches */
-.color-swatch {
+/* ------------------------------------------------------------------
+   Switch (Updates toggle)
+   ------------------------------------------------------------------ */
+
+.settings-panel switch {
+    min-width: 36px;
     min-height: 18px;
-    min-width: 18px;
-    border-radius: 9px;
+    border-radius: 10px;
+    background-color: $border;
+    background-image: none;
+    border: none;
+    color: $text_muted;
+}
+.settings-panel switch:checked {
+    background-color: $accent;
+    background-image: none;
+}
+.settings-panel switch slider {
+    background-color: $text_primary;
+    background-image: none;
+    border: none;
+    border-radius: 8px;
+    min-width: 14px;
+    min-height: 14px;
+    margin: 1px;
+    box-shadow: none;
+}
+
+/* ------------------------------------------------------------------
+   Font-colour swatches
+   ------------------------------------------------------------------ */
+
+.color-swatch {
+    min-height: 22px;
+    min-width: 22px;
+    border-radius: 11px;
     border: 2px solid transparent;
     padding: 0;
-    margin: 0 1px;
+    margin: 0 2px;
     background-image: none;
 }
 .color-swatch:hover {
@@ -208,51 +333,48 @@
     border-color: $text_primary;
 }
 .swatch-default {
-    background-color: transparent;
+    background-color: $bg_overlay;
     border: 2px solid $text_muted;
-    color: $text_muted;
-    font-size: 9px;
-    font-weight: bold;
+    color: $text_secondary;
+    font-size: 10px;
+    font-weight: 700;
 }
-.swatch-green {
-    background-color: #40a02b;
-}
-.swatch-peach {
-    background-color: #fe640b;
-}
-.swatch-mauve {
-    background-color: #8839ef;
-}
-.swatch-pink {
-    background-color: #ea76cb;
-}
-.swatch-teal {
-    background-color: #179299;
-}
+.swatch-green { background-color: #40a02b; }
+.swatch-peach { background-color: #fe640b; }
+.swatch-mauve { background-color: #8839ef; }
+.swatch-pink  { background-color: #ea76cb; }
+.swatch-teal  { background-color: #179299; }
 
-/* Section headers */
+/* ------------------------------------------------------------------
+   Section header above list (TODAY / YESTERDAY / SNIPPETS …)
+   ------------------------------------------------------------------ */
+
 .section-header {
     color: $text_muted;
     font-size: 9px;
-    font-weight: bold;
-    letter-spacing: 1px;
-    padding: 6px 12px 2px 12px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    padding: 8px 14px 4px 14px;
 }
 
-/* Listbox background */
-.clipman-window list {
-    background-color: $bg_crust;
-}
+/* ------------------------------------------------------------------
+   Clipboard entry rows
+   ------------------------------------------------------------------ */
+
+.clipman-window list,
 .clipman-window list row {
     background-color: transparent;
 }
+.clipman-window list {
+    background-color: $bg_crust;
+}
 
-/* Clipboard entry rows */
 .clip-row {
     background-color: $bg_base;
-    border-radius: 6px;
-    padding: 5px 10px;
-    margin: 1px 4px;
+    border-radius: 8px;
+    padding: 8px 12px;
+    margin: 2px 6px;
+    border-left: 2px solid transparent;
 }
 .clip-row:hover {
     background-color: $bg_surface;
@@ -261,6 +383,7 @@ row:selected .clip-row {
     background-color: $selected_bg;
     border-left: 2px solid $accent;
 }
+
 .clip-text {
     color: $text_primary;
     font-size: ${font_size}px;
@@ -276,110 +399,78 @@ row:selected .clip-row {
 .clip-type-badge {
     color: $accent;
     font-size: 8px;
-    font-weight: bold;
+    font-weight: 700;
+    letter-spacing: 0.6px;
 }
 
-/* Row action buttons */
-.pin-button, .delete-button, .edit-button, .expand-button, .url-button {
+/* Per-row action buttons (pin / delete / edit / expand / url) */
+.pin-button,
+.delete-button,
+.edit-button,
+.expand-button,
+.url-button {
     background: none;
     background-image: none;
     border: none;
-    padding: 0;
-    min-height: 16px;
-    min-width: 16px;
+    padding: 2px;
+    min-height: 18px;
+    min-width: 18px;
     font-size: 11px;
-}
-.pin-button:hover, .delete-button:hover, .edit-button:hover,
-.expand-button:hover, .url-button:hover {
-    background-color: $hover_overlay;
-    background-image: none;
     border-radius: 4px;
 }
-.expand-button {
-    color: $text_muted;
+.pin-button:hover,
+.delete-button:hover,
+.edit-button:hover,
+.expand-button:hover,
+.url-button:hover {
+    background-color: $hover_overlay;
+    background-image: none;
 }
-.url-button {
-    color: $accent;
-}
-.pinned {
-    color: $pin_color;
-}
-.unpinned {
-    color: $text_muted;
-}
-.delete-button {
-    color: $text_muted;
-}
-.delete-button:hover {
-    color: $danger;
-}
+.expand-button { color: $text_muted; }
+.url-button { color: $accent; }
+.pinned { color: $pin_color; }
+.unpinned { color: $text_muted; }
+.delete-button { color: $text_muted; }
+.delete-button:hover { color: $danger; }
 
 /* Snippet name */
 .snippet-name {
     color: $text_primary;
     font-size: ${font_size}px;
-    font-weight: bold;
+    font-weight: 600;
 }
 
 /* Empty state */
 .empty-label {
     color: $text_muted;
-    font-size: 13px;
+    font-size: 12px;
+    padding: 32px 16px;
 }
 
-/* Bottom status bar */
+/* ------------------------------------------------------------------
+   Bottom status bar
+   ------------------------------------------------------------------ */
+
 .status-bar {
     background-color: $bg_base;
-    padding: 4px 10px;
+    padding: 6px 12px;
     border-top: 1px solid $bg_overlay;
 }
 .status-count {
     color: $text_muted;
     font-size: 10px;
 }
-.action-button {
+.incognito-btn,
+.incognito-active {
     background-color: transparent;
     background-image: none;
-    border: 1px solid $border;
-    border-radius: 6px;
-    color: $text_secondary;
-    font-size: 10px;
-    padding: 1px 8px;
-    min-height: 18px;
-}
-.action-button:hover {
-    background-color: $bg_overlay;
-    background-image: none;
-    color: $text_primary;
-}
-.action-button-danger {
-    background-color: transparent;
-    background-image: none;
-    border: 1px solid $border;
-    border-radius: 6px;
-    color: $danger;
-    font-size: 10px;
-    padding: 1px 8px;
-    min-height: 18px;
-}
-.action-button-danger:hover {
-    background-color: $danger_bg;
-    background-image: none;
-    border-color: $danger;
-    color: $danger;
-}
-
-/* Incognito button */
-.incognito-btn {
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    border-radius: 6px;
+    border: 1px solid transparent;
+    border-radius: 8px;
     color: $text_muted;
     font-size: 14px;
-    padding: 1px 4px;
-    min-height: 18px;
-    min-width: 18px;
+    padding: 2px 6px;
+    min-height: 22px;
+    min-width: 22px;
 }
 .incognito-btn:hover {
     background-color: $bg_overlay;
@@ -388,13 +479,8 @@ row:selected .clip-row {
 .incognito-active {
     background-color: $danger_bg;
     background-image: none;
-    border: 1px solid $danger;
-    border-radius: 6px;
+    border-color: $danger;
     color: $danger;
-    font-size: 14px;
-    padding: 1px 4px;
-    min-height: 18px;
-    min-width: 18px;
 }
 .incognito-active:hover {
     background-color: $danger;
@@ -406,57 +492,36 @@ row:selected .clip-row {
 .sensitive-badge {
     color: $danger;
     font-size: 9px;
+    font-weight: 700;
 }
 .sensitive-row {
-    opacity: 0.7;
+    opacity: 0.78;
 }
 
-/* Backup/Restore buttons */
-.backup-btn {
-    background-color: transparent;
-    background-image: none;
-    border: 1px solid $border;
-    border-radius: 6px;
-    color: $text_secondary;
-    font-size: 10px;
-    padding: 1px 10px;
-    min-height: 18px;
-    margin: 0 2px;
-}
-.backup-btn:hover {
-    background-color: $bg_overlay;
-    background-image: none;
-    color: $text_primary;
-}
+/* ------------------------------------------------------------------
+   Snippet dialog
+   ------------------------------------------------------------------ */
 
-/* Snippet dialog */
-.snippet-dialog {
-    background-color: $bg_base;
-}
+.snippet-dialog,
 .snippet-dialog-content {
     background-color: $bg_base;
 }
 .snippet-dialog-label {
     color: $text_secondary;
     font-size: 12px;
-    font-weight: bold;
+    font-weight: 600;
 }
-.snippet-dialog-entry {
+.snippet-dialog-entry,
+.snippet-dialog-textview {
     background-color: $bg_overlay;
     color: $text_primary;
-    border: 1px solid $border;
-    border-radius: 6px;
-    padding: 4px 8px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 6px 10px;
     font-size: 12px;
 }
 .snippet-dialog-entry:focus {
     border-color: $accent;
-}
-.snippet-dialog-textview {
-    background-color: $bg_overlay;
-    color: $text_primary;
-    font-size: 12px;
-    border-radius: 6px;
 }
 .snippet-dialog-textview text {
     background-color: $bg_overlay;
@@ -467,9 +532,10 @@ row:selected .clip-row {
     background-image: none;
     color: $text_secondary;
     border: 1px solid $border;
-    border-radius: 6px;
-    padding: 4px 14px;
+    border-radius: 8px;
+    padding: 4px 16px;
     font-size: 12px;
+    font-weight: 500;
 }
 .snippet-dialog .dialog-action-area button:hover {
     background-color: $border;
@@ -481,7 +547,7 @@ row:selected .clip-row {
     background-image: none;
     color: $accent_on;
     border: none;
-    font-weight: bold;
+    font-weight: 700;
 }
 .snippet-dialog .dialog-action-area button:last-child:hover {
     background-color: $accent_hover;
@@ -495,4 +561,16 @@ row:selected .clip-row {
 }
 .snippet-dialog headerbar .title {
     color: $text_primary;
+}
+
+/* ------------------------------------------------------------------
+   Update banner (shown when a newer release is detected)
+   ------------------------------------------------------------------ */
+
+.update-banner {
+    background-color: $bg_overlay;
+    color: $accent;
+    border-bottom: 1px solid $border;
+    padding: 6px 12px;
+    font-size: 11px;
 }
