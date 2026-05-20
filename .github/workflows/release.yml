@@ -290,6 +290,226 @@ jobs:
           snap: ${{ steps.resolve.outputs.snap }}
           release: stable
 
+  build-distpkgs:
+    name: Build .deb + .rpm
+    needs: [pre-flight, tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.pre-flight.outputs.tag }}
+          persist-credentials: false
+
+      - name: Install fpm + rpm tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev rubygems build-essential rpm
+          sudo gem install --no-document fpm -v 1.16.0
+
+      - name: Stage filesystem tree
+        env:
+          VERSION: ${{ needs.pre-flight.outputs.version }}
+        run: |
+          stage=staging
+          rm -rf "$stage"
+          install -d "$stage"/usr/lib/clipman
+          install -d "$stage"/usr/lib/clipman/clipman
+          install -d "$stage"/usr/lib/clipman/extension
+          install -d "$stage"/usr/bin
+          install -d "$stage"/usr/share/applications
+          install -d "$stage"/usr/share/icons/hicolor/scalable/apps
+          install -d "$stage"/usr/share/doc/clipman-clipboard
+          install -d "$stage"/usr/share/clipman
+
+          # Python package + entry script
+          cp -r clipman/* "$stage"/usr/lib/clipman/clipman/
+          install -Dm755 clipman.py "$stage"/usr/lib/clipman/clipman.py
+          install -Dm755 launcher.sh "$stage"/usr/lib/clipman/launcher.sh
+
+          # Bundle extension source so install-extension subcommand can find it
+          cp extension/extension.js "$stage"/usr/lib/clipman/extension/
+          cp extension/metadata.json "$stage"/usr/lib/clipman/extension/
+
+          # /usr/bin/clipman wrapper
+          cat > "$stage"/usr/bin/clipman <<'EOF'
+          #!/bin/sh
+          exec /usr/lib/clipman/clipman.py "$@"
+          EOF
+          chmod 0755 "$stage"/usr/bin/clipman
+
+          # .desktop file (the placeholder install.sh rewrites at source-install
+          # time; for system install, point it at /usr/bin/clipman directly)
+          sed "s|CLIPMAN_PATH_PLACEHOLDER|/usr/lib/clipman|g" \
+            data/com.clipman.Clipman.desktop \
+            > "$stage"/usr/share/applications/com.clipman.Clipman.desktop
+
+          # Icon
+          cp data/com.clipman.Clipman.svg \
+            "$stage"/usr/share/icons/hicolor/scalable/apps/com.clipman.Clipman.svg
+
+          # AppStream metadata
+          cp data/com.clipman.Clipman.metainfo.xml "$stage"/usr/share/clipman/
+
+          # Docs
+          cp README.md LICENSE NOTICE CHANGELOG.md \
+            "$stage"/usr/share/doc/clipman-clipboard/
+
+          # Sanity: print the tree (first 40 entries)
+          find "$stage" -maxdepth 5 | head -40
+
+      - name: Build .deb
+        env:
+          VERSION: ${{ needs.pre-flight.outputs.version }}
+        run: |
+          fpm -s dir -t deb -p clipman_${VERSION}_all.deb \
+            --name clipman-clipboard \
+            --version "$VERSION" \
+            --architecture all \
+            --license Apache-2.0 \
+            --maintainer "MohammedEl-sayedAhmed <noreply@github.com>" \
+            --url "https://github.com/MohammedEl-sayedAhmed/clipman" \
+            --description "Clipboard history manager for GNOME on Wayland.\nDesktop integration (GNOME Shell extension + keybinding) is\nper-user; run /usr/share/doc/clipman-clipboard/README.md or the\nupstream install.sh inside this user session to enable it." \
+            --depends python3 \
+            --depends python3-gi \
+            --depends python3-dbus \
+            --depends gir1.2-gtk-3.0 \
+            --depends wl-clipboard \
+            -C staging .
+
+      - name: Build .rpm
+        env:
+          VERSION: ${{ needs.pre-flight.outputs.version }}
+        run: |
+          fpm -s dir -t rpm -p clipman-${VERSION}-1.noarch.rpm \
+            --name clipman-clipboard \
+            --version "$VERSION" \
+            --architecture noarch \
+            --license Apache-2.0 \
+            --maintainer "MohammedEl-sayedAhmed <noreply@github.com>" \
+            --url "https://github.com/MohammedEl-sayedAhmed/clipman" \
+            --description "Clipboard history manager for GNOME on Wayland." \
+            --depends python3 \
+            --depends python3-gobject \
+            --depends python3-dbus \
+            --depends gtk3 \
+            --depends wl-clipboard \
+            -C staging .
+
+      - name: Upload .deb + .rpm artifacts
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: distpkgs-${{ needs.pre-flight.outputs.tag }}
+          path: |
+            clipman_*.deb
+            clipman-*.rpm
+          retention-days: 30
+          if-no-files-found: error
+
+  build-appimage:
+    name: Build AppImage
+    needs: [pre-flight, build-pypi]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.pre-flight.outputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Download PyPI wheel artifact
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: pypi-dist
+          path: dist
+
+      - name: Install python-appimage + FUSE2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2
+          pip install python-appimage==1.4
+
+      - name: Stage app recipe
+        env:
+          VERSION: ${{ needs.pre-flight.outputs.version }}
+        run: |
+          stage=appimage-src
+          rm -rf "$stage"
+          install -d "$stage"
+          # Entrypoint
+          cat > "$stage/entrypoint.sh" <<'EOF'
+          #!/bin/sh
+          "{{ python-executable }}" -m clipman.app "$@"
+          EOF
+          chmod +x "$stage/entrypoint.sh"
+
+          # Requirements file points python-appimage to install our wheel.
+          cp dist/clipman_clipboard-${VERSION}-py3-none-any.whl "$stage"/
+          cat > "$stage/requirements.txt" <<EOF
+          ./clipman_clipboard-${VERSION}-py3-none-any.whl
+          EOF
+
+          # .desktop + icon required by AppImage spec.
+          cat > "$stage/clipman.desktop" <<'EOF'
+          [Desktop Entry]
+          Name=Clipman
+          Comment=Clipboard history manager for GNOME on Wayland
+          Exec=clipman
+          Icon=clipman
+          Terminal=false
+          Type=Application
+          Categories=Utility;
+          EOF
+          cp data/com.clipman.Clipman.svg "$stage/clipman.svg"
+
+      - name: Build AppImage
+        env:
+          VERSION: ${{ needs.pre-flight.outputs.version }}
+        run: |
+          # python-appimage bundles Python 3.12 + wheel. NOT bundled: GTK
+          # runtime, PyGObject bindings — those still need to be installed
+          # system-wide (python3-gi + gir1.2-gtk-3.0). Documented in the
+          # release notes Assets section.
+          python-appimage build app -p 3.12 appimage-src/ || \
+            echo "::warning::AppImage build failed — Python-GTK packaging is brittle. \
+            Continuing without the AppImage artifact; .deb/.rpm/snap/pypi all built fine."
+          # Rename to a deterministic name if the build succeeded.
+          built=$(ls Clipman*-x86_64.AppImage 2>/dev/null | head -n 1 || true)
+          if [ -n "$built" ]; then
+            mv "$built" "clipman-${VERSION}-x86_64.AppImage"
+            ls -l "clipman-${VERSION}-x86_64.AppImage"
+          fi
+
+      - name: Upload AppImage artifact (if produced)
+        if: hashFiles('clipman-*-x86_64.AppImage') != ''
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        with:
+          name: appimage-${{ needs.pre-flight.outputs.tag }}
+          path: clipman-*-x86_64.AppImage
+          retention-days: 30
+          if-no-files-found: warn
+
   bundle-extension:
     name: Bundle GNOME Shell extension
     needs: [pre-flight, tests]
@@ -332,8 +552,8 @@ jobs:
 
   github-release:
     name: Create GitHub Release
-    needs: [pre-flight, publish-pypi, publish-snap, bundle-extension]
-    if: always() && needs.pre-flight.result == 'success' && needs.bundle-extension.result == 'success'
+    needs: [pre-flight, publish-pypi, publish-snap, bundle-extension, build-distpkgs, build-appimage]
+    if: always() && needs.pre-flight.result == 'success' && needs.bundle-extension.result == 'success' && needs.build-distpkgs.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -362,6 +582,22 @@ jobs:
           name: extension-bundle-${{ needs.pre-flight.outputs.tag }}
           path: release-assets
 
+      - name: Download .deb + .rpm
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        with:
+          name: distpkgs-${{ needs.pre-flight.outputs.tag }}
+          path: release-assets
+
+      - name: Download AppImage (optional)
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
+        continue-on-error: true
+        with:
+          name: appimage-${{ needs.pre-flight.outputs.tag }}
+          path: release-assets
+
+      - name: List assembled assets
+        run: ls -lh release-assets
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@01570a1f39cb168c169c802c3bceb9e93fb10974 # v2.1.0
         with:
@@ -372,15 +608,27 @@ jobs:
 
             ---
 
-            ### Install / upgrade
+            ## Assets
 
-            **PyPI:** `pip install --upgrade clipman-clipboard`
-            **Snap:** auto-refresh, or `snap refresh clipman`
-            **From source:** `git clone … && ./install.sh`
+            | File | Use case | Channel |
+            |------|----------|---------|
+            | `clipman_clipboard-*.whl` | `pip install --upgrade clipman-clipboard` | PyPI (also auto-published) |
+            | `clipman_clipboard-*.tar.gz` | source build via `pip install` | PyPI (also auto-published) |
+            | `clipman_*.deb` | `sudo apt install ./clipman_*.deb` | Debian / Ubuntu (system) |
+            | `clipman-*.rpm` | `sudo dnf install ./clipman-*.rpm` | Fedora / RHEL / openSUSE (system) |
+            | `clipman_*.snap` | `sudo snap install --dangerous ./clipman_*.snap` | Any distro w/ snapd (also auto-published to Snap Store stable) |
+            | `clipman-*-x86_64.AppImage` | `chmod +x ./clipman-*.AppImage && ./clipman-*.AppImage` | Any glibc Linux (requires system `python3-gi`/`python3-dbus`) |
+            | `clipman-extension-*.zip` | upload at <https://extensions.gnome.org/upload/> or unzip into `~/.local/share/gnome-shell/extensions/` | GNOME Extensions website (manual) |
+            | `Source code (zip / tar.gz)` | auto-generated by GitHub | git checkout |
 
-            ### GNOME Shell extension (manual step until EGO API exists)
+            **Important install caveats**
 
-            Download `clipman-extension-${{ needs.pre-flight.outputs.tag }}.zip` below and upload it at https://extensions.gnome.org/upload/ if this release bumps `extension/metadata.json`. Existing source installs pick up the new extension automatically via `install.sh`.
+            - The `.deb` / `.rpm` install the daemon to `/usr/bin/clipman` and the Python module to `/usr/lib/clipman/`, but **do not** install the GNOME Shell extension or register the `Super+V` keybinding — those are per-user. After installing the package, run upstream `install.sh` from a source checkout, or follow the per-user setup in `docs/development.md`.
+            - The `AppImage` bundles a Python 3.12 runtime + clipman, but **not** GTK or PyGObject. It still requires system `python3-gi` + `gir1.2-gtk-3.0` packages installed (almost every desktop Linux already has them). GTK can't be trivially bundled in an AppImage; if a full self-contained binary is critical, the Snap or Flatpak builds are better fits.
+
+            ### GNOME Shell extension (manual step — EGO has no upload API)
+
+            Download `clipman-extension-${{ needs.pre-flight.outputs.tag }}.zip` and upload it at <https://extensions.gnome.org/upload/>. Existing source installs pick up the new extension automatically via `install.sh`.
           draft: false
           prerelease: false
           fail_on_unmatched_files: true
@@ -389,3 +637,6 @@ jobs:
             release-assets/clipman_*.snap
             release-assets/clipman_clipboard-*.tar.gz
             release-assets/clipman_clipboard-*.whl
+            release-assets/clipman_*.deb
+            release-assets/clipman-*.rpm
+            release-assets/clipman-*-x86_64.AppImage
