@@ -204,7 +204,7 @@ jobs:
           path: dist
 
       - name: Publish to PyPI (OIDC trusted publishing)
-        uses: pypa/gh-action-pypi-publish@ecb4c3dfd4790f14e30aaeac04855c7413ee9368 # v1.12.2
+        uses: pypa/gh-action-pypi-publish@15c56dba361d8335944d31a2ecd17d700fc7bcbc # v1.12.2
 
   build-snap:
     name: Build snap
@@ -229,7 +229,7 @@ jobs:
 
       - name: Build snap
         id: build
-        uses: snapcore/action-build@d12445ae70c52b1ead8b8a0ac6635f0432af5c80 # v1.3.0
+        uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79 # v1.3.0
 
       - name: Upload snap artifact
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
@@ -283,7 +283,7 @@ jobs:
 
       - name: Publish to Snap Store (stable channel)
         if: steps.creds.outputs.enabled == 'true'
-        uses: snapcore/action-publish@d383e5c99f47316f8c8d74be837f6a77455ec5a6 # v1.2.0
+        uses: snapcore/action-publish@214b86e5ca036ead1668c79afb81e550e6c54d40 # v1.2.0
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
@@ -631,7 +631,13 @@ jobs:
             Download `clipman-extension-${{ needs.pre-flight.outputs.tag }}.zip` and upload it at <https://extensions.gnome.org/upload/>. Existing source installs pick up the new extension automatically via `install.sh`.
           draft: false
           prerelease: false
-          fail_on_unmatched_files: true
+          # Tolerate missing patterns: the AppImage build is best-effort
+          # (Python+GTK packaging is brittle). We'd rather ship a release
+          # without the AppImage than fail the whole pipeline on that one
+          # glob. .deb / .rpm / snap / extension / wheel / sdist are all
+          # produced by required-success jobs, so a missing one of those
+          # would already have failed an upstream job before we got here.
+          fail_on_unmatched_files: false
           files: |
             release-assets/clipman-extension-${{ needs.pre-flight.outputs.tag }}.zip
             release-assets/clipman_*.snap
