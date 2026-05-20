@@ -14,6 +14,17 @@ All notable changes to Clipman are documented in this file.
   `Ctrl+V`, `Ctrl+Shift+V`, or `Shift+Insert`. Closes #7.
 - `clipman/keybindings.py` module with gsettings shell-out helpers
   and a 30-test unit suite (`tests/test_keybindings.py`).
+- **In-app update notifications.** Daemon polls GitHub Releases
+  anonymously once per day; the settings panel gains an "Updates"
+  row (status / opt-out switch / "Check now" button) and the popup
+  surfaces a dismissible banner when a newer release is detected.
+  Default ON for source / PyPI / AUR, OFF for Snap and Flatpak
+  (they auto-refresh). New `clipman/updates.py` module with a
+  38-test unit suite (`tests/test_updates.py`). `__version__`
+  constant added to `clipman/__init__.py` as the runtime source of
+  truth; `scripts/bump-version.sh` keeps it in sync with
+  `pyproject.toml`. `network` plug added to `snap/snapcraft.yaml`
+  for the opt-in path. See [ADR 0007](docs/adr/0007-in-app-update-notifications.md).
 
 ### Changed
 - GNOME Shell extension D-Bus interface: `SimulatePaste()` now

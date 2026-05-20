@@ -4,7 +4,7 @@ import subprocess
 import time
 import gi
 
-from clipman import _, keybindings
+from clipman import _, __version__, keybindings, updates
 from clipman.database import _safe_image_path
 
 gi.require_version("Gtk", "3.0")
@@ -115,6 +115,10 @@ class ClipmanWindow(Gtk.Window):
         self._apply_css()
         self._build_ui()
 
+        # If a previous run cached a newer version that's still not
+        # dismissed, surface the banner immediately on startup.
+        self.refresh_update_banner()
+
         self.connect("key-press-event", self._on_key_press)
         self.connect("delete-event", self._on_delete)
         self.connect("focus-out-event", self._on_focus_out)
@@ -151,6 +155,28 @@ class ClipmanWindow(Gtk.Window):
 
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(main_box)
+
+        # -- Update banner (hidden unless a newer release is detected) -----
+        self._update_banner = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=6
+        )
+        self._update_banner.get_style_context().add_class("update-banner")
+        self._update_banner.set_no_show_all(True)
+        self._update_banner_label = Gtk.Label(label="")
+        self._update_banner_label.set_halign(Gtk.Align.START)
+        self._update_banner_label.set_hexpand(True)
+        self._update_banner.pack_start(self._update_banner_label, True, True, 0)
+        update_link_btn = Gtk.Button(label=_("Release notes"))
+        update_link_btn.get_style_context().add_class("backup-btn")
+        update_link_btn.connect("clicked", self._on_update_link_clicked)
+        self._update_banner.pack_start(update_link_btn, False, False, 0)
+        dismiss_btn = Gtk.Button(label="×")
+        dismiss_btn.set_tooltip_text(_("Dismiss"))
+        dismiss_btn.get_accessible().set_name(_("Dismiss update banner"))
+        dismiss_btn.get_style_context().add_class("gear-button")
+        dismiss_btn.connect("clicked", self._on_update_banner_dismiss)
+        self._update_banner.pack_start(dismiss_btn, False, False, 0)
+        main_box.pack_start(self._update_banner, False, False, 0)
 
         # -- Header: search + gear -----------------------------------------
         header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
@@ -268,6 +294,31 @@ class ClipmanWindow(Gtk.Window):
         self._paste_combo.connect("changed", self._on_paste_mode_changed)
         paste_row.pack_start(self._paste_combo, False, False, 0)
         self.settings_panel.pack_start(paste_row, False, False, 0)
+
+        # Updates row — opt-in check + status label + manual trigger.
+        updates_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        updates_label = Gtk.Label(label=_("Updates"))
+        updates_label.get_style_context().add_class("settings-label")
+        updates_label.set_halign(Gtk.Align.START)
+        updates_row.pack_start(updates_label, False, False, 0)
+        self._update_status = Gtk.Label(label="")
+        self._update_status.get_style_context().add_class("settings-value")
+        self._update_status.set_halign(Gtk.Align.START)
+        updates_row.pack_start(self._update_status, False, False, 0)
+        updates_spacer = Gtk.Box()
+        updates_spacer.set_hexpand(True)
+        updates_row.pack_start(updates_spacer, True, True, 0)
+        self._updates_toggle = Gtk.Switch()
+        self._updates_toggle.set_tooltip_text(_("Check for new releases on GitHub"))
+        self._updates_toggle.set_active(updates._enabled(self.db))
+        self._updates_toggle.connect("notify::active", self._on_updates_toggle)
+        updates_row.pack_start(self._updates_toggle, False, False, 0)
+        self._check_now_btn = Gtk.Button(label=_("Check now"))
+        self._check_now_btn.get_style_context().add_class("backup-btn")
+        self._check_now_btn.connect("clicked", self._on_check_now_clicked)
+        updates_row.pack_start(self._check_now_btn, False, False, 0)
+        self.settings_panel.pack_start(updates_row, False, False, 0)
+        self._refresh_update_status_text()
 
         # Theme toggle row
         theme_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
@@ -991,6 +1042,67 @@ class ClipmanWindow(Gtk.Window):
         ))
         msg.run()
         msg.destroy()
+
+    # -- Update notifications ----------------------------------------------
+
+    def _on_updates_toggle(self, switch, _gparam):
+        updates.set_enabled(self.db, switch.get_active())
+        self._check_now_btn.set_sensitive(switch.get_active())
+        self._refresh_update_status_text()
+        self.refresh_update_banner()
+
+    def _on_check_now_clicked(self, _button):
+        self._update_status.set_text(_("Checking..."))
+        # Bypass the 24h rate limit for a manual click.
+        self.db.set_setting(updates.SETTING_LAST_CHECK, "0")
+        updates.check_async(self.db, callback=self._on_update_result)
+
+    def _on_update_result(self, is_newer, latest, _url):
+        self._refresh_update_status_text()
+        self.refresh_update_banner()
+        return False  # GLib.idle_add: run once
+
+    def _refresh_update_status_text(self):
+        if not updates._enabled(self.db):
+            self._update_status.set_text(_("(disabled)"))
+            self._check_now_btn.set_sensitive(False)
+            return
+        self._check_now_btn.set_sensitive(True)
+        latest = updates.latest_known(self.db)
+        if not latest:
+            self._update_status.set_text(_("not checked yet"))
+        elif updates._is_newer(latest, __version__):
+            self._update_status.set_text(_("v{v} available").format(v=latest))
+        else:
+            self._update_status.set_text(_("up to date"))
+
+    def refresh_update_banner(self):
+        """Public so app.py can re-evaluate after a background check."""
+        show, latest = updates.should_show_banner(self.db)
+        if show:
+            self._update_banner_label.set_text(
+                _("Update available: v{new} (you have v{cur})").format(
+                    new=latest, cur=__version__
+                )
+            )
+            self._update_banner.set_no_show_all(False)
+            self._update_banner.show_all()
+        else:
+            self._update_banner.hide()
+            self._update_banner.set_no_show_all(True)
+
+    def _on_update_link_clicked(self, _button):
+        import webbrowser
+        latest = updates.latest_known(self.db) or __version__
+        webbrowser.open(
+            f"https://github.com/MohammedEl-sayedAhmed/clipman/releases/tag/v{latest}"
+        )
+
+    def _on_update_banner_dismiss(self, _button):
+        latest = updates.latest_known(self.db)
+        if latest:
+            updates.dismiss(self.db, latest)
+        self.refresh_update_banner()
 
     def _cleanup_sensitive(self):
         deleted = self.db.delete_expired_sensitive(self._sensitive_timeout)

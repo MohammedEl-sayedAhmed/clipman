@@ -39,6 +39,8 @@ apps:
       - home
       - gsettings
       - opengl
+      - network  # update-check daemon polls api.github.com (opt-in,
+                 # default OFF in snap because snap auto-refreshes)
 
 parts:
   wl-clipboard:
