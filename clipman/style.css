@@ -123,6 +123,16 @@
     font-weight: bold;
     letter-spacing: 1px;
 }
+.settings-section-header {
+    color: $accent;
+    font-size: 9px;
+    font-weight: bold;
+    letter-spacing: 1.5px;
+    margin-top: 10px;
+    margin-bottom: 2px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid $bg_overlay;
+}
 .settings-label {
     color: $text_secondary;
     font-size: 11px;
