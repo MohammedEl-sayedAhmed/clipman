@@ -195,20 +195,6 @@ Same caveat as the `.deb`: the per-user extension + keybinding are not registere
 </details>
 
 <details>
-<summary><strong>AppImage</strong> (portable, no install)</summary>
-
-Download `clipman-<version>-x86_64.AppImage` from the [latest release](https://github.com/MohammedEl-sayedAhmed/clipman/releases/latest) and run:
-
-```bash
-chmod +x ./clipman-*.AppImage
-./clipman-*.AppImage
-```
-
-The AppImage doesn't bundle GTK or PyGObject — it still needs system `python3-gi` and `gir1.2-gtk-3.0`. For a fully self-contained install, prefer the Snap or Flatpak.
-
-</details>
-
-<details>
 <summary><strong>GNOME Shell Extension</strong> (installed automatically by install.sh)</summary>
 
 The companion extension is required for clipboard detection. It is installed automatically by the install script, but can also be installed manually from [GNOME Extensions](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/):
