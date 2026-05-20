@@ -8,11 +8,24 @@ on:
     branches: [main]
   schedule:
     - cron: "27 4 * * 1"
+  workflow_dispatch:
 
 permissions: {}
 
+# On push to main, each commit needs its own analyze + update-baseline
+# run so the security-baseline branch stays in sync with current main.
+# A ref-scoped concurrency group with cancel-in-progress: false caused
+# GitHub Actions to drop subsequent pushes whose queued slot would have
+# otherwise waited behind an in-progress run, leaving the baseline
+# pinned to an older commit. Splitting the group key by event:
+#   push       -> per-SHA group (every commit gets its own slot, never collides);
+#   pull_request -> per-PR group with cancel-in-progress true (saves runner minutes on re-pushes);
+#   schedule   -> per-workflow group (only one weekly run at a time is fine).
+# workflow_dispatch is enabled below as a manual escape hatch in case
+# a future push ever does get dropped — we can refresh the baseline
+# without waiting for the next push to main.
 concurrency:
-  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  group: codeql-${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
