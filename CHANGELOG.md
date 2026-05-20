@@ -55,8 +55,29 @@ All notable changes to Clipman are documented in this file.
 
 #### Changed
 - **Dependabot bumps**: `actions/labeler` 5.0.0 → 6.1.0 (#10),
-  pinned to commit SHA per the project's supply-chain policy
-  (ADR 0003).
+  `step-security/harden-runner` 2.10.2 → 2.19.3 (#11),
+  `github/codeql-action` SHA bump (#12),
+  `actions/checkout` 4.2.2 → 6.0.2 (#13),
+  `actions/setup-python` 5.3.0 → 6.2.0 (#14), all pinned to commit
+  SHA per the project's supply-chain policy (ADR 0003).
+- **Ratchet fingerprint strategy** (#20): swapped the CodeQL
+  ratchet's `rule:file:line` fingerprints for SARIF
+  `partialFingerprints.primaryLocationLineHash` so PRs that just
+  shift lines no longer surface as "new findings", and added
+  `if: github.event_name == 'pull_request'` on the ratchet step so
+  the `update-baseline` job can run on push without being blocked by
+  the ratchet on main itself. Baseline schema bumped to `2`. See
+  ADR 0008.
+- **Scorecard SHA fix** (#22): the previous `ossf/scorecard-action`
+  SHA was the annotated-tag object, not the commit it points to.
+  Scorecard's webapp rejected it as an imposter commit, failing
+  every push to main. Resolved to the real commit SHA.
+
+#### Removed
+- **Stray root-level Flathub manifest** (#18): the obsolete
+  `com.clipman.Clipman.json` at the repo root used the pre-rename
+  app-id and was not referenced anywhere. The current Flathub
+  manifest lives at `flathub/io.github.MohammedEl_sayedAhmed.Clipman.json`.
 
 #### Docs
 - Added `docs/adr/` with the first six MADR-format ADRs covering
@@ -64,6 +85,13 @@ All notable changes to Clipman are documented in this file.
   branch-protection posture. See `docs/adr/README.md` for the index.
 - Added `docs/releases/README.md` documenting where release notes
   live and how the release pipeline assembles them.
+- Added a Mermaid architecture diagram under the **How It Works**
+  section of `README.md` (#21).
+- Added `CODE_OF_CONDUCT.md` (Contributor Covenant v2.1),
+  `docs/development.md` (build/test/debug guide), and
+  `docs/release-checklist.md` (release runbook).
+- Added ADR 0008 (ratchet fingerprint strategy, documents #20) and
+  ADR 0009 (weekly snap rebuild cadence, documents #9).
 
 ## [1.0.4] - 2026-02-28
 
