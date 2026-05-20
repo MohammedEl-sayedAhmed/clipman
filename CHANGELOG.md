@@ -4,6 +4,14 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Internal / CI
+- **More release artifacts.** The tag-triggered release pipeline now
+  also builds `.deb`, `.rpm`, and an AppImage (best-effort) and
+  attaches them to the GitHub Release alongside the existing PyPI
+  wheel + sdist, snap, and GNOME extension zip. Release body gains a
+  templated "Assets" table documenting each artifact's use case and
+  install caveats. See [docs/releases/README.md](docs/releases/README.md).
+
 ## [1.0.5] - 2026-05-20
 
 ### Highlights
