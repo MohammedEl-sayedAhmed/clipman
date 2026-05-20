@@ -69,6 +69,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Fetch security baseline
+        if: github.event_name == 'pull_request'
         run: |
           git fetch origin security-baseline --depth=1 2>/dev/null && \
             git show origin/security-baseline:.github/security-baseline.json \
@@ -79,6 +80,13 @@ jobs:
           echo "::endgroup::"
 
       - name: Ratchet against baseline (${{ matrix.language }})
+        # PR-only: on push to main, the update-baseline job downstream
+        # rebuilds the baseline from the fresh SARIF instead. Running
+        # the ratchet on push would fail when main itself shifts lines
+        # vs. the older baseline, which would in turn block update-baseline
+        # (it needs analyze to succeed) — a deadlock that traps the baseline
+        # on whatever state it was first written with.
+        if: github.event_name == 'pull_request'
         env:
           MATRIX_LANGUAGE: ${{ matrix.language }}
         run: |
