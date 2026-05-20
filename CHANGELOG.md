@@ -6,6 +6,41 @@ All notable changes to Clipman are documented in this file.
 
 ## [1.0.5] - 2026-05-20
 
+### Highlights
+
+The first release with **customizable keyboard shortcuts** and an
+**in-app update checker**. Two long-standing community requests
+(issues [#4](https://github.com/MohammedEl-sayedAhmed/clipman/issues/4)
+and [#7](https://github.com/MohammedEl-sayedAhmed/clipman/issues/7))
+are addressed: pick any combo to open Clipman, pick how it sends the
+paste keystroke (Auto / Ctrl+V / Ctrl+Shift+V / Shift+Insert).
+
+Under the hood, this release also ships the entire CI/security and
+release-automation overhaul — Dependabot, CodeQL with a
+hash-stable baseline ratchet, OpenSSF Scorecard, secret scanning,
+gitleaks, a tag-triggered release pipeline (PyPI via OIDC, Snap
+stable, GitHub Release, extension bundle), weekly snap rebuilds for
+Ubuntu security updates, and a documentation sweep covering nine
+ADRs, a development guide, and a release runbook. See the full
+breakdown below.
+
+### Install / upgrade
+
+| Channel | Command |
+|---------|---------|
+| **PyPI** | `pip install --upgrade clipman-clipboard` |
+| **Snap** | auto-refreshes, or `snap refresh clipman` |
+| **AUR** | `yay -S clipman` (or `paru -S clipman`) |
+| **Source** | `git pull && ./install.sh` |
+| **GNOME Extension** | re-run `install.sh`, or upload the attached `clipman-extension-v1.0.5.zip` at <https://extensions.gnome.org/upload/> |
+
+### Compatibility
+
+- **GNOME Shell** 45, 46, 47, 48 (extension `metadata.json` is at
+  version 5 — `SimulatePaste(s mode)`; the daemon retries
+  no-arg automatically against an unupgraded v4 extension).
+- **Python** 3.10 – 3.12 (tested on `ubuntu-24.04`).
+
 ### Added
 - Customizable toggle shortcut from the settings panel. Click the
   shortcut button to capture a new key combination; the daemon writes
