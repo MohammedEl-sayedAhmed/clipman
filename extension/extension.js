@@ -8,12 +8,39 @@ import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 const PASTE_DBUS_IFACE = `
 <node>
   <interface name="org.gnome.Shell.Extensions.clipman">
-    <method name="SimulatePaste"/>
+    <method name="SimulatePaste">
+      <arg type="s" direction="in" name="mode"/>
+    </method>
     <method name="MoveWindowToCursor">
       <arg type="s" direction="in" name="title"/>
     </method>
   </interface>
 </node>`;
+
+const TERMINAL_WM_CLASSES = [
+    'gnome-terminal-server', 'tilix', 'kitty', 'alacritty',
+    'terminator', 'xterm', 'konsole', 'foot', 'wezterm',
+    'st', 'sakura', 'xfce4-terminal', 'mate-terminal',
+    'lxterminal', 'guake', 'tilda', 'cool-retro-term',
+];
+
+// Keystroke recipes: ordered list of (keyval, modifiers-implied-by-keystroke).
+// The first element of each pair is the actual keyval to press; modifier
+// keys are emitted around the press/release.
+const PASTE_RECIPES = {
+    'ctrl-v': {modifiers: ['Control_L'], key: 'v'},
+    'ctrl-shift-v': {modifiers: ['Control_L', 'Shift_L'], key: 'v'},
+    'shift-insert': {modifiers: ['Shift_L'], key: 'Insert'},
+};
+
+const KEY_LOOKUP = {
+    'Control_L': Clutter.KEY_Control_L,
+    'Shift_L': Clutter.KEY_Shift_L,
+    'Alt_L': Clutter.KEY_Alt_L,
+    'Super_L': Clutter.KEY_Super_L,
+    'v': Clutter.KEY_v,
+    'Insert': Clutter.KEY_Insert,
+};
 
 export default class ClipmanExtension extends Extension {
     enable() {
@@ -57,50 +84,41 @@ export default class ClipmanExtension extends Extension {
         }
     }
 
-    SimulatePaste() {
-        const TERMINAL_CLASSES = [
-            'gnome-terminal-server', 'tilix', 'kitty', 'alacritty',
-            'terminator', 'xterm', 'konsole', 'foot', 'wezterm',
-            'st', 'sakura', 'xfce4-terminal', 'mate-terminal',
-            'lxterminal', 'guake', 'tilda', 'cool-retro-term',
-        ];
+    SimulatePaste(mode) {
+        const recipe = this._resolveRecipe(mode);
+        this._dispatchKeystroke(recipe);
+    }
+
+    _resolveRecipe(mode) {
+        // 'auto' (or missing) -> Ctrl+V unless focused window is a terminal,
+        // in which case Ctrl+Shift+V. Explicit modes override.
+        if (mode && PASTE_RECIPES[mode])
+            return PASTE_RECIPES[mode];
 
         const focusWin = global.display.get_focus_window();
         const wmClass = focusWin?.get_wm_class()?.toLowerCase() ?? '';
-        const needShift = TERMINAL_CLASSES.some(c => wmClass.includes(c));
+        const isTerminal = TERMINAL_WM_CLASSES.some(c => wmClass.includes(c));
+        return isTerminal ? PASTE_RECIPES['ctrl-shift-v'] : PASTE_RECIPES['ctrl-v'];
+    }
 
+    _dispatchKeystroke(recipe) {
         const seat = Clutter.get_default_backend().get_default_seat();
         const vk = seat.create_virtual_device(
             Clutter.InputDeviceType.KEYBOARD_DEVICE
         );
-        vk.notify_keyval(
-            Clutter.CURRENT_TIME,
-            Clutter.KEY_Control_L, Clutter.KeyState.PRESSED
-        );
-        if (needShift) {
-            vk.notify_keyval(
-                Clutter.CURRENT_TIME,
-                Clutter.KEY_Shift_L, Clutter.KeyState.PRESSED
-            );
+
+        for (const mod of recipe.modifiers) {
+            vk.notify_keyval(Clutter.CURRENT_TIME,
+                KEY_LOOKUP[mod], Clutter.KeyState.PRESSED);
         }
-        vk.notify_keyval(
-            Clutter.CURRENT_TIME,
-            Clutter.KEY_v, Clutter.KeyState.PRESSED
-        );
-        vk.notify_keyval(
-            Clutter.CURRENT_TIME,
-            Clutter.KEY_v, Clutter.KeyState.RELEASED
-        );
-        if (needShift) {
-            vk.notify_keyval(
-                Clutter.CURRENT_TIME,
-                Clutter.KEY_Shift_L, Clutter.KeyState.RELEASED
-            );
+        vk.notify_keyval(Clutter.CURRENT_TIME,
+            KEY_LOOKUP[recipe.key], Clutter.KeyState.PRESSED);
+        vk.notify_keyval(Clutter.CURRENT_TIME,
+            KEY_LOOKUP[recipe.key], Clutter.KeyState.RELEASED);
+        for (const mod of [...recipe.modifiers].reverse()) {
+            vk.notify_keyval(Clutter.CURRENT_TIME,
+                KEY_LOOKUP[mod], Clutter.KeyState.RELEASED);
         }
-        vk.notify_keyval(
-            Clutter.CURRENT_TIME,
-            Clutter.KEY_Control_L, Clutter.KeyState.RELEASED
-        );
     }
 
     MoveWindowToCursor(title) {
