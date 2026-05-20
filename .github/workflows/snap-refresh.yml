@@ -72,7 +72,7 @@ jobs:
 
       - name: Build snap
         id: build
-        uses: snapcore/action-build@d12445ae70c52b1ead8b8a0ac6635f0432af5c80 # v1.3.0
+        uses: snapcore/action-build@3bdaa03e1ba6bf59a65f84a751d943d549a54e79 # v1.3.0
 
       - name: Upload snap artifact
         uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
@@ -127,7 +127,7 @@ jobs:
 
       - name: Publish to Snap Store
         if: steps.creds.outputs.enabled == 'true'
-        uses: snapcore/action-publish@d383e5c99f47316f8c8d74be837f6a77455ec5a6 # v1.2.0
+        uses: snapcore/action-publish@214b86e5ca036ead1668c79afb81e550e6c54d40 # v1.2.0
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
