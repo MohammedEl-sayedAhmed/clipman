@@ -125,6 +125,8 @@ systemctl --user start clipman.service
 
 The systemd service auto-restarts on crash and starts automatically on login.
 
+> If you cloned the repo and Clipman is useful to you, please [star it on GitHub](https://github.com/MohammedEl-sayedAhmed/clipman/stargazers) — source installs aren't counted anywhere else, and stars are how the project gets visibility.
+
 ### Alternative Installation
 
 <details>
@@ -369,6 +371,16 @@ Licensed under the **Apache License, Version 2.0**. You may use, modify, and dis
 - State any changes you made
 
 See the [LICENSE](LICENSE) and [NOTICE](NOTICE) files for full details.
+
+## Star History
+
+<a href="https://star-history.com/#MohammedEl-sayedAhmed/clipman&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=MohammedEl-sayedAhmed/clipman&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=MohammedEl-sayedAhmed/clipman&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=MohammedEl-sayedAhmed/clipman&type=Date" />
+  </picture>
+</a>
 
 ## Acknowledgements
 
