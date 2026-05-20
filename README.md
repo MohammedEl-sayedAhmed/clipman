@@ -82,6 +82,7 @@ Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extensi
 - **Backup validation** — imported databases checked for schema integrity and sanitized
 - **Parameterized SQL** — no injection vectors
 - **No shell execution** — all subprocesses use argument lists, never `shell=True`
+- **Update notifications without telemetry** — when enabled, the daemon does a single anonymous `GET` to `api.github.com/repos/.../releases/latest` once per day (no body, no params, no cookies, no identifiers). Default ON for source / PyPI / AUR installs, OFF for Snap and Flatpak (they auto-refresh). Settings → Updates to toggle. See [ADR 0007](docs/adr/0007-in-app-update-notifications.md).
 
 ### Integration
 
