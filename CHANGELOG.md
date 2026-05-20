@@ -22,6 +22,49 @@ All notable changes to Clipman are documented in this file.
   daemon remains compatible with an unupgraded extension.
 - `extension/metadata.json`: bumped to version 5.
 
+### Internal / CI
+
+#### Added
+- **CI/security baseline** (#8): Dependabot for `pip` and
+  `github-actions` (weekly, labeled `dependencies`/`python`/`ci`);
+  CodeQL for Python and JavaScript with the `security-and-quality`
+  suite (weekly + on PR/push); ruff on `clipman/` and `tests/`;
+  shellcheck on `install.sh`/`uninstall.sh`/`launcher.sh`; gitleaks
+  secret scan on PR/push; `SECURITY.md` with the private-disclosure
+  policy; PR template + issue forms (bug, feature, and a config that
+  routes security reports through GitHub Security Advisories).
+- **Weekly Snap Store rebuild** (#9): `snap-refresh.yml` rebuilds and
+  re-publishes the Snap on a weekly cron so the published artifact
+  always carries the latest security patches for its base + python
+  layer, even when no code changed in this repo.
+- **Tag-triggered release automation** (#16): `release.yml` builds
+  and publishes a tagged release end-to-end — pre-flight sanity
+  checks (tag matches `pyproject.toml` and `snap/snapcraft.yaml`,
+  CHANGELOG has a matching section), full test matrix
+  (Python 3.10 / 3.11 / 3.12), PyPI publish via OIDC trusted
+  publishing (no long-lived token), Snap publish to the stable
+  channel, versioned GNOME extension bundle, and a GitHub Release
+  with all artifacts attached and the body extracted from
+  `CHANGELOG.md`. See `docs/releases/README.md` and ADR 0004.
+- **CodeQL security-baseline ratchet** (#17): a PR fails CodeQL only
+  if it introduces fingerprints not already in the on-disk baseline.
+  Baseline lives on the `security-baseline` orphan branch, is
+  refreshed automatically on `push: main`, and is protected against
+  manual tampering by `baseline-guard.yml` (auto-revert + open
+  issue). See ADR 0002.
+
+#### Changed
+- **Dependabot bumps**: `actions/labeler` 5.0.0 → 6.1.0 (#10),
+  pinned to commit SHA per the project's supply-chain policy
+  (ADR 0003).
+
+#### Docs
+- Added `docs/adr/` with the first six MADR-format ADRs covering
+  the decisions behind PRs #8, #15, #16, and #17 plus the project's
+  branch-protection posture. See `docs/adr/README.md` for the index.
+- Added `docs/releases/README.md` documenting where release notes
+  live and how the release pipeline assembles them.
+
 ## [1.0.4] - 2026-02-28
 
 ### Fixed
