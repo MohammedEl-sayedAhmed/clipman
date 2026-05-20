@@ -9,7 +9,14 @@
  * -------------
  * Spacing:  4 / 6 / 10 / 14 / 20 px
  * Radius:   4 (badge)  6 (input)  8 (button/swatch)  12 (window/card)
- * Type:     9 (caption)  10 (small)  11 (body)  12 (emphasis)  $font_size (content)
+ * Type:     10 (caption)  11 (meta)  12 (label/body)  13 (button)
+ *           14 (title)   $font_size (user-configurable content)
+ *
+ * NOTE on font sizes: the "Font size" setting in the Settings panel
+ * controls $font_size, which only applies to clipboard *content*
+ * (search input, clip text, snippet name). All chrome (labels,
+ * section headers, buttons, captions) is hardcoded here so the UI
+ * shell stays legible regardless of what the user picks for content.
  */
 
 /* ------------------------------------------------------------------
@@ -32,7 +39,7 @@
 }
 .clipman-window headerbar .title {
     color: $text_primary;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
     letter-spacing: 0.3px;
 }
@@ -82,7 +89,7 @@
     padding: 4px 8px;
     min-height: 28px;
     min-width: 28px;
-    font-size: 17px;
+    font-size: 18px;
 }
 .gear-button:hover {
     background-color: $bg_overlay;
@@ -105,7 +112,7 @@
     border: none;
     border-radius: 12px;
     color: $text_secondary;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 500;
     padding: 3px 12px;
     min-height: 22px;
@@ -136,7 +143,7 @@
 /* Panel title at top */
 .settings-title {
     color: $text_muted;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 2px;
     margin-bottom: 4px;
@@ -146,7 +153,7 @@
 /* Section headers between groups (APPEARANCE / HISTORY / SHORTCUTS / UPDATES / DATA) */
 .settings-section-header {
     color: $accent;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 1.8px;
     margin-top: 12px;
@@ -157,14 +164,14 @@
 /* Row label / value */
 .settings-label {
     color: $text_secondary;
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 500;
     min-width: 90px;
     padding-right: 4px;
 }
 .settings-value {
     color: $text_muted;
-    font-size: 10px;
+    font-size: 12px;
     min-width: 36px;
 }
 
@@ -212,7 +219,7 @@
     border: 1px solid $border;
     border-radius: 8px;
     color: $text_secondary;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 500;
     padding: 4px 12px;
     min-height: 22px;
@@ -237,7 +244,7 @@
     border: 1px solid $border;
     border-radius: 8px;
     color: $text_secondary;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 500;
     padding: 3px 12px;
     min-height: 22px;
@@ -266,7 +273,7 @@
     border: none;
     border-radius: 6px;
     color: $text_muted;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 500;
     padding: 3px 14px;
     min-height: 22px;
@@ -336,7 +343,7 @@
     background-color: $bg_overlay;
     border: 2px solid $text_muted;
     color: $text_secondary;
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 700;
 }
 .swatch-green { background-color: #40a02b; }
@@ -351,7 +358,7 @@
 
 .section-header {
     color: $text_muted;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 1.2px;
     padding: 8px 14px 4px 14px;
@@ -390,15 +397,15 @@ row:selected .clip-row {
 }
 .clip-time {
     color: $text_muted;
-    font-size: 9px;
+    font-size: 11px;
 }
 .clip-chars {
     color: $text_faint;
-    font-size: 9px;
+    font-size: 11px;
 }
 .clip-type-badge {
     color: $accent;
-    font-size: 8px;
+    font-size: 10px;
     font-weight: 700;
     letter-spacing: 0.6px;
 }
@@ -415,7 +422,7 @@ row:selected .clip-row {
     padding: 2px;
     min-height: 18px;
     min-width: 18px;
-    font-size: 11px;
+    font-size: 13px;
     border-radius: 4px;
 }
 .pin-button:hover,
@@ -443,7 +450,7 @@ row:selected .clip-row {
 /* Empty state */
 .empty-label {
     color: $text_muted;
-    font-size: 12px;
+    font-size: 14px;
     padding: 32px 16px;
 }
 
@@ -458,7 +465,7 @@ row:selected .clip-row {
 }
 .status-count {
     color: $text_muted;
-    font-size: 10px;
+    font-size: 12px;
 }
 .incognito-btn,
 .incognito-active {
@@ -467,7 +474,7 @@ row:selected .clip-row {
     border: 1px solid transparent;
     border-radius: 8px;
     color: $text_muted;
-    font-size: 14px;
+    font-size: 16px;
     padding: 2px 6px;
     min-height: 22px;
     min-width: 22px;
@@ -491,7 +498,7 @@ row:selected .clip-row {
 /* Sensitive entries */
 .sensitive-badge {
     color: $danger;
-    font-size: 9px;
+    font-size: 11px;
     font-weight: 700;
 }
 .sensitive-row {
@@ -508,7 +515,7 @@ row:selected .clip-row {
 }
 .snippet-dialog-label {
     color: $text_secondary;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 600;
 }
 .snippet-dialog-entry,
@@ -518,7 +525,7 @@ row:selected .clip-row {
     border: 1px solid transparent;
     border-radius: 8px;
     padding: 6px 10px;
-    font-size: 12px;
+    font-size: 14px;
 }
 .snippet-dialog-entry:focus {
     border-color: $accent;
@@ -534,7 +541,7 @@ row:selected .clip-row {
     border: 1px solid $border;
     border-radius: 8px;
     padding: 4px 16px;
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 500;
 }
 .snippet-dialog .dialog-action-area button:hover {
@@ -572,5 +579,5 @@ row:selected .clip-row {
     color: $accent;
     border-bottom: 1px solid $border;
     padding: 6px 12px;
-    font-size: 11px;
+    font-size: 13px;
 }
