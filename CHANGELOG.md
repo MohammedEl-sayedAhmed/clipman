@@ -4,6 +4,8 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-05-20
+
 ### Added
 - Customizable toggle shortcut from the settings panel. Click the
   shortcut button to capture a new key combination; the daemon writes
