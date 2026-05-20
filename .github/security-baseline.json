@@ -1,28 +1,28 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "updated": "2026-05-20",
-  "description": "Known-finding fingerprints from main. PR scans compare to this snapshot; new fingerprints fail the ratchet job. Maintained by the codeql update-baseline job on push to main; manual pushes are reverted by baseline-guard.yml.",
+  "description": "Known-finding fingerprints from main. PR scans compare to this snapshot; new fingerprints fail the ratchet job. Format: <rule-id>:<SARIF-partialFingerprint> (line-shift-stable). Maintained by the codeql update-baseline job on push to main; manual pushes are reverted by baseline-guard.yml.",
   "codeql": {
     "count": 18,
     "fingerprints": [
-      "py/cyclic-import:clipman.py:57",
-      "py/cyclic-import:clipman/app.py:12",
-      "py/cyclic-import:clipman/window.py:7",
-      "py/empty-except:clipman/clipboard_monitor.py:100",
-      "py/empty-except:clipman/clipboard_monitor.py:110",
-      "py/empty-except:clipman/clipboard_monitor.py:185",
-      "py/empty-except:clipman/clipboard_monitor.py:273",
-      "py/empty-except:clipman/database.py:203",
-      "py/empty-except:clipman/database.py:216",
-      "py/empty-except:clipman/database.py:240",
-      "py/empty-except:clipman/database.py:256",
-      "py/empty-except:clipman/window.py:1015",
-      "py/empty-except:clipman/window.py:1242",
-      "py/empty-except:clipman/window.py:781",
-      "py/print-during-import:clipman.py:26",
-      "py/print-during-import:clipman.py:27",
-      "py/print-during-import:clipman.py:28",
-      "py/unnecessary-pass:tests/test_clipboard_monitor.py:880"
+      "py/cyclic-import:1a4342a31f330967:1",
+      "py/cyclic-import:a574df4ed516888c:1",
+      "py/cyclic-import:b2b646ffc9469d63:1",
+      "py/empty-except:16c2e81b95b7e0c6:1",
+      "py/empty-except:27705709934fd174:1",
+      "py/empty-except:27d8e55762448bcf:1",
+      "py/empty-except:2b607a433830a3ac:1",
+      "py/empty-except:5069ceef7368a7c4:1",
+      "py/empty-except:801722b4895399c2:1",
+      "py/empty-except:aced73ff0e8921:1",
+      "py/empty-except:f03023dac6b1164b:1",
+      "py/empty-except:f8f4e4633f24065b:1",
+      "py/empty-except:f8f5043b82b03f38:1",
+      "py/empty-except:fbac02238da302f4:1",
+      "py/print-during-import:25b756d9a51f4be3:1",
+      "py/print-during-import:766ef556e9a9b61f:1",
+      "py/print-during-import:8aa9bb762263d45c:1",
+      "py/unnecessary-pass:7abbb599b8ed2f80:1"
     ]
   }
 }
