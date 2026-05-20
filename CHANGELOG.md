@@ -4,13 +4,80 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-05-20
+
+### Highlights
+
+A follow-up release that lands everything 1.0.5 was meant to bring
+plus the UI polish and packaging breadth the maintainer requested
+after seeing the first cut.
+
+**For users**, 1.0.6 supersedes 1.0.5 wherever 1.0.5 actually reached
+(Snap Store stable). PyPI and the GitHub Release page reach this
+codebase here for the first time — the 1.0.5 publish pipeline failed
+mid-way and was retried as 1.0.6.
+
+**New on top of 1.0.5:**
+
+- Three additional release artifacts shipped to the GitHub Release:
+  `.deb` (Debian / Ubuntu), `.rpm` (Fedora / RHEL / openSUSE), and an
+  AppImage (best-effort, Linux-portable). PyPI wheel + sdist, Snap
+  stable, and the GNOME Shell extension zip are unchanged from 1.0.5.
+- Settings panel restructured into five clearly-labelled sections
+  (**APPEARANCE / HISTORY / SHORTCUTS / UPDATES / DATA**). The Updates
+  row no longer crams its switch + status + button onto one line.
+- Comprehensive visual overhaul of the popup CSS — accent-coloured
+  slider thumbs on slim tracks, refined buttons with bigger touch
+  targets, theme as a proper segmented control, larger colour
+  swatches, custom switch styling, more breathing room everywhere.
+- Chrome font sizes raised across the board so labels, section
+  headers, and buttons are legible on standard-DPI displays (the
+  earlier overhaul had drifted to 8-11 px; now 10-14 px depending
+  on the role).
+- A subtle but important fix: clicking certain settings widgets on
+  some Wayland compositors used to silently swallow the click. The
+  `focus-out-event` handler now distinguishes between losing focus
+  to another window (still hides) and losing focus to a child of
+  the popup itself (no-op). Affected the Switch, the combo box, and
+  the shortcut-capture dialog.
+
+### Compatibility
+
+Unchanged from 1.0.5: GNOME Shell 45 – 48, Python 3.10 – 3.12,
+extension `metadata.json` version 5.
+
+### Install / upgrade
+
+| Channel | Command |
+|---------|---------|
+| **PyPI** | `pip install --upgrade clipman-clipboard` |
+| **Snap** | auto-refresh, or `snap refresh clipman` |
+| **AUR** | `yay -S clipman` (or `paru -S clipman`) |
+| **Source** | `git pull && ./install.sh` |
+| **`.deb` (Debian / Ubuntu)** | grab `clipman_1.0.6_all.deb` from the GitHub Release → `sudo apt install ./clipman_1.0.6_all.deb` |
+| **`.rpm` (Fedora / RHEL)** | grab `clipman-1.0.6-1.noarch.rpm` from the GitHub Release → `sudo dnf install ./clipman-1.0.6-1.noarch.rpm` |
+| **AppImage** | grab `clipman-1.0.6-x86_64.AppImage` → `chmod +x` → run. Still needs system `python3-gi` and `gir1.2-gtk-3.0`. |
+| **GNOME Extension** | re-run `install.sh`, or upload the attached `clipman-extension-v1.0.6.zip` at <https://extensions.gnome.org/upload/> |
+
+### Changed
+- Release pipeline: `pypa/gh-action-pypi-publish` now pinned to the
+  *commit* SHA rather than the annotated-tag-object SHA. The previous
+  pin caused the v1.0.5 PyPI publish to fail with "Unable to find
+  image" because Docker-based actions resolve the image tag from the
+  ref. `snapcore/action-{build,publish}` fixed for consistency.
+- `softprops/action-gh-release` no longer fails when the AppImage
+  glob doesn't match (`fail_on_unmatched_files: false`). AppImage
+  packaging for a Python+GTK app is intentionally best-effort.
+- CodeQL workflow: per-SHA concurrency group on `push` events so
+  rapid back-to-back merges to `main` no longer drop the queued
+  `update-baseline` job. `workflow_dispatch` added as a manual
+  escape hatch.
+
 ### Internal / CI
-- **More release artifacts.** The tag-triggered release pipeline now
-  also builds `.deb`, `.rpm`, and an AppImage (best-effort) and
-  attaches them to the GitHub Release alongside the existing PyPI
-  wheel + sdist, snap, and GNOME extension zip. Release body gains a
-  templated "Assets" table documenting each artifact's use case and
-  install caveats. See [docs/releases/README.md](docs/releases/README.md).
+- `.github/workflows/release.yml`: new `build-distpkgs` job (fpm-based
+  .deb + .rpm) and new `build-appimage` job (python-appimage-based).
+  Release body now carries a templated **Assets** table with use
+  case + channel + install caveats per artifact.
 
 ## [1.0.5] - 2026-05-20
 
