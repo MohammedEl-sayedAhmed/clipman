@@ -276,53 +276,16 @@ Settings are saved automatically and persist across sessions.
 
 ### Architecture
 
-```mermaid
-flowchart LR
-    classDef user fill:#dbeafe,stroke:#3b82f6,color:#1e40af
-    classDef gshell fill:#fef3c7,stroke:#d97706,color:#92400e
-    classDef daemon fill:#dcfce7,stroke:#16a34a,color:#166534
-    classDef storage fill:#f3e8ff,stroke:#9333ea,color:#6b21a8
+Clipman is split into a GNOME Shell extension that detects clipboard
+changes natively and a Python + GTK3 daemon that stores history in a
+local SQLite database. The two halves talk over D-Bus on the session
+bus; there is no polling, no telemetry, and only one network call
+(the daily anonymous update check, opt-out — see
+[ADR 0007](docs/adr/0007-in-app-update-notifications.md)).
 
-    User((User)):::user
-    App["Any GTK / Qt / Electron / terminal app"]:::user
-
-    subgraph SHELL ["GNOME Shell"]
-        Ext["clipman extension<br/>extension.js"]:::gshell
-        KB["custom-keybinding<br/>(gsettings)"]:::gshell
-    end
-
-    Clip["Wayland clipboard"]:::gshell
-
-    subgraph DAEMON ["clipman daemon (Python, GTK3)"]
-        DbusSvc["dbus_service.py<br/>(com.clipman.Daemon)"]:::daemon
-        Monitor["clipboard_monitor.py<br/>(dedupe + sensitive detect)"]:::daemon
-        Window["window.py<br/>(GTK popup + settings)"]:::daemon
-        Fallback["wl-paste --watch<br/>(used when extension absent)"]:::daemon
-    end
-
-    DB[("SQLite WAL<br/>~/.local/share/clipman/")]:::storage
-
-    App -->|Ctrl+C| Clip
-    Clip -. owner-changed .-> Ext
-    Clip -. owner-changed .-> Fallback
-    Ext -->|D-Bus: NewEntry text or image| DbusSvc
-    Fallback --> DbusSvc
-
-    DbusSvc --> Monitor
-    Monitor -->|SHA256 dedup| DB
-
-    User -->|Super+V| KB
-    KB -->|launcher.sh toggle| DbusSvc
-    DbusSvc -->|Toggle| Window
-    Window <-->|history + snippets| DB
-
-    User -->|click entry| Window
-    Window -->|wl-copy| Clip
-    Window -->|D-Bus: SimulatePaste mode| Ext
-    Ext -->|virtual keyboard| App
-```
-
-The `wl-paste --watch` fallback only runs when the GNOME Shell extension is absent (e.g., other Wayland compositors). Inside snap confinement, neither path is available — snap users rely on the extension running in their host session.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the full process model,
+data model, D-Bus contract, trust boundaries, and decision-record
+backlinks.
 
 <details>
 <summary><strong>Project structure</strong></summary>
