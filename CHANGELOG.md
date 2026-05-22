@@ -6,11 +6,11 @@ All notable changes to Clipman are documented in this file.
 
 ### Documentation
 
-A comprehensive eight-PR documentation overhaul lands the missing
-high-level docs that downstream packagers, contributors, translators,
-and security reviewers have been asking for. None of the changes
-ship code; the release pipeline, install channels, and runtime
-behavior are unchanged.
+A comprehensive nine-PR documentation overhaul (PRs #40 through #48)
+lands the missing high-level docs that downstream packagers,
+contributors, translators, and security reviewers have been asking
+for. None of the changes ship code; the release pipeline, install
+channels, and runtime behavior are unchanged.
 
 - `docs/adr/0010-versioning-policy.md` — codifies SemVer 2.0.0 with
   clipman-specific MAJOR/MINOR/PATCH triggers (D-Bus contracts on
@@ -19,8 +19,8 @@ behavior are unchanged.
   settings-key renames, the `~/.local/share/clipman/` data-dir
   layout, and the GTK3→GTK4 toolkit choice).
 - `docs/maintaining.md` — the maintainer playbook: release flow,
-  branch hygiene, Dependabot triage, GHAS handling, AUR/Snap/Flathub
-  channel notes.
+  branch hygiene, Dependabot triage, GHAS handling, AUR/Snap channel
+  notes.
 - `ARCHITECTURE.md` — top-level walkthrough of the daemon ↔ extension
   split, the D-Bus surface, the SQLite store, and the GTK3 popup.
 - `GOVERNANCE.md` — project governance, decision-making, and the role
@@ -32,6 +32,9 @@ behavior are unchanged.
 - `docs/threat-model.md` — STRIDE-style threat model covering the
   clipboard surface, IPC, on-disk storage, and the update checker
   from ADR 0007.
+- `docs/ci-cd.md` — workflow-by-workflow inventory of
+  `.github/workflows/`, the release-pipeline DAG, the secrets matrix,
+  and the SHA-pinning policy reference.
 - `CONTRIBUTING.md` — refreshed contributor entry point that links
   the new docs together and points first-timers at the right place.
 
