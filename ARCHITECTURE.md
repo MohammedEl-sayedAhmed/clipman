@@ -157,6 +157,15 @@ No analytics, no crash reporting, no third-party services.
 
 ## Architecture diagram
 
+<p align="center">
+  <img src="docs/architecture.svg"
+       alt="Clipman architecture: GNOME Shell extension and Python/GTK3 daemon communicate over D-Bus; clipboard changes flow from the Wayland clipboard via owner-changed signals through the extension (or wl-paste fallback) into the daemon, which deduplicates by SHA256 and persists to a SQLite WAL store."
+       width="100%">
+</p>
+
+<details>
+<summary>Diagram source (Mermaid fallback / text version)</summary>
+
 ```mermaid
 flowchart LR
     classDef user fill:#dbeafe,stroke:#3b82f6,color:#1e40af
@@ -202,6 +211,8 @@ flowchart LR
     Window -->|D-Bus: SimulatePaste mode| Ext
     Ext -->|virtual keyboard| App
 ```
+
+</details>
 
 ## Decision records
 
