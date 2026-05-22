@@ -22,6 +22,7 @@ a new ADR that links back.
 | 0007 | [In-app update-availability notifications](0007-in-app-update-notifications.md)             | Accepted | Daemon polls GitHub Releases anonymously once per day; in-app banner + dismissible per-version; default off on snap/flatpak. |
 | 0008 | [Ratchet fingerprint strategy](0008-ratchet-fingerprint-strategy.md)                        | Accepted | Switch CodeQL ratchet from `rule:file:line` to SARIF `partialFingerprints`, and skip the ratchet on push to fix the update-baseline deadlock. |
 | 0009 | [Weekly snap rebuild cadence](0009-snap-rebuild-cadence.md)                                 | Accepted | Scheduled weekly rebuild publishes to `edge` automatically so the snap stays patched against Ubuntu archive USNs without coupling to a code release. |
+| 0010 | [Versioning policy](0010-versioning-policy.md)                                              | Accepted | SemVer 2.0.0; clipman-specific MAJOR triggers (D-Bus contract, SQLite schema break, dropped Python/GNOME Shell support, settings-key rename, data dir move, GTK3→GTK4). |
 
 ## Authoring a new ADR
 
