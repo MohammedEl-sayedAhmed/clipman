@@ -9,12 +9,18 @@ deciders: MohammedEl-sayedAhmed
 ## Context
 
 Clipman ships through five channels: PyPI, source / `install.sh`,
-Snap, Flathub, AUR, and the GNOME Extensions website (extension
-only). Snap and Flathub auto-refresh installed apps; the other three
-require the user to manually pull updates. Today there is **no
-signal inside the running app** that a new release exists — users
-discover updates only by visiting GitHub, the AUR, or PyPI on their
-own initiative.
+Snap, AUR, `.deb`/`.rpm` artifacts on the GitHub Release page, plus
+the GNOME Extensions website (extension only). The Snap Store
+auto-refreshes installed snaps; the others require the user to pull
+updates manually. Today there is **no signal inside the running app**
+that a new release exists — users discover updates only by visiting
+GitHub, the AUR, or PyPI on their own initiative.
+
+(Flathub is *not* a current channel. There is no submission in flight;
+a reference manifest is kept under `flathub/` for possible future use.
+The per-install default for the update check still treats a hypothetical
+Flatpak install as auto-refreshing, since the technology itself
+refreshes when configured by a store.)
 
 We want a low-friction, privacy-respecting nudge: when a newer
 release is published, the running daemon should surface a small
@@ -24,9 +30,11 @@ in-app indicator the next time the user opens the popup. Concretely:
   cookies, or anything beyond what an anonymous web visitor would
   fetch.
 - *No auto-update.* We notify and link; we don't download or install.
-- *Opt-out friendly.* Snap and Flathub users in particular don't need
-  this — their package manager already refreshes — so it should
-  default off there.
+- *Opt-out friendly.* Snap users in particular don't need this — the
+  Snap Store already refreshes installed snaps — so it should default
+  off there. The same default applies if a Flatpak install ever exists
+  (`$FLATPAK_ID` set), since a Flatpak-hosting store would refresh on
+  its own.
 - *No new system dependency.* The daemon must do this with what's
   already installed (Python 3.10+, stdlib).
 
