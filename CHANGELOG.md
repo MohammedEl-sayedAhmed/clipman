@@ -4,6 +4,37 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Documentation
+
+A comprehensive eight-PR documentation overhaul lands the missing
+high-level docs that downstream packagers, contributors, translators,
+and security reviewers have been asking for. None of the changes
+ship code; the release pipeline, install channels, and runtime
+behavior are unchanged.
+
+- `docs/adr/0010-versioning-policy.md` — codifies SemVer 2.0.0 with
+  clipman-specific MAJOR/MINOR/PATCH triggers (D-Bus contracts on
+  `com.clipman.Daemon` and `org.gnome.Shell.Extensions.clipman`,
+  SQLite schema breaks, supported Python and GNOME Shell ranges,
+  settings-key renames, the `~/.local/share/clipman/` data-dir
+  layout, and the GTK3→GTK4 toolkit choice).
+- `docs/maintaining.md` — the maintainer playbook: release flow,
+  branch hygiene, Dependabot triage, GHAS handling, AUR/Snap/Flathub
+  channel notes.
+- `ARCHITECTURE.md` — top-level walkthrough of the daemon ↔ extension
+  split, the D-Bus surface, the SQLite store, and the GTK3 popup.
+- `GOVERNANCE.md` — project governance, decision-making, and the role
+  of ADRs.
+- `docs/translating.md` — how to add a new locale and run the
+  translation toolchain.
+- `docs/dbus-api.md` — full reference for both D-Bus interfaces with
+  signatures, semantics, and worked `gdbus call` examples.
+- `docs/threat-model.md` — STRIDE-style threat model covering the
+  clipboard surface, IPC, on-disk storage, and the update checker
+  from ADR 0007.
+- `CONTRIBUTING.md` — refreshed contributor entry point that links
+  the new docs together and points first-timers at the right place.
+
 ## [1.0.6] - 2026-05-20
 
 ### Highlights
