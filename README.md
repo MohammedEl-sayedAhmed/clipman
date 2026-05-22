@@ -217,13 +217,13 @@ Or with paru: `paru -S clipman-clipboard`
 </details>
 
 <details>
-<summary><strong>Flatpak / Flathub</strong> (manifest in repo, submission pending)</summary>
+<summary><strong>Flatpak / Flathub</strong> (not currently published)</summary>
 
-A Flathub manifest is maintained at `flathub/io.github.MohammedEl_sayedAhmed.Clipman.json` for the upcoming Flathub submission. Once accepted, install with:
-
-```bash
-flatpak install flathub io.github.MohammedEl_sayedAhmed.Clipman
-```
+Clipman is **not** currently published on Flathub and there is no
+submission in flight. A reference manifest is kept at
+`flathub/io.github.MohammedEl_sayedAhmed.Clipman.json` so that a future
+submission has somewhere to start, but it should not be treated as a
+released channel.
 
 </details>
 

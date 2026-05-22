@@ -8,12 +8,15 @@ deciders: MohammedEl-sayedAhmed
 
 ## Context
 
-Clipman has shipped through eight 1.0.x releases on PyPI, Snap, Flathub,
-AUR, and the GitHub Releases page, plus an out-of-band cadence for the
-GNOME Shell extension on extensions.gnome.org. Until now the meaning of
-each version bump has lived only in the maintainer's head and in the
-release-checklist prose. That worked while the public surface was
-small, but it has grown:
+Clipman has shipped through eight 1.0.x releases on PyPI, Snap, AUR,
+and the GitHub Releases page (`.deb` / `.rpm` / AppImage artifacts),
+plus an out-of-band cadence for the GNOME Shell extension on
+extensions.gnome.org. (Flathub is not a current channel — a manifest
+is kept under `flathub/` for possible future use, but there is no
+submission in flight.) Until now the meaning of each version bump has
+lived only in the maintainer's head and in the release-checklist
+prose. That worked while the public surface was small, but it has
+grown:
 
 - Two D-Bus interfaces with explicit contracts — `com.clipman.Daemon`
   at `/com/clipman/Daemon` (methods: `Toggle`, `Show`, `Hide`, `Quit`,
@@ -29,10 +32,10 @@ small, but it has grown:
   Ubuntu 22.04+.
 - A toolkit choice (GTK3) that downstream packagers depend on.
 
-Without a written policy, downstreams (AUR, Flathub, Snap, distro
-packagers) cannot tell from a tag alone whether a release will require
-a rebuild against new system libraries, a schema migration, or a new
-extension version. They also cannot tell whether the extension's
+Without a written policy, downstreams (AUR, Snap, distro packagers,
+plus any future Flathub submission) cannot tell from a tag alone
+whether a release will require a rebuild against new system libraries,
+a schema migration, or a new extension version. They also cannot tell whether the extension's
 `metadata.json` `version` integer — bumped 4→5 in ADR 0005 — is the
 same concept as the product's tag, which it is not.
 
