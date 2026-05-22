@@ -24,10 +24,9 @@ new maintainer knows what they are about to invoke.
   The tag push is the trigger.
 - `.github/workflows/release.yml` fires on the tag and, as of v1.0.6+,
   publishes to PyPI, the Snap Store `stable` channel, AUR, and the
-  GitHub Release end-to-end. AUR publication was wired in with PR #39
-  ("ci(release): auto-publish to AUR on tag push") on top of the AUR
-  packaging refresh and `scripts/update-aur.sh` helper introduced in
-  PR #38.
+  GitHub Release end-to-end. The full job DAG, secrets matrix, and
+  SHA-pinning policy are documented in
+  [docs/ci-cd.md](ci-cd.md#release-pipeline-end-to-end).
 - The GNOME Extensions website upload at
   https://extensions.gnome.org/upload/ is the one step that remains
   manual — EGO has no programmatic upload API. Grab the
@@ -104,6 +103,7 @@ users will skip MINOR releases, so:
 ## Cross-reference
 
 - Release runbook (literal commands): `docs/release-checklist.md`
+- Release pipeline reference (job DAG, secrets, SHA-pin policy): `docs/ci-cd.md`
 - Versioning policy: `docs/adr/0010-versioning-policy.md` (added in
   the parallel docs overhaul)
 - D-Bus deprecation precedent: `docs/adr/0005-dbus-simulate-paste-mode-arg.md`
