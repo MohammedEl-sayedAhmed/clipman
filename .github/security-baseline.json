@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "updated": "2026-05-20",
+  "updated": "2026-05-22",
   "description": "Known-finding fingerprints from main. PR scans compare to this snapshot; new fingerprints fail the ratchet job. Format: <rule-id>:<SARIF-partialFingerprint> (line-shift-stable). Maintained by the codeql update-baseline job on push to main; manual pushes are reverted by baseline-guard.yml.",
   "codeql": {
     "count": 20,
