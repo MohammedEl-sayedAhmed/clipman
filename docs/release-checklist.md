@@ -85,9 +85,10 @@ These steps aren't automatable today:
   upload API.
 - **AUR** — bump `aur/PKGBUILD` (the bump script already did this) and
   push to the AUR remote if you maintain a separate AUR repo.
-- **Flathub** — open a PR against the Flathub repo bumping the
-  manifest source URL / commit. The in-repo manifest under `flathub/`
-  is for reference only.
+- **Flathub** — not a current channel. The in-repo manifest under
+  `flathub/` is kept for reference only; if a Flathub submission
+  is ever made, this step becomes "open a PR against the Flathub
+  repo bumping the manifest source URL / commit".
 
 ## Verify the release publicly
 
