@@ -315,7 +315,7 @@ clipman/
 │   └── clipman.service            # Systemd user service
 ├── po/
 │   ├── POTFILES.in                # Files with translatable strings
-│   └── clipman.pot                # Translation template (71 strings)
+│   └── clipman.pot                # Translation template (70 strings)
 ├── tests/
 │   ├── test_database.py           # Database unit tests (93 tests)
 │   ├── test_clipboard_monitor.py  # Monitor unit tests (105 tests)
