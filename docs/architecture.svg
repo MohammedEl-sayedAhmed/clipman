@@ -1,0 +1,175 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 763" role="img" aria-labelledby="title desc" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" text-rendering="optimizeLegibility">
+  <title id="title">clipman architecture</title>
+  <desc id="desc">Capture path: an application writes to the Wayland clipboard, which notifies either the GNOME Shell clipman extension or the wl-paste fallback, both of which forward new entries to the daemon's D-Bus service. The monitor deduplicates by SHA256 and persists to a SQLite WAL store. Paste path: Super+V triggers the keybinding which toggles the GTK popup window; the window reads and writes history with SQLite, then either calls wl-copy or asks the extension to inject a virtual keystroke into the target app.</desc>
+
+  <style>
+    .lbl      { font-size: 14px; font-weight: 600; }
+    .sub      { font-size: 11.5px; font-weight: 400; }
+    .edge-lbl { font-size: 11.5px; font-weight: 500; }
+
+    .node      { stroke-width: 1.5; }
+    .ua-fill { fill: #dbeafe; }
+    .ua-str  { stroke: #3b82f6; }
+    .ua-txt  { fill: #1e40af; }
+
+    .gs-fill { fill: #fef3c7; }
+    .gs-str  { stroke: #d97706; }
+    .gs-txt  { fill: #92400e; }
+
+    .dn-fill { fill: #dcfce7; }
+    .dn-str  { stroke: #16a34a; }
+    .dn-txt  { fill: #166534; }
+
+    .st-fill { fill: #f3e8ff; }
+    .st-str  { stroke: #9333ea; }
+    .st-txt  { fill: #6b21a8; }
+
+    .edge      { stroke: #475569; stroke-width: 1.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    .edge-dash { stroke: #475569; stroke-width: 1.5; fill: none; stroke-dasharray: 6 4; stroke-linecap: round; stroke-linejoin: round; }
+    .edge-txt  { fill: #334155; }
+    .edge-bg   { fill: #ffffff; }
+    .arrow     { fill: #475569; }
+
+    .group-box { fill: none; stroke: #94a3b8; stroke-width: 1.25; stroke-dasharray: 5 4; }
+    .group-lbl { font-size: 12px; font-weight: 600; fill: #64748b; letter-spacing: 0.3px; }
+
+    @media (prefers-color-scheme: dark) {
+      .ua-fill { fill: #1e3a8a; }
+      .ua-str  { stroke: #60a5fa; }
+      .ua-txt  { fill: #bfdbfe; }
+
+      .gs-fill { fill: #78350f; }
+      .gs-str  { stroke: #fbbf24; }
+      .gs-txt  { fill: #fde68a; }
+
+      .dn-fill { fill: #14532d; }
+      .dn-str  { stroke: #4ade80; }
+      .dn-txt  { fill: #bbf7d0; }
+
+      .st-fill { fill: #581c87; }
+      .st-str  { stroke: #c084fc; }
+      .st-txt  { fill: #e9d5ff; }
+
+      .edge      { stroke: #cbd5e1; }
+      .edge-dash { stroke: #cbd5e1; }
+      .edge-txt  { fill: #e2e8f0; }
+      .edge-bg   { fill: #0f172a; }
+      .arrow     { fill: #cbd5e1; }
+
+      .group-box { stroke: #64748b; }
+      .group-lbl { fill: #94a3b8; }
+    }
+  </style>
+
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" class="arrow"/>
+    </marker>
+  </defs>
+
+  <rect x="680" y="60" width="270" height="180" rx="10" class="group-box"/>
+  <text x="694" y="80" class="group-lbl">GNOME SHELL</text>
+
+  <rect x="290" y="440" width="780" height="180" rx="10" class="group-box"/>
+  <text x="304" y="460" class="group-lbl">CLIPMAN DAEMON</text>
+
+  <circle cx="80" cy="200" r="34" class="node ua-fill ua-str"/>
+  <text x="80" y="204" text-anchor="middle" class="lbl ua-txt">User</text>
+
+  <rect x="40" y="320" width="200" height="64" rx="8" class="node ua-fill ua-str"/>
+  <text x="140" y="346" text-anchor="middle" class="lbl ua-txt">Any application</text>
+  <text x="140" y="364" text-anchor="middle" class="sub ua-txt">GTK / Qt / Electron / terminal</text>
+
+  <rect x="370" y="320" width="190" height="64" rx="8" class="node ua-fill ua-str"/>
+  <text x="465" y="346" text-anchor="middle" class="lbl ua-txt">Wayland clipboard</text>
+  <text x="465" y="364" text-anchor="middle" class="sub ua-txt">wl_data_device</text>
+
+  <rect x="700" y="95" width="230" height="60" rx="8" class="node gs-fill gs-str"/>
+  <text x="815" y="119" text-anchor="middle" class="lbl gs-txt">clipman extension</text>
+  <text x="815" y="137" text-anchor="middle" class="sub gs-txt">extension.js</text>
+
+  <rect x="700" y="170" width="230" height="60" rx="8" class="node gs-fill gs-str"/>
+  <text x="815" y="194" text-anchor="middle" class="lbl gs-txt">custom-keybinding</text>
+  <text x="815" y="212" text-anchor="middle" class="sub gs-txt">gsettings, Super+V</text>
+
+  <rect x="490" y="478" width="220" height="64" rx="8" class="node dn-fill dn-str"/>
+  <text x="600" y="502" text-anchor="middle" class="lbl dn-txt">dbus_service.py</text>
+  <text x="600" y="520" text-anchor="middle" class="sub dn-txt">com.clipman.Daemon</text>
+
+  <rect x="490" y="555" width="220" height="55" rx="8" class="node dn-fill dn-str"/>
+  <text x="600" y="576" text-anchor="middle" class="lbl dn-txt">clipboard_monitor.py</text>
+  <text x="600" y="593" text-anchor="middle" class="sub dn-txt">dedupe + sensitive-data detection</text>
+
+  <rect x="830" y="478" width="220" height="64" rx="8" class="node dn-fill dn-str"/>
+  <text x="940" y="502" text-anchor="middle" class="lbl dn-txt">window.py</text>
+  <text x="940" y="520" text-anchor="middle" class="sub dn-txt">GTK popup + settings</text>
+
+  <rect x="310" y="478" width="160" height="64" rx="8" class="node dn-fill dn-str"/>
+  <text x="390" y="502" text-anchor="middle" class="lbl dn-txt">wl-paste --watch</text>
+  <text x="390" y="520" text-anchor="middle" class="sub dn-txt">fallback</text>
+
+  <g transform="translate(530, 665)">
+    <ellipse cx="70" cy="10" rx="70" ry="12" class="node st-fill st-str"/>
+    <path d="M0,10 L0,55 A70,12 0 0 0 140,55 L140,10" class="node st-fill st-str"/>
+    <ellipse cx="70" cy="10" rx="70" ry="12" class="node st-fill st-str"/>
+    <text x="70" y="38" text-anchor="middle" class="lbl st-txt">SQLite (WAL)</text>
+    <text x="70" y="55" text-anchor="middle" class="sub st-txt">~/.local/share/clipman/</text>
+  </g>
+
+  <path d="M240,352 L370,352" class="edge" marker-end="url(#arr)"/>
+  <rect x="278" y="340" width="54" height="16" rx="2" class="edge-bg"/>
+  <text x="305" y="352" text-anchor="middle" class="edge-lbl edge-txt">Ctrl+C</text>
+
+  <path d="M560,352 L640,352 L640,140 L700,140" class="edge-dash" marker-end="url(#arr)"/>
+  <rect x="591" y="222" width="98" height="16" rx="2" class="edge-bg"/>
+  <text x="640" y="234" text-anchor="middle" class="edge-lbl edge-txt">owner-changed</text>
+
+  <path d="M390,384 L390,478" class="edge-dash" marker-end="url(#arr)"/>
+  <rect x="341" y="420" width="98" height="16" rx="2" class="edge-bg"/>
+  <text x="390" y="432" text-anchor="middle" class="edge-lbl edge-txt">owner-changed</text>
+
+  <path d="M780,155 L780,430 L540,430 L540,478" class="edge" marker-end="url(#arr)"/>
+  <rect x="478" y="422" width="124" height="16" rx="2" class="edge-bg"/>
+  <text x="540" y="434" text-anchor="middle" class="edge-lbl edge-txt">NewEntry(text|image)</text>
+
+  <path d="M470,510 L490,510" class="edge" marker-end="url(#arr)"/>
+
+  <path d="M600,542 L600,555" class="edge" marker-end="url(#arr)"/>
+
+  <path d="M600,610 L600,665" class="edge" marker-end="url(#arr)"/>
+  <rect x="563" y="628" width="74" height="16" rx="2" class="edge-bg"/>
+  <text x="600" y="640" text-anchor="middle" class="edge-lbl edge-txt">SHA256 dedup</text>
+
+  <path d="M114,200 C300,130 520,130 700,200" class="edge" marker-end="url(#arr)"/>
+  <rect x="380" y="147" width="60" height="16" rx="2" class="edge-bg"/>
+  <text x="410" y="160" text-anchor="middle" class="edge-lbl edge-txt">Super+V</text>
+
+  <path d="M850,230 L850,460 L660,460 L660,478" class="edge" marker-end="url(#arr)"/>
+  <rect x="710" y="452" width="112" height="16" rx="2" class="edge-bg"/>
+  <text x="766" y="464" text-anchor="middle" class="edge-lbl edge-txt">launcher.sh toggle</text>
+
+  <path d="M710,510 L830,510" class="edge" marker-end="url(#arr)"/>
+  <rect x="753" y="500" width="44" height="16" rx="2" class="edge-bg"/>
+  <text x="775" y="512" text-anchor="middle" class="edge-lbl edge-txt">Toggle</text>
+
+  <path d="M940,542 L940,720 L670,720" class="edge" marker-start="url(#arr)" marker-end="url(#arr)"/>
+  <rect x="780" y="712" width="106" height="16" rx="2" class="edge-bg"/>
+  <text x="833" y="724" text-anchor="middle" class="edge-lbl edge-txt">history + snippets</text>
+
+  <path d="M46,200 L18,200 L18,745 L900,745 L900,542" class="edge" marker-end="url(#arr)"/>
+  <rect x="420" y="737" width="68" height="16" rx="2" class="edge-bg"/>
+  <text x="454" y="749" text-anchor="middle" class="edge-lbl edge-txt">click entry</text>
+
+  <path d="M1050,510 L1130,510 L1130,40 L465,40 L465,320" class="edge" marker-end="url(#arr)"/>
+  <rect x="438" y="32" width="54" height="16" rx="2" class="edge-bg"/>
+  <text x="465" y="44" text-anchor="middle" class="edge-lbl edge-txt">wl-copy</text>
+
+  <path d="M1050,500 L1095,500 L1095,125 L934,125" class="edge" marker-end="url(#arr)"/>
+  <rect x="1018" y="285" width="118" height="16" rx="2" class="edge-bg"/>
+  <text x="1077" y="297" text-anchor="middle" class="edge-lbl edge-txt">SimulatePaste(s)</text>
+
+  <path d="M700,110 L210,110 L210,320" class="edge" marker-end="url(#arr)"/>
+  <rect x="157" y="216" width="106" height="16" rx="2" class="edge-bg"/>
+  <text x="210" y="228" text-anchor="middle" class="edge-lbl edge-txt">virtual keyboard</text>
+</svg>
