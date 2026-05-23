@@ -6,14 +6,16 @@ name: Verify architecture.png matches architecture.svg
 # not handle SVG inline. Failing here is a much better UX than the
 # diagram silently going stale on the cross-post.
 #
-# The workflow runs render-diagram.sh into a temporary path and
-# compares the rendered output to the committed PNG. If they differ,
-# the job fails with a clear instruction to re-run the script
-# locally. We do NOT auto-push the regenerated PNG because pushes
-# from GITHUB_TOKEN do not trigger downstream workflows (so required
-# status checks would not re-run on the bot commit, leaving the PR
-# unmergeable), and adding a PAT just for this rarely-changing
-# diagram is more weight than the convenience earns.
+# The workflow renders the SVG into a temporary path using exactly the
+# same renderer that scripts/render-diagram.sh uses locally (cairosvg
+# pinned to 2.9.0), then compares the rendered output byte-for-byte to
+# the committed PNG. If they differ, the job fails with a clear
+# instruction to re-run the script locally. We do NOT auto-push the
+# regenerated PNG because pushes from GITHUB_TOKEN do not trigger
+# downstream workflows (so required status checks would not re-run on
+# the bot commit, leaving the PR unmergeable), and adding a PAT just
+# for this rarely-changing diagram is more weight than the convenience
+# earns.
 
 on:
   pull_request:
@@ -47,15 +49,25 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install rsvg-convert
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends librsvg2-bin
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: '3.12'
 
-      - name: Render PNG into a temp location
+      - name: Render PNG with cairosvg into a temp location
         run: |
+          set -euo pipefail
+          python3 -m pip install --quiet 'cairosvg==2.9.0'
           tmp="$(mktemp -d)"
-          rsvg-convert -w 1600 -o "$tmp/architecture.png" docs/architecture.svg
+          python3 - "docs/architecture.svg" "$tmp/architecture.png" 1600 <<'PY'
+          import sys
+          import cairosvg
+          cairosvg.svg2png(
+              url=sys.argv[1],
+              write_to=sys.argv[2],
+              output_width=int(sys.argv[3]),
+          )
+          PY
           echo "RENDERED_PNG=$tmp/architecture.png" >> "$GITHUB_ENV"
 
       - name: Compare rendered output to the committed PNG
