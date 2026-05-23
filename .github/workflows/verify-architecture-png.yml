@@ -54,10 +54,13 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install cairosvg + Pillow
+        run: |
+          python3 -m pip install --quiet 'cairosvg==2.9.0' 'Pillow>=10,<12'
+
       - name: Render PNG with cairosvg into a temp location
         run: |
           set -euo pipefail
-          python3 -m pip install --quiet 'cairosvg==2.9.0'
           tmp="$(mktemp -d)"
           python3 - "docs/architecture.svg" "$tmp/architecture.png" 1600 <<'PY'
           import sys
@@ -70,14 +73,53 @@ jobs:
           PY
           echo "RENDERED_PNG=$tmp/architecture.png" >> "$GITHUB_ENV"
 
-      - name: Compare rendered output to the committed PNG
+      - name: Compare rendered output to the committed PNG by pixel content
         run: |
           set -euo pipefail
-          if ! cmp -s "$RENDERED_PNG" docs/architecture.png; then
-            echo "::error::docs/architecture.png is out of date relative to docs/architecture.svg."
-            echo "::error::Regenerate locally with: ./scripts/render-diagram.sh"
-            echo "::error::Then commit the updated docs/architecture.png alongside the SVG change."
-            ls -la "$RENDERED_PNG" docs/architecture.png
-            exit 1
-          fi
-          echo "docs/architecture.png matches the SVG."
+          python3 - "$RENDERED_PNG" docs/architecture.png <<'PY'
+          # PNG byte-equality is too strict — cairosvg's output bytes depend
+          # on the libcairo version and embed metadata that varies across
+          # machines, so a local-vs-CI byte-cmp fails even when the visible
+          # diagram is identical. Instead, compare raw pixel content: load
+          # both PNGs into RGBA arrays and check pixel-for-pixel match.
+          # That catches real visual drift (the SVG was edited and the PNG
+          # wasn't regenerated) but is stable across renderers/runners.
+          import sys
+          from PIL import Image, ImageChops
+          rendered = Image.open(sys.argv[1]).convert("RGBA")
+          committed = Image.open(sys.argv[2]).convert("RGBA")
+          if rendered.size != committed.size:
+              print(
+                  f"::error::Size mismatch: rendered={rendered.size}, "
+                  f"committed={committed.size}"
+              )
+              sys.exit(1)
+          diff = ImageChops.difference(rendered, committed)
+          bbox = diff.getbbox()
+          if bbox is not None:
+              # Quantify the difference so the failure message points the
+              # author at the right action: a tiny diff may just be encoder
+              # drift, but a large diff is real staleness.
+              w, h = rendered.size
+              changed_px = sum(1 for px in diff.getdata() if any(px))
+              total_px = w * h
+              pct = 100.0 * changed_px / total_px
+              print(
+                  f"::error::docs/architecture.png does not match a fresh "
+                  f"render of docs/architecture.svg."
+              )
+              print(
+                  f"::error::{changed_px}/{total_px} pixels differ "
+                  f"({pct:.4f}%), bbox={bbox}."
+              )
+              print("::error::Regenerate locally with: ./scripts/render-diagram.sh")
+              print(
+                  "::error::Then commit the updated docs/architecture.png "
+                  "alongside the SVG change."
+              )
+              sys.exit(1)
+          print(
+              f"docs/architecture.png matches the SVG by pixel content "
+              f"({rendered.size[0]}x{rendered.size[1]}, RGBA)."
+          )
+          PY
