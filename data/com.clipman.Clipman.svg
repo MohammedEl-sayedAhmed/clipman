@@ -1,15 +1,67 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <!-- Clipboard board -->
-  <rect x="24" y="20" width="80" height="96" rx="8" fill="#585b70"/>
-  <rect x="28" y="36" width="72" height="76" rx="4" fill="#313244"/>
-  <!-- Clip at top -->
-  <rect x="44" y="12" width="40" height="20" rx="6" fill="#89b4fa"/>
-  <rect x="50" y="8" width="28" height="12" rx="4" fill="#89b4fa"/>
-  <!-- Text lines -->
-  <rect x="38" y="48" width="52" height="5" rx="2" fill="#a6adc8"/>
-  <rect x="38" y="60" width="40" height="5" rx="2" fill="#a6adc8"/>
-  <rect x="38" y="72" width="48" height="5" rx="2" fill="#a6adc8"/>
-  <rect x="38" y="84" width="32" height="5" rx="2" fill="#a6adc8"/>
-  <!-- History stack indicator -->
-  <rect x="20" y="24" width="80" height="96" rx="8" fill="none" stroke="#7f849c" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5" transform="translate(-4,-4)"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Clipman</title>
+  <desc id="desc">Three stacked clipboard cards with a clip at the top, in Catppuccin Mocha colors. Visualises clipboard history with a paste cursor on the front card.</desc>
+
+  <defs>
+    <!-- Subtle stroke gradient for the front card so the edge catches
+         light at the top and recedes toward the bottom. -->
+    <linearGradient id="cardStroke" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#cba6f7" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#cba6f7" stop-opacity="0.25"/>
+    </linearGradient>
+
+    <!-- Catppuccin Mocha tokens used by reference below -->
+    <!-- base   #1e1e2e  surface0 #313244  surface1 #45475a  surface2 #585b70
+         text   #cdd6f4  subtext0 #a6adc8  subtext1 #bac2de
+         mauve  #cba6f7  pink     #f5c2e7  blue     #89b4fa  lavender #b4befe -->
+  </defs>
+
+  <!-- Back card (oldest in the history stack) -->
+  <g transform="translate(82, 18)">
+    <rect width="140" height="196" rx="16"
+          fill="#313244" stroke="#45475a" stroke-width="1.5"/>
+  </g>
+
+  <!-- Middle card -->
+  <g transform="translate(64, 32)">
+    <rect width="140" height="196" rx="16"
+          fill="#45475a" stroke="#585b70" stroke-width="1.5"/>
+  </g>
+
+  <!-- Front card (the active clip) -->
+  <g transform="translate(46, 46)">
+    <rect width="156" height="204" rx="16"
+          fill="#1e1e2e" stroke="url(#cardStroke)" stroke-width="2.5"/>
+
+    <!-- Clip at the top -->
+    <g transform="translate(78, -20)">
+      <!-- Outer clip band: Catppuccin mauve -->
+      <rect x="-28" y="2" width="56" height="28" rx="7"
+            fill="#cba6f7"/>
+      <!-- Inner top tab: Catppuccin lavender -->
+      <rect x="-19" y="-6" width="38" height="18" rx="5"
+            fill="#b4befe"/>
+      <!-- Pin highlight -->
+      <circle cx="0" cy="18" r="3.5" fill="#1e1e2e"/>
+    </g>
+
+    <!-- Content lines (the clipboard entry) -->
+    <rect x="22" y="44" width="112" height="10" rx="4" fill="#cdd6f4"/>
+    <rect x="22" y="66" width="88"  height="8"  rx="3" fill="#a6adc8"/>
+    <rect x="22" y="82" width="100" height="8"  rx="3" fill="#a6adc8"/>
+    <rect x="22" y="98" width="68"  height="8"  rx="3" fill="#a6adc8"/>
+
+    <!-- Selected row: the active clipboard entry — Catppuccin pink. -->
+    <rect x="16" y="124" width="124" height="28" rx="7"
+          fill="#f5c2e7" fill-opacity="0.15"
+          stroke="#f5c2e7" stroke-width="1.5" stroke-opacity="0.9"/>
+    <rect x="26" y="134" width="78" height="8" rx="3" fill="#f5c2e7"/>
+
+    <!-- Paste-cursor caret on the right side of the selected row -->
+    <path d="M 118 130 L 128 138 L 118 146 Z" fill="#f5c2e7"/>
+
+    <!-- Bottom hint lines for vertical weight -->
+    <rect x="22" y="166" width="56" height="8" rx="3" fill="#585b70"/>
+    <rect x="22" y="180" width="40" height="8" rx="3" fill="#45475a"/>
+  </g>
 </svg>

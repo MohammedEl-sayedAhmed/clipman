@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/logo.svg" alt="Clipman logo" width="128" height="128">
+
 # Clipman
 
 **A clipboard history manager for Ubuntu/GNOME on Wayland**
