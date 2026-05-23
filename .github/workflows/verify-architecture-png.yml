@@ -1,0 +1,71 @@
+name: Verify architecture.png matches architecture.svg
+
+# Catches the case where someone edits docs/architecture.svg without
+# regenerating docs/architecture.png. The PNG is needed by the cross-
+# post mirror of the writeup, since the dev.to render pipeline does
+# not handle SVG inline. Failing here is a much better UX than the
+# diagram silently going stale on the cross-post.
+#
+# The workflow runs render-diagram.sh into a temporary path and
+# compares the rendered output to the committed PNG. If they differ,
+# the job fails with a clear instruction to re-run the script
+# locally. We do NOT auto-push the regenerated PNG because pushes
+# from GITHUB_TOKEN do not trigger downstream workflows (so required
+# status checks would not re-run on the bot commit, leaving the PR
+# unmergeable), and adding a PAT just for this rarely-changing
+# diagram is more weight than the convenience earns.
+
+on:
+  pull_request:
+    paths:
+      - 'docs/architecture.svg'
+      - 'docs/architecture.png'
+      - 'scripts/render-diagram.sh'
+      - '.github/workflows/verify-architecture-png.yml'
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@ab7a9404c0f3da075243ca237b5fac12c98deaa5 # v2.19.3
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install rsvg-convert
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends librsvg2-bin
+
+      - name: Render PNG into a temp location
+        run: |
+          tmp="$(mktemp -d)"
+          rsvg-convert -w 1600 -o "$tmp/architecture.png" docs/architecture.svg
+          echo "RENDERED_PNG=$tmp/architecture.png" >> "$GITHUB_ENV"
+
+      - name: Compare rendered output to the committed PNG
+        run: |
+          set -euo pipefail
+          if ! cmp -s "$RENDERED_PNG" docs/architecture.png; then
+            echo "::error::docs/architecture.png is out of date relative to docs/architecture.svg."
+            echo "::error::Regenerate locally with: ./scripts/render-diagram.sh"
+            echo "::error::Then commit the updated docs/architecture.png alongside the SVG change."
+            ls -la "$RENDERED_PNG" docs/architecture.png
+            exit 1
+          fi
+          echo "docs/architecture.png matches the SVG."
