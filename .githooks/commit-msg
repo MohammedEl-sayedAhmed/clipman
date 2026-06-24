@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# commit-msg hook: reject commits whose message contains AI/Claude
+# footprints or trailers citing a denied account.
+
+# shellcheck source=.githooks/_lib.sh
+. "$(dirname -- "$(readlink -f -- "$0" 2>/dev/null || printf '%s' "$0")")/_lib.sh"
+
+msg_file="${1:?commit-msg hook requires the message file path}"
+
+failed=0
+
+# 1. Footprint scan on the full message body.
+if ! scan_footprints "$msg_file"; then
+    failed=1
+fi
+
+# 2. Trailer scan: dual approach.
+#    (a) git interpret-trailers --parse handles folded continuations cleanly,
+#        but returns EMPTY when trailer lines have leading whitespace.
+#    (b) regex fallback with leading-whitespace tolerance catches what (a)
+#        misses (BYPASS-09).
+trailer_keys='co-authored-by|signed-off-by|reviewed-by|assisted-by|acked-by|tested-by|reported-by|helped-by|suggested-by|authored-by|mentored-by|cc'
+
+check_trailer_value() {
+    local key="$1" value="$2"
+    if contains_denied_identity "$value"; then
+        if [ "$failed" -eq 0 ]; then
+            hook_error "trailer cites a denied account ($(denied_list_for_message))"
+        fi
+        hook_detail "${key}: ${value}"
+        failed=1
+    fi
+}
+
+# (a) Parser pass — handles folded trailers + canonical RFC-2822 trailers
+trailers=$(parse_message_trailers "$msg_file")
+if [ -n "$trailers" ]; then
+    while IFS=$'\t' read -r key value; do
+        [ -z "$key$value" ] && continue
+        case "$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]')" in
+            co-authored-by|signed-off-by|reviewed-by|assisted-by|acked-by|tested-by|reported-by|helped-by|suggested-by|authored-by|mentored-by|cc)
+                check_trailer_value "$key" "$value"
+                ;;
+        esac
+    done <<<"$trailers"
+fi
+
+# (b) Regex fallback with leading-whitespace tolerance
+while IFS= read -r line || [ -n "$line" ]; do
+    # Strip leading whitespace
+    trimmed="${line#"${line%%[![:space:]]*}"}"
+    if [[ "$trimmed" =~ ^([Cc][Oo][-_.[:space:]]?[Aa][Uu][Tt][Hh][Oo][Rr][Ee][Dd][-_.[:space:]]?[Bb][Yy]|[Ss][Ii][Gg][Nn][Ee][Dd][-_.[:space:]]?[Oo][Ff][Ff][-_.[:space:]]?[Bb][Yy]|[Rr][Ee][Vv][Ii][Ee][Ww][Ee][Dd][-_.[:space:]]?[Bb][Yy]|[Aa][Ss][Ss][Ii][Ss][Tt][Ee][Dd][-_.[:space:]]?[Bb][Yy]|[Aa][Cc][Kk][Ee][Dd][-_.[:space:]]?[Bb][Yy]|[Tt][Ee][Ss][Tt][Ee][Dd][-_.[:space:]]?[Bb][Yy]|[Rr][Ee][Pp][Oo][Rr][Tt][Ee][Dd][-_.[:space:]]?[Bb][Yy]|[Hh][Ee][Ll][Pp][Ee][Dd][-_.[:space:]]?[Bb][Yy]|[Ss][Uu][Gg][Gg][Ee][Ss][Tt][Ee][Dd][-_.[:space:]]?[Bb][Yy]|[Aa][Uu][Tt][Hh][Oo][Rr][Ee][Dd][-_.[:space:]]?[Bb][Yy]|[Mm][Ee][Nn][Tt][Oo][Rr][Ee][Dd][-_.[:space:]]?[Bb][Yy]|[Cc][Cc])[[:space:]]*:[[:space:]]*(.+)$ ]]; then
+        check_trailer_value "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+    fi
+done < "$msg_file"
+
+if [ "$failed" -eq 0 ]; then
+    hook_ok "commit message: clean"
+    exit 0
+fi
+
+hook_section "commit aborted"
+hook_detail "Edit the commit message to remove the highlighted content, then commit again."
+hook_detail "Bypass once (NOT recommended): git commit --no-verify"
+exit 1
