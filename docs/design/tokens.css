@@ -1,0 +1,200 @@
+/* Clipman design tokens — libadwaita-flavored on Catppuccin.
+ *
+ * These mockups are HTML/CSS first. The intended implementation target
+ * is GTK4 + libadwaita ≥ 1.5; every visual primitive here maps to a
+ * libadwaita widget or the equivalent CSS selector under GTK4's CSS
+ * engine. See docs/design/index.html for the libadwaita component map.
+ *
+ * Palette: Catppuccin (https://catppuccin.com) — Mocha (dark) + Latte (light).
+ * Default is dark. Add class="theme-light" to <body> for light theme.
+ */
+
+:root {
+    /* ------------- Spacing (libadwaita uses multiples of 6) ------------- */
+    --space-1: 4px;
+    --space-2: 6px;
+    --space-3: 8px;
+    --space-4: 12px;
+    --space-5: 18px;
+    --space-6: 24px;
+    --space-7: 36px;
+
+    /* ------------- Radii (libadwaita standard: 6, 8, 12) ---------------- */
+    --radius-sm: 6px;     /* inputs, small buttons */
+    --radius-md: 9px;     /* rows, pills */
+    --radius-lg: 12px;    /* cards, window */
+    --radius-pill: 9999px;
+
+    /* ------------- Type ramp ------------------------------------------- */
+    --font: -apple-system, "Inter", "Inter Variable", "Cantarell", "Adwaita Sans",
+            "Segoe UI", system-ui, sans-serif;
+    --font-mono: "Iosevka", "JetBrains Mono", "SF Mono", "Cascadia Code",
+                 "Roboto Mono", "Source Code Pro", ui-monospace, monospace;
+    --size-caption: 11px;
+    --size-meta: 12px;
+    --size-body: 13px;
+    --size-title: 14px;
+    --size-headline: 17px;
+    --line: 1.4;
+
+    /* ------------- Weights --------------------------------------------- */
+    --weight-regular: 400;
+    --weight-medium: 500;
+    --weight-semibold: 600;
+    --weight-bold: 700;
+
+    /* ------------- Easing / timing ------------------------------------- */
+    --ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    --time-fast: 110ms;
+    --time-base: 180ms;
+    --time-slow: 280ms;
+
+    /* ------------- Shadows --------------------------------------------- */
+    --shadow-window: 0 6px 24px -4px rgba(0, 0, 0, 0.55),
+                     0 2px 6px -2px rgba(0, 0, 0, 0.35),
+                     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+    --shadow-hover: 0 2px 6px -1px rgba(0, 0, 0, 0.35);
+    --shadow-focus: 0 0 0 2px var(--accent), 0 0 0 4px var(--accent-soft);
+}
+
+/* ==========================================================================
+   Catppuccin Mocha — dark theme (default)
+   ========================================================================== */
+
+:root, body.theme-dark {
+    /* Surfaces */
+    --bg-crust:    #181825;   /* deepest — window backdrop */
+    --bg-base:     #1e1e2e;   /* primary surface */
+    --bg-mantle:   #181825;   /* secondary surface */
+    --bg-surface:  #252536;   /* elevated surface (cards, hovered) */
+    --bg-overlay:  #313244;   /* popovers, dialogs, hover overlay */
+    --bg-row-hover:rgba(205, 214, 244, 0.06);
+
+    /* Text */
+    --fg-text:     #cdd6f4;   /* primary */
+    --fg-subtext:  #a6adc8;   /* secondary */
+    --fg-muted:    #6c7086;   /* metadata, captions */
+    --fg-faint:    #45475a;   /* placeholder, disabled */
+    --fg-on-accent:#1e1e2e;
+
+    /* Borders / dividers */
+    --border-soft: #313244;
+    --border-strong: #45475a;
+    --divider:     rgba(205, 214, 244, 0.06);
+
+    /* Accent (Catppuccin Blue) */
+    --accent:      #89b4fa;
+    --accent-hover:#b4d0fb;
+    --accent-soft: rgba(137, 180, 250, 0.18);
+
+    /* Semantic */
+    --success:     #a6e3a1;
+    --warning:     #f9e2af;
+    --error:       #f38ba8;
+    --info:        #74c7ec;
+
+    /* Pin (yellow), Incognito (lavender) */
+    --pin:         #f9e2af;
+    --incognito:   #b4befe;
+
+    /* Type icons (per-clip-type tints) */
+    --type-text:   #89b4fa;
+    --type-image:  #cba6f7;
+    --type-link:   #74c7ec;
+    --type-code:   #94e2d5;
+    --type-snip:   #f9e2af;
+
+    color-scheme: dark;
+}
+
+/* ==========================================================================
+   Light theme — high-contrast stone + brand-blue
+   --------------------------------------------------------------------------
+   Surface hierarchy by elevation (lightest = most elevated, opposite of dark):
+     row/card  →  #ffffff   (pure white, on top)
+     window    →  #f5f5f4   (stone-100)
+     headerbar →  #e7e5e4   (stone-200, recessed)
+   Text is near-black (stone-900) — full WCAG AA contrast for body copy.
+   ========================================================================== */
+
+body.theme-light {
+    --bg-crust:    #d6d3d1;   /* outer / shadow region — stone-300 */
+    --bg-base:     #f5f5f4;   /* window background — stone-100 */
+    --bg-mantle:   #e7e5e4;   /* headerbar / footer — stone-200 (recessed) */
+    --bg-surface:  #ffffff;   /* elevated rows / cards — pure white */
+    --bg-overlay:  #e7e5e4;   /* hover overlay, search-bar fill — stone-200 */
+    --bg-row-hover:rgba(28, 25, 23, 0.04);
+
+    --fg-text:     #1c1917;   /* near-black — stone-900 */
+    --fg-subtext:  #44403c;   /* stone-700 */
+    --fg-muted:    #78716c;   /* stone-500 */
+    --fg-faint:    #a8a29e;   /* stone-400 */
+    --fg-on-accent:#ffffff;
+
+    --border-soft:   #e7e5e4; /* stone-200 — clearly visible */
+    --border-strong: #d6d3d1; /* stone-300 */
+    --divider:       rgba(28, 25, 23, 0.07);
+
+    --accent:        #2563eb; /* blue-600 — punchy, high contrast on white */
+    --accent-hover:  #1d4ed8; /* blue-700 */
+    --accent-soft:   rgba(37, 99, 235, 0.12);
+
+    --success:       #16a34a; /* green-600 */
+    --warning:       #b45309; /* amber-700 */
+    --error:         #dc2626; /* red-600 */
+    --info:          #0891b2; /* cyan-600 */
+
+    --pin:           #b45309; /* amber-700 — darker than the gold star */
+    --incognito:     #7c3aed; /* violet-600 */
+
+    --type-text:     #2563eb; /* blue-600 */
+    --type-image:    #9333ea; /* purple-600 */
+    --type-link:     #0891b2; /* cyan-600 */
+    --type-code:     #0d9488; /* teal-600 */
+    --type-snip:     #b45309; /* amber-700 */
+
+    --shadow-window: 0 12px 40px -8px rgba(28, 25, 23, 0.18),
+                     0 4px 12px -2px rgba(28, 25, 23, 0.10),
+                     0 0 0 1px rgba(28, 25, 23, 0.06);
+
+    color-scheme: light;
+}
+
+/* ==========================================================================
+   Resets & base
+   ========================================================================== */
+
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: var(--font);
+    font-size: var(--size-body);
+    line-height: var(--line);
+    color: var(--fg-text);
+    background: var(--bg-crust);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+button {
+    font-family: inherit;
+    font-size: inherit;
+    color: inherit;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+button:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}

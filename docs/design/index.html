@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Clipman — design mockups</title>
+    <link rel="stylesheet" href="tokens.css">
+    <style>
+        body {
+            min-height: 100vh;
+            padding: var(--space-7);
+            display: flex;
+            justify-content: center;
+        }
+        .page {
+            max-width: 720px;
+            width: 100%;
+        }
+        h1 {
+            font-size: 28px;
+            font-weight: var(--weight-bold);
+            letter-spacing: -0.02em;
+            color: var(--fg-text);
+            margin: 0 0 var(--space-2);
+        }
+        .lead {
+            color: var(--fg-subtext);
+            font-size: var(--size-headline);
+            margin: 0 0 var(--space-6);
+            max-width: 60ch;
+        }
+        h2 {
+            font-size: 18px;
+            font-weight: var(--weight-semibold);
+            color: var(--fg-text);
+            margin: var(--space-6) 0 var(--space-3);
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: var(--space-4);
+        }
+        .card {
+            background: var(--bg-base);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            text-decoration: none;
+            color: inherit;
+            transition: all var(--time-base) var(--ease);
+            display: block;
+        }
+        .card:hover {
+            border-color: var(--accent);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px -4px rgba(0,0,0,0.4);
+        }
+        .card .preview {
+            height: 160px;
+            background: linear-gradient(135deg, var(--bg-mantle), var(--bg-surface));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            color: var(--accent);
+        }
+        .card .body {
+            padding: var(--space-4);
+        }
+        .card .title {
+            font-weight: var(--weight-semibold);
+            color: var(--fg-text);
+            margin-bottom: 4px;
+        }
+        .card .desc {
+            font-size: var(--size-meta);
+            color: var(--fg-muted);
+        }
+        .card .status {
+            display: inline-block;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 2px 8px;
+            border-radius: var(--radius-pill);
+            margin-top: var(--space-2);
+            font-weight: var(--weight-semibold);
+        }
+        .status.done    { background: rgba(166, 227, 161, 0.14); color: var(--success); }
+        .status.draft   { background: var(--accent-soft);        color: var(--accent); }
+        .status.todo    { background: var(--bg-overlay);         color: var(--fg-muted); }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--bg-base);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            font-size: var(--size-meta);
+        }
+        th, td {
+            text-align: left;
+            padding: var(--space-3) var(--space-4);
+            border-bottom: 1px solid var(--divider);
+        }
+        th {
+            font-weight: var(--weight-semibold);
+            color: var(--fg-subtext);
+            background: var(--bg-mantle);
+            font-size: var(--size-caption);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        tr:last-child td { border-bottom: none; }
+        code {
+            font-family: var(--font-mono);
+            font-size: 12px;
+            background: var(--bg-overlay);
+            padding: 1px 6px;
+            border-radius: 4px;
+            color: var(--fg-text);
+        }
+        .theme-toggle {
+            position: fixed;
+            top: var(--space-4);
+            right: var(--space-4);
+            background: var(--bg-overlay);
+            border-radius: var(--radius-pill);
+            padding: 6px 14px;
+            font-size: var(--size-meta);
+            color: var(--fg-subtext);
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .theme-toggle button {
+            padding: 4px 10px;
+            border-radius: var(--radius-pill);
+            color: var(--fg-subtext);
+        }
+        .theme-toggle button.active {
+            background: var(--accent);
+            color: var(--fg-on-accent);
+            font-weight: var(--weight-semibold);
+        }
+    </style>
+</head>
+<body class="theme-dark">
+
+<div class="theme-toggle">
+    <span>theme</span>
+    <button class="active" onclick="document.body.className='theme-dark'; refreshActive(this)">Dark</button>
+    <button onclick="document.body.className='theme-light'; refreshActive(this)">Light</button>
+</div>
+
+<div class="page">
+
+    <h1>Clipman redesign</h1>
+    <p class="lead">
+        HTML/CSS mockups for the GTK4 + libadwaita rewrite of the clipboard popup.
+        Designed against Catppuccin Mocha/Latte; tokens in
+        <code>tokens.css</code> map 1:1 to libadwaita widgets.
+    </p>
+
+    <h2>Surfaces</h2>
+    <div class="card-grid">
+
+        <div class="card" style="opacity: 0.6">
+            <div class="preview" style="color: var(--fg-muted)">▣</div>
+            <div class="body">
+                <div class="title">Main window</div>
+                <div class="desc">Clipboard popup — search, filter, pinned, day-grouped rows, footer.</div>
+                <span class="status todo">To do</span>
+            </div>
+        </div>
+
+        <div class="card" style="opacity: 0.6">
+            <div class="preview" style="color: var(--fg-muted)">⚙</div>
+            <div class="body">
+                <div class="title">Preferences</div>
+                <div class="desc">Settings extracted from the inline panel into AdwPreferencesWindow with groups: Appearance / Privacy / Shortcuts / Storage / Updates / About.</div>
+                <span class="status todo">To do</span>
+            </div>
+        </div>
+
+        <div class="card" style="opacity: 0.6">
+            <div class="preview" style="color: var(--fg-muted)">✎</div>
+            <div class="body">
+                <div class="title">Snippets editor</div>
+                <div class="desc">Master-detail Adw.Dialog: searchable snippet list on the left, edit form on the right with monospace content, {{date}}/{{clipboard}} variables, use-count meta.</div>
+                <span class="status todo">To do</span>
+            </div>
+        </div>
+
+        <div class="card" style="opacity: 0.6">
+            <div class="preview" style="color: var(--fg-muted)">∅</div>
+            <div class="body">
+                <div class="title">Edge states</div>
+                <div class="desc">Empty / no-results / incognito mode / first-run / clipboard permission denied.</div>
+                <span class="status todo">To do</span>
+            </div>
+        </div>
+
+    </div>
+
+    <h2>libadwaita component map</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>UI element</th>
+                <th>libadwaita widget</th>
+                <th>Replaces (current)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>Window title bar</td>            <td><code>Adw.HeaderBar</code></td>             <td>Custom CSD header</td></tr>
+            <tr><td>Search field</td>                <td><code>Adw.EntryRow</code> (search)</td>     <td><code>Gtk.SearchEntry</code></td></tr>
+            <tr><td>Filter tabs</td>                 <td><code>Adw.ViewSwitcher</code> (pill)</td>   <td>Custom <code>filter-tab</code> buttons</td></tr>
+            <tr><td>Settings (was inline)</td>       <td><code>Adw.PreferencesWindow</code></td>     <td>Inline settings panel inside main window</td></tr>
+            <tr><td>Day-grouped sections</td>        <td><code>Adw.PreferencesGroup</code></td>      <td>Plain "TODAY" label</td></tr>
+            <tr><td>Clip row</td>                    <td><code>Adw.ActionRow</code></td>             <td>Hand-built Gtk.Box rows</td></tr>
+            <tr><td>Update banner</td>               <td><code>Adw.Banner</code></td>                <td>Custom <code>update-banner</code> box</td></tr>
+            <tr><td>Empty / no-results state</td>    <td><code>Adw.StatusPage</code></td>            <td>Hidden listbox</td></tr>
+            <tr><td>Snippets edit modal</td>         <td><code>Adw.Dialog</code></td>                <td><code>Gtk.Dialog</code></td></tr>
+            <tr><td>Toast notifications</td>         <td><code>Adw.Toast</code></td>                 <td>(none today)</td></tr>
+        </tbody>
+    </table>
+
+    <h2>Design principles</h2>
+    <ul style="line-height: 1.7; color: var(--fg-subtext);">
+        <li><b>Native GNOME feel.</b> Looks like Files / Settings; no custom chrome that fights the desktop.</li>
+        <li><b>Settings out of the main view.</b> The clipboard popup is for clipboard content; settings move to their own window.</li>
+        <li><b>Day-grouped rows.</b> Pinned → Today → Yesterday → Earlier this week → Older. Easier to scan than a flat list.</li>
+        <li><b>Color-coded type icons.</b> Text / image / link / code / snippet each get a tinted leading icon — at a glance.</li>
+        <li><b>Hover-only actions.</b> Pin and delete buttons are invisible until you hover; reduces visual noise.</li>
+        <li><b>Catppuccin throughout.</b> Both themes share the same tokens, only the palette changes.</li>
+    </ul>
+
+</div>
+
+<script>
+    function refreshActive(btn) {
+        document.querySelectorAll('.theme-toggle button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+</script>
+
+</body>
+</html>
