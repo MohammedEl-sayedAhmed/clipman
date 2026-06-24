@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Clipman — edge states</title>
+    <link rel="stylesheet" href="tokens.css">
+    <style>
+        body {
+            min-height: 100vh;
+            padding: var(--space-7);
+            background:
+                radial-gradient(circle at 30% 20%, rgba(137, 180, 250, 0.06), transparent 60%),
+                radial-gradient(circle at 80% 80%, rgba(203, 166, 247, 0.05), transparent 50%),
+                var(--bg-crust);
+        }
+        body.theme-light {
+            background:
+                radial-gradient(circle at 30% 20%, rgba(37, 99, 235, 0.06), transparent 60%),
+                radial-gradient(circle at 80% 80%, rgba(147, 51, 234, 0.05), transparent 50%),
+                var(--bg-crust);
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: var(--space-4);
+            right: var(--space-4);
+            background: var(--bg-overlay);
+            border-radius: var(--radius-pill);
+            padding: 6px 14px;
+            font-size: var(--size-meta);
+            color: var(--fg-subtext);
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            z-index: 10;
+        }
+        .theme-toggle button {
+            padding: 4px 10px;
+            border-radius: var(--radius-pill);
+            color: var(--fg-subtext);
+        }
+        .theme-toggle button.active {
+            background: var(--accent);
+            color: var(--fg-on-accent);
+            font-weight: var(--weight-semibold);
+        }
+
+        /* ==================================================================
+           Page layout: window mockup on the left, state picker on the right
+           ================================================================== */
+        .layout {
+            display: grid;
+            grid-template-columns: 420px 280px;
+            gap: var(--space-6);
+            justify-content: center;
+            align-items: start;
+            margin: 0 auto;
+            max-width: 800px;
+        }
+
+        /* Window shell (same dimensions as main-window.html) */
+        .window {
+            width: 420px;
+            height: 640px;
+            background: var(--bg-base);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-window);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid var(--border-soft);
+            position: relative;
+        }
+
+        /* HeaderBar */
+        .headerbar {
+            display: flex;
+            align-items: center;
+            padding: var(--space-2) var(--space-3);
+            background: var(--bg-mantle);
+            border-bottom: 1px solid var(--divider);
+            min-height: 38px;
+        }
+        .headerbar .title-wrap { flex: 1; text-align: center; }
+        .headerbar .title {
+            font-size: var(--size-title);
+            font-weight: var(--weight-semibold);
+            color: var(--fg-text);
+            letter-spacing: -0.01em;
+        }
+        .header-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: var(--radius-sm);
+            color: var(--fg-subtext);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background var(--time-fast) var(--ease);
+            position: relative;
+        }
+        .header-btn:hover { background: var(--bg-overlay); color: var(--fg-text); }
+        .header-btn svg { width: 16px; height: 16px; }
+        .header-btn.is-active {
+            background: rgba(180, 190, 254, 0.18);
+            color: var(--incognito);
+        }
+        body.theme-light .header-btn.is-active {
+            background: rgba(124, 58, 237, 0.12);
+        }
+
+        /* Banner (top-of-window strip — AdwBanner) */
+        .banner {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: 10px var(--space-3);
+            font-size: var(--size-meta);
+            border-bottom: 1px solid var(--divider);
+        }
+        .banner-info    { background: rgba(116, 199, 236, 0.10); color: var(--info); }
+        .banner-warning { background: rgba(249, 226, 175, 0.10); color: var(--warning); }
+        .banner-privacy { background: rgba(180, 190, 254, 0.10); color: var(--incognito); }
+        body.theme-light .banner-info    { background: rgba(8, 145, 178, 0.08); }
+        body.theme-light .banner-warning { background: rgba(180, 83, 9, 0.08); }
+        body.theme-light .banner-privacy { background: rgba(124, 58, 237, 0.08); }
+        .banner svg { width: 16px; height: 16px; flex-shrink: 0; }
+        .banner .banner-body { flex: 1; min-width: 0; }
+        .banner .banner-body strong { color: var(--fg-text); font-weight: var(--weight-semibold); }
+        .banner .banner-body .desc { color: var(--fg-subtext); font-size: var(--size-caption); margin-top: 1px; }
+        .banner .actions { display: flex; gap: 4px; }
+        .banner .btn-text {
+            padding: 4px 10px;
+            font-size: var(--size-caption);
+            font-weight: var(--weight-semibold);
+            border-radius: var(--radius-sm);
+            color: var(--fg-text);
+            background: transparent;
+            transition: background var(--time-fast) var(--ease);
+        }
+        .banner .btn-text:hover { background: var(--bg-overlay); }
+        .banner .btn-text.is-primary { color: var(--info); }
+        .banner-warning .btn-text.is-primary { color: var(--warning); }
+        .banner-privacy .btn-text.is-primary { color: var(--incognito); }
+        .banner .dismiss {
+            width: 24px;
+            height: 24px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: var(--radius-sm);
+            color: var(--fg-muted);
+        }
+        .banner .dismiss:hover { background: var(--bg-overlay); color: var(--fg-text); }
+        .banner .dismiss svg { width: 12px; height: 12px; }
+
+        /* Toolbar (search + filter) */
+        .toolbar {
+            padding: var(--space-3) var(--space-3) var(--space-2);
+            background: var(--bg-base);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+        }
+        .search {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            background: var(--bg-overlay);
+            padding: 7px 10px;
+            border-radius: var(--radius-md);
+            border: 1px solid transparent;
+        }
+        .search svg { width: 14px; height: 14px; color: var(--fg-muted); }
+        .search input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--fg-text);
+            font-family: inherit;
+            font-size: var(--size-body);
+        }
+        .search input::placeholder { color: var(--fg-muted); }
+        .switcher {
+            display: flex;
+            gap: 2px;
+            padding: 2px;
+            background: var(--bg-overlay);
+            border-radius: var(--radius-md);
+            align-self: flex-start;
+        }
+        .switcher button {
+            padding: 5px 12px;
+            font-size: var(--size-meta);
+            font-weight: var(--weight-medium);
+            color: var(--fg-subtext);
+            border-radius: var(--radius-sm);
+        }
+        .switcher button.active {
+            background: var(--bg-base);
+            color: var(--fg-text);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.15);
+        }
+
+        /* Content area */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* StatusPage (the canonical edge-state component) */
+        .status-page {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: var(--space-5);
+            color: var(--fg-muted);
+        }
+        .status-icon {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: var(--space-4);
+        }
+        .status-icon svg { width: 32px; height: 32px; }
+
+        /* Tonal variants for the StatusPage icon */
+        .tone-neutral       { background: var(--bg-overlay); color: var(--fg-muted); }
+        .tone-informational { background: rgba(116, 199, 236, 0.14); color: var(--info); }
+        body.theme-light .tone-informational { background: rgba(8, 145, 178, 0.10); }
+        .tone-positive      { background: rgba(180, 190, 254, 0.18); color: var(--incognito); }
+        body.theme-light .tone-positive { background: rgba(124, 58, 237, 0.12); }
+        .tone-warning       { background: rgba(249, 226, 175, 0.18); color: var(--warning); }
+        body.theme-light .tone-warning { background: rgba(180, 83, 9, 0.12); }
+        .tone-error         { background: rgba(243, 139, 168, 0.18); color: var(--error); }
+        body.theme-light .tone-error { background: rgba(220, 38, 38, 0.10); }
+
+        .status-title {
+            font-size: 18px;
+            font-weight: var(--weight-semibold);
+            color: var(--fg-text);
+            margin-bottom: 6px;
+            letter-spacing: -0.01em;
+            max-width: 30ch;
+        }
+        .status-desc {
+            font-size: var(--size-body);
+            color: var(--fg-subtext);
+            margin-bottom: var(--space-4);
+            max-width: 38ch;
+            line-height: 1.5;
+        }
+        .status-actions {
+            display: flex;
+            gap: var(--space-2);
+            margin-bottom: var(--space-3);
+        }
+        .btn {
+            padding: 7px 14px;
+            font-size: var(--size-meta);
+            font-weight: var(--weight-semibold);
+            border-radius: var(--radius-sm);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all var(--time-fast) var(--ease);
+        }
+        .btn-primary { background: var(--accent); color: var(--fg-on-accent); }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-primary.tone-warning-cta { background: var(--warning); color: #1c1917; }
+        .btn-primary.tone-error-cta   { background: var(--error);   color: #fff; }
+        .btn-primary.tone-positive-cta{ background: var(--incognito); color: #fff; }
+        .btn-outline {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-strong);
+            color: var(--fg-text);
+            font-weight: var(--weight-medium);
+        }
+        .btn-outline:hover { background: var(--bg-overlay); }
+        .status-kbd {
+            margin-top: 4px;
+            font-size: var(--size-caption);
+            color: var(--fg-muted);
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .kbd {
+            font-family: var(--font);
+            font-size: 11px;
+            padding: 2px 7px;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-soft);
+            border-radius: 5px;
+            color: var(--fg-subtext);
+            font-weight: var(--weight-medium);
+            box-shadow: 0 1px 0 var(--border-strong);
+        }
+
+        /* Populated mock content (used when a state renders inside an
+           otherwise-normal popup — banner states) */
+        .mock-rows { padding: var(--space-2) var(--space-3) var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }
+        .mock-group-header { font-size: var(--size-caption); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-muted); padding: var(--space-1) var(--space-2); }
+        .mock-rows-inner { background: var(--bg-surface); border: 1px solid var(--border-soft); border-radius: var(--radius-md); overflow: hidden; }
+        .mock-row { padding: 9px 12px; border-bottom: 1px solid var(--divider); display: flex; align-items: center; gap: 10px; }
+        .mock-row:last-child { border-bottom: none; }
+        .mock-row .ico { width: 26px; height: 26px; border-radius: 6px; background: var(--bg-overlay); flex-shrink: 0; }
+        .mock-row .lbl { flex: 1; color: var(--fg-text); font-size: var(--size-body); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .mock-row .meta { font-size: var(--size-caption); color: var(--fg-muted); }
+        .mock-row.is-dim { opacity: 0.65; }
+        body.theme-dark .window.is-incognito .toolbar { background: linear-gradient(135deg, var(--bg-base) 0%, rgba(180,190,254,0.04) 100%); }
+        body.theme-light .window.is-incognito .toolbar { background: linear-gradient(135deg, var(--bg-base) 0%, rgba(124,58,237,0.04) 100%); }
+
+        /* Footer */
+        .footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-2) var(--space-3);
+            background: var(--bg-mantle);
+            border-top: 1px solid var(--divider);
+            font-size: var(--size-meta);
+            color: var(--fg-muted);
+        }
+        .footer .right { display: flex; gap: var(--space-2); align-items: center; }
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: var(--radius-pill);
+            font-size: 11px;
+            font-weight: var(--weight-medium);
+        }
+        .pill-recording { background: rgba(166, 227, 161, 0.14); color: var(--success); }
+        body.theme-light .pill-recording { background: rgba(22, 163, 74, 0.10); }
+        .pill-paused { background: rgba(180, 190, 254, 0.18); color: var(--incognito); }
+        body.theme-light .pill-paused { background: rgba(124, 58, 237, 0.12); }
+        .pill svg { width: 10px; height: 10px; }
+        .footer .text-btn { padding: 3px 8px; border-radius: var(--radius-sm); color: var(--fg-subtext); }
+        .footer .text-btn:hover { background: var(--bg-overlay); color: var(--fg-text); }
+        .footer .text-btn.danger { color: var(--error); opacity: 0.8; }
+
+        /* AlertDialog overlay */
+        .dialog-scrim {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.55);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-3);
+            border-radius: var(--radius-lg);
+            backdrop-filter: blur(2px);
+        }
+        body.theme-light .dialog-scrim { background: rgba(0,0,0,0.35); }
+        .dialog {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-md);
+            box-shadow: 0 12px 40px -8px rgba(0,0,0,0.45);
+            width: 100%;
+            max-width: 340px;
+            overflow: hidden;
+        }
+        .dialog-body { padding: var(--space-4); text-align: center; }
+        .dialog-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin: 4px auto var(--space-3);
+        }
+        .dialog-icon svg { width: 22px; height: 22px; }
+        .dialog-title {
+            font-size: var(--size-headline);
+            font-weight: var(--weight-semibold);
+            color: var(--fg-text);
+            margin-bottom: 4px;
+            letter-spacing: -0.01em;
+        }
+        .dialog-desc {
+            font-size: var(--size-meta);
+            color: var(--fg-subtext);
+            line-height: 1.5;
+            margin-bottom: 0;
+        }
+        .dialog-actions {
+            display: flex;
+            border-top: 1px solid var(--divider);
+        }
+        .dialog-actions button {
+            flex: 1;
+            padding: 12px;
+            font-size: var(--size-body);
+            font-weight: var(--weight-semibold);
+            color: var(--fg-text);
+            background: transparent;
+            border-right: 1px solid var(--divider);
+            transition: background var(--time-fast) var(--ease);
+        }
+        .dialog-actions button:last-child { border-right: none; }
+        .dialog-actions button:hover { background: var(--bg-overlay); }
+        .dialog-actions button.is-primary { color: var(--accent); }
+        .dialog-actions button.is-destructive { color: var(--error); }
+
+        /* ----- State picker (right column) ----- */
+        .picker {
+            background: var(--bg-base);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+        .picker-head {
+            padding: var(--space-3) var(--space-4);
+            background: var(--bg-mantle);
+            border-bottom: 1px solid var(--divider);
+            font-size: var(--size-caption);
+            font-weight: var(--weight-semibold);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--fg-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .picker-head .count { color: var(--accent); font-variant-numeric: tabular-nums; }
+        .picker-group {
+            padding: 6px;
+            border-bottom: 1px solid var(--divider);
+        }
+        .picker-group:last-child { border-bottom: none; }
+        .picker-group .group-label {
+            padding: 4px 10px 6px;
+            font-size: 10px;
+            font-weight: var(--weight-semibold);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--fg-muted);
+        }
+        .picker-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            border-radius: var(--radius-sm);
+            font-size: var(--size-meta);
+            color: var(--fg-subtext);
+            cursor: pointer;
+            transition: all var(--time-fast) var(--ease);
+        }
+        .picker-item:hover:not(.active) { background: var(--bg-row-hover); color: var(--fg-text); }
+        .picker-item.active {
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-weight: var(--weight-semibold);
+        }
+        .picker-item .dot {
+            width: 6px; height: 6px; border-radius: 50%; background: var(--fg-faint); flex-shrink: 0;
+        }
+        .picker-item .dot.t-info { background: var(--info); }
+        .picker-item .dot.t-pos  { background: var(--incognito); }
+        .picker-item .dot.t-warn { background: var(--warning); }
+        .picker-item .dot.t-err  { background: var(--error); }
+        .picker-item .dot.t-neu  { background: var(--fg-muted); }
+    </style>
+</head>
+<body class="theme-dark">
+
+<div class="theme-toggle">
+    <span>theme</span>
+    <button class="active" onclick="document.body.className='theme-dark'; rt(this)">Dark</button>
+    <button onclick="document.body.className='theme-light'; rt(this)">Light</button>
+</div>
+
+<div class="layout">
+
+    <!-- ============ Window mockup ============ -->
+    <div class="window" id="window"></div>
+
+    <!-- ============ State picker ============ -->
+    <aside class="picker">
+        <div class="picker-head">
+            <span>Edge states</span>
+            <span class="count" id="count">15</span>
+        </div>
+
+        <div class="picker-group">
+            <div class="group-label">Baseline</div>
+            <div class="picker-item active" data-state="populated"><span class="dot t-neu"></span>Populated history</div>
+        </div>
+
+        <div class="picker-group">
+            <div class="group-label">Informational</div>
+            <div class="picker-item" data-state="empty"><span class="dot t-info"></span>Empty history</div>
+            <div class="picker-item" data-state="no-snippets"><span class="dot t-info"></span>No snippets</div>
+            <div class="picker-item" data-state="no-results"><span class="dot t-info"></span>No search results</div>
+            <div class="picker-item" data-state="update-available"><span class="dot t-info"></span>Update available</div>
+            <div class="picker-item" data-state="sensitive-auto-cleared"><span class="dot t-info"></span>Sensitive auto-cleared</div>
+        </div>
+
+        <div class="picker-group">
+            <div class="group-label">Privacy</div>
+            <div class="picker-item" data-state="incognito-on"><span class="dot t-pos"></span>Incognito (paused)</div>
+        </div>
+
+        <div class="picker-group">
+            <div class="group-label">Setup</div>
+            <div class="picker-item" data-state="first-run"><span class="dot t-warn"></span>Extension not connected</div>
+            <div class="picker-item" data-state="snap-required"><span class="dot t-warn"></span>Snap extension required</div>
+            <div class="picker-item" data-state="shortcut-failed"><span class="dot t-warn"></span>Shortcut couldn't register</div>
+        </div>
+
+        <div class="picker-group">
+            <div class="group-label">Errors</div>
+            <div class="picker-item" data-state="backup-failed"><span class="dot t-err"></span>Backup failed</div>
+            <div class="picker-item" data-state="restore-failed"><span class="dot t-err"></span>Restore failed</div>
+            <div class="picker-item" data-state="clipboard-blocked"><span class="dot t-err"></span>Clipboard blocked</div>
+            <div class="picker-item" data-state="watcher-crashed"><span class="dot t-err"></span>Watcher crashed</div>
+            <div class="picker-item" data-state="db-corrupt"><span class="dot t-err"></span>Database error</div>
+        </div>
+    </aside>
+
+</div>
+
+<!-- ============ Inline state renderer ============ -->
+<script>
+function rt(b) {
+    document.querySelectorAll('.theme-toggle button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+}
+
+// SVG icon library (Adwaita symbolic style — single-stroke, 16x16 viewBox scaled into 32x32)
+const I = {
+    paste:     '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="8" height="11" rx="1.5"/><path d="M6 3V2h4v1M6 7h4M6 9.5h3"/></svg>',
+    bookmark:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2.5h8v11l-4-3-4 3z"/></svg>',
+    search:    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3"/></svg>',
+    eye:       '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="1.8"/></svg>',
+    eyeSlash:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 3l10 10M5 5.5C3 7 1.5 8 1.5 8s2.5 4.5 6.5 4.5c1.4 0 2.6-.5 3.6-1.2"/><path d="M14.5 8s-1-1.8-2.8-3.2c-1-.8-2.2-1.3-3.7-1.3-.5 0-1 .05-1.4.16"/></svg>',
+    download:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 2v8.5M4.5 7.5L8 11l3.5-3.5M3 13.5h10"/></svg>',
+    shield:    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1.5l5 1.8v4c0 3.5-2.3 6.2-5 7.2-2.7-1-5-3.7-5-7.2v-4L8 1.5z"/><path d="M5.5 8l2 2 3-3.5"/></svg>',
+    puzzle:    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5h4v2c0 .5.4 1 1 1h2v4h-2c-.5 0-1 .4-1 1v3h-4v-3c0-.5-.4-1-1-1H3v-4h2c.5 0 1-.4 1-1v-2z"/></svg>',
+    keyboard:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M4 9.5h8"/></svg>',
+    warning:   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2l6.5 11h-13z"/><path d="M8 6v3M8 11h.01"/></svg>',
+    error:     '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6.5"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5"/></svg>',
+    bug:       '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="9" r="4"/><path d="M8 1.5v3M4.5 3l2 1.5M11.5 3l-2 1.5M2 8h2M14 8h-2M3 13l2-1.5M13 13l-2-1.5M8 13v2"/></svg>',
+    database:  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><ellipse cx="8" cy="3.5" rx="5" ry="1.5"/><path d="M3 3.5v9c0 .83 2.24 1.5 5 1.5s5-.67 5-1.5v-9M3 8c0 .83 2.24 1.5 5 1.5s5-.67 5-1.5"/></svg>',
+    arrowUp:   '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v6M5.5 7.5L8 5l2.5 2.5"/></svg>',
+};
+
+// State definitions
+const STATES = {
+    'populated': {
+        mode: 'baseline',
+        title: 'Populated history',
+        incognito: false,
+        rows: [
+            ['Today', '“Standup template — yesterday: ...”', '14× · 2 h ago'],
+            ['Today', 'image.png — design review notes',     '2 min ago'],
+            ['Today', 'git fetch --prune && git rebase',     '14 min ago'],
+            ['Yest.', 'Viewing the concept of zero …',       '18:42'],
+        ],
+        footer: { left: '42 items', pill: 'recording', clear: true },
+    },
+    'empty': {
+        mode: 'status',
+        tone: 'informational', icon: I.paste,
+        title: 'Nothing copied yet',
+        body:  'Copy text or an image and it will appear here. The popup stays hidden until you summon it.',
+        kbd:   ['Super', 'V', '— or your custom shortcut'],
+        footer: { left: '0 items', pill: 'recording' },
+    },
+    'no-snippets': {
+        mode: 'status',
+        switcher: 'Snippets',
+        tone: 'informational', icon: I.bookmark,
+        title: 'No snippets yet',
+        body:  'Save reusable text — signatures, addresses, code stubs — and paste them from here.',
+        primary: { label: 'Add snippet', tone: 'primary' },
+        kbd: ['Ctrl', 'N'],
+        footer: { left: '0 snippets' },
+    },
+    'no-results': {
+        mode: 'status',
+        searchValue: 'libadwaita',
+        tone: 'informational', icon: I.search,
+        title: 'No clips match that search',
+        body:  'Try a shorter query, switch the filter to All, or clear the search box.',
+        primary: { label: 'Clear search', tone: 'outline' },
+        footer: { left: '0 of 42 items', pill: 'recording' },
+    },
+    'update-available': {
+        mode: 'banner+rows',
+        banner: {
+            kind: 'info', icon: I.arrowUp,
+            title: 'A newer Clipman release is available',
+            desc:  'v1.0.7 · released yesterday',
+            primary: 'Release notes', dismiss: true,
+        },
+        rows: 'short',
+        footer: { left: '42 items', pill: 'recording', clear: true },
+    },
+    'sensitive-auto-cleared': {
+        mode: 'banner+rows',
+        banner: {
+            kind: 'warning', icon: I.shield,
+            title: 'Sensitive items cleared',
+            desc:  '3 clips matching token / key patterns were purged after the auto-clear timeout',
+            primary: 'Open settings', dismiss: true,
+        },
+        rows: 'short',
+        footer: { left: '39 items', pill: 'recording', clear: true },
+    },
+    'incognito-on': {
+        mode: 'banner+rows',
+        incognito: true,
+        banner: {
+            kind: 'privacy', icon: I.eyeSlash,
+            title: 'Incognito is on',
+            desc:  'New copies are not recorded. Existing entries stay available.',
+            primary: 'Resume recording',
+        },
+        rows: 'short',
+        footer: { left: '42 items', pill: 'paused', clear: true },
+    },
+    'first-run': {
+        mode: 'status',
+        tone: 'warning', icon: I.puzzle,
+        title: 'GNOME Shell extension isn’t connected',
+        body:  'Clipman is recording via wl-paste, but auto-paste on click needs the bundled GNOME extension enabled.',
+        primary: { label: 'Open Extensions', tone: 'warning-cta' },
+        secondary: { label: 'Install guide', tone: 'outline' },
+        footer: { left: '0 items', pill: 'recording' },
+    },
+    'snap-required': {
+        mode: 'status',
+        tone: 'warning', icon: I.puzzle,
+        title: 'GNOME extension required under snap',
+        body:  'Snap confinement blocks wl-paste, so Clipman needs the bundled GNOME extension to record anything.',
+        primary: { label: 'Open Extensions', tone: 'warning-cta' },
+        secondary: { label: 'Snap notes', tone: 'outline' },
+        footer: { left: '0 items' },
+    },
+    'shortcut-failed': {
+        mode: 'dialog-on-populated',
+        dialog: {
+            tone: 'warning', icon: I.keyboard,
+            title: 'Couldn’t update the GNOME shortcut',
+            body:  'Clipman’s keybinding isn’t registered with GNOME. Run install.sh to register it, then set the shortcut again.',
+            actions: [
+                { label: 'Copy command', tone: 'outline' },
+                { label: 'Got it', tone: 'primary' },
+            ],
+        },
+    },
+    'backup-failed': {
+        mode: 'dialog-on-populated',
+        dialog: {
+            tone: 'error', icon: I.error,
+            title: 'Backup failed',
+            body:  'The destination is full, read-only, or otherwise unwritable. Pick a different folder or free up space, then retry.',
+            actions: [
+                { label: 'Choose another location', tone: 'outline' },
+                { label: 'Retry', tone: 'primary' },
+            ],
+        },
+    },
+    'restore-failed': {
+        mode: 'dialog-on-populated',
+        dialog: {
+            tone: 'error', icon: I.error,
+            title: 'Restore failed',
+            body:  'That file isn’t a Clipman backup, or it includes triggers/views we won’t import. Pick a .db file exported by Clipman.',
+            actions: [
+                { label: 'Pick another file', tone: 'outline' },
+                { label: 'Close', tone: 'primary' },
+            ],
+        },
+    },
+    'clipboard-blocked': {
+        mode: 'status',
+        tone: 'error', icon: I.error,
+        title: 'Clipman can’t watch the clipboard',
+        body:  'Install wl-clipboard and use a Wayland session, or enable the GNOME extension. Until then, copies won’t be recorded.',
+        primary: { label: 'Install wl-clipboard', tone: 'error-cta' },
+        secondary: { label: 'Setup help', tone: 'outline' },
+        footer: { left: '0 items' },
+    },
+    'watcher-crashed': {
+        mode: 'status',
+        tone: 'error', icon: I.bug,
+        title: 'Clipboard watcher stopped',
+        body:  'The wl-paste helper crashed too many times. Clipman stopped retrying. Restart the daemon to resume capturing clips.',
+        primary: { label: 'Restart Clipman', tone: 'error-cta' },
+        secondary: { label: 'View logs', tone: 'outline' },
+        footer: { left: '42 items · paused' },
+    },
+    'db-corrupt': {
+        mode: 'status',
+        tone: 'error', icon: I.database,
+        title: 'Can’t open the clipboard database',
+        body:  'Another Clipman process may be running, or the database file is corrupt. Close other instances, or restore a backup.',
+        primary: { label: 'Reveal database folder', tone: 'error-cta' },
+        secondary: { label: 'Restore from backup', tone: 'outline' },
+        footer: { left: '' },
+    },
+};
+
+// ----- Rendering -----
+const win = document.getElementById('window');
+
+function renderHeaderBar(s) {
+    return `
+        <header class="headerbar">
+            <button class="header-btn ${s.incognito ? 'is-active' : ''}" title="Incognito">${I.eye}</button>
+            <div class="title-wrap"><span class="title">Clipman</span></div>
+            <button class="header-btn" title="Menu">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 5h10M3 8h10M3 11h10"/></svg>
+            </button>
+        </header>`;
+}
+
+function renderToolbar(s) {
+    const tabs = ['All', 'Text', 'Images', 'Snippets'];
+    const activeTab = s.switcher || 'All';
+    return `
+        <div class="toolbar">
+            <div class="search">${I.search}
+                <input type="text" placeholder="Search clipboard history…" value="${s.searchValue || ''}" />
+            </div>
+            <nav class="switcher">
+                ${tabs.map(t => `<button class="${t === activeTab ? 'active' : ''}">${t}</button>`).join('')}
+            </nav>
+        </div>`;
+}
+
+function renderBanner(b) {
+    const kindClass = `banner-${b.kind}`;
+    return `
+        <div class="banner ${kindClass}">
+            ${b.icon}
+            <div class="banner-body">
+                <strong>${b.title}</strong>
+                ${b.desc ? `<div class="desc">${b.desc}</div>` : ''}
+            </div>
+            <div class="actions">
+                ${b.primary ? `<button class="btn-text is-primary">${b.primary}</button>` : ''}
+                ${b.dismiss ? `<button class="dismiss" title="Dismiss"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg></button>` : ''}
+            </div>
+        </div>`;
+}
+
+function renderShortRows() {
+    const rows = [
+        ['edit-paste-symbolic', 'Standup template', '14× · 2 h'],
+        ['image',               'image.png',         '2 min'],
+        ['code',                'git fetch --prune', '14 min'],
+    ];
+    return `
+        <div class="mock-rows">
+            <div class="mock-group-header">★ Pinned · Today</div>
+            <div class="mock-rows-inner">
+                ${rows.map(r => `<div class="mock-row"><div class="ico"></div><div class="lbl">${r[1]}</div><div class="meta">${r[2]}</div></div>`).join('')}
+            </div>
+        </div>`;
+}
+
+function renderStatus(s) {
+    const toneClass = `tone-${s.tone}`;
+    return `
+        <div class="status-page">
+            <div class="status-icon ${toneClass}">${s.icon}</div>
+            <div class="status-title">${s.title}</div>
+            <div class="status-desc">${s.body}</div>
+            ${s.primary || s.secondary ? `
+                <div class="status-actions">
+                    ${s.secondary ? `<button class="btn btn-${s.secondary.tone}">${s.secondary.label}</button>` : ''}
+                    ${s.primary ? `<button class="btn btn-primary ${s.primary.tone && s.primary.tone !== 'primary' ? 'tone-' + s.primary.tone : ''}">${s.primary.label}</button>` : ''}
+                </div>` : ''}
+            ${s.kbd ? `<div class="status-kbd">${s.kbd.map((k, i) => i < s.kbd.length - 1 || s.kbd.length === 1 ? `<span class="kbd">${k}</span>` : `<span>${k}</span>`).join(' + ').replace('+ <span>', '<span>')}</div>` : ''}
+        </div>`;
+}
+
+function renderFooter(f) {
+    if (!f) return '';
+    return `
+        <footer class="footer">
+            <span>${f.left || ''}</span>
+            <div class="right">
+                ${f.pill === 'recording' ? `<span class="pill pill-recording"><svg viewBox="0 0 16 16" fill="currentColor"><circle cx="8" cy="8" r="3"/></svg>Recording</span>` : ''}
+                ${f.pill === 'paused'    ? `<span class="pill pill-paused"><svg viewBox="0 0 16 16" fill="currentColor"><rect x="5" y="4" width="2" height="8"/><rect x="9" y="4" width="2" height="8"/></svg>Paused</span>` : ''}
+                ${f.clear ? `<button class="text-btn danger">Clear all</button>` : ''}
+            </div>
+        </footer>`;
+}
+
+function renderDialog(d) {
+    const toneClass = `tone-${d.tone}`;
+    return `
+        <div class="dialog-scrim">
+            <div class="dialog">
+                <div class="dialog-body">
+                    <div class="dialog-icon ${toneClass}">${d.icon}</div>
+                    <div class="dialog-title">${d.title}</div>
+                    <div class="dialog-desc">${d.body}</div>
+                </div>
+                <div class="dialog-actions">
+                    ${d.actions.map(a => `<button class="${a.tone === 'primary' ? 'is-primary' : ''} ${a.tone === 'destructive' ? 'is-destructive' : ''}">${a.label}</button>`).join('')}
+                </div>
+            </div>
+        </div>`;
+}
+
+function renderPopulatedRows() {
+    return `
+        <div class="mock-rows">
+            <div class="mock-group-header">★ Pinned</div>
+            <div class="mock-rows-inner">
+                <div class="mock-row"><div class="ico"></div><div class="lbl">Standup template — yesterday / today / blockers</div></div>
+                <div class="mock-row"><div class="ico"></div><div class="lbl">https://github.com/.../clipman</div></div>
+            </div>
+            <div class="mock-group-header" style="margin-top: 12px;">Today</div>
+            <div class="mock-rows-inner">
+                <div class="mock-row"><div class="ico"></div><div class="lbl">A number is a mathematical object …</div></div>
+                <div class="mock-row"><div class="ico"></div><div class="lbl">image.png — design review notes</div></div>
+                <div class="mock-row"><div class="ico"></div><div class="lbl">git fetch --prune && git rebase -i …</div></div>
+            </div>
+        </div>`;
+}
+
+function renderState(name) {
+    const s = STATES[name];
+    if (!s) { win.innerHTML = '<div style="padding:20px;color:var(--fg-muted)">Unknown state: ' + name + '</div>'; return; }
+
+    win.className = 'window' + (s.incognito ? ' is-incognito' : '');
+
+    if (s.mode === 'baseline') {
+        win.innerHTML = renderHeaderBar(s) + renderToolbar(s) + `<div class="content">${renderPopulatedRows()}</div>` + renderFooter(s.footer);
+    } else if (s.mode === 'status') {
+        win.innerHTML = renderHeaderBar(s) + renderToolbar(s) + `<div class="content">${renderStatus(s)}</div>` + renderFooter(s.footer);
+    } else if (s.mode === 'banner+rows') {
+        win.innerHTML = renderHeaderBar(s) + renderBanner(s.banner) + renderToolbar(s) + `<div class="content">${renderShortRows()}</div>` + renderFooter(s.footer);
+    } else if (s.mode === 'dialog-on-populated') {
+        win.innerHTML = renderHeaderBar({}) + renderToolbar({}) + `<div class="content">${renderPopulatedRows()}</div>` + renderFooter({left: '42 items', pill: 'recording', clear: true}) + renderDialog(s.dialog);
+    }
+}
+
+// Wire up picker
+document.querySelectorAll('.picker-item').forEach(item => {
+    item.addEventListener('click', () => {
+        document.querySelectorAll('.picker-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        renderState(item.dataset.state);
+    });
+});
+
+// Initial state from ?state= URL or first item
+const params = new URLSearchParams(location.search);
+const initial = params.get('state');
+const allKeys = Array.from(document.querySelectorAll('.picker-item')).map(i => i.dataset.state);
+const start = allKeys.includes(initial) ? initial : 'populated';
+const startItem = document.querySelector(`[data-state="${start}"]`);
+document.querySelectorAll('.picker-item').forEach(i => i.classList.remove('active'));
+startItem.classList.add('active');
+renderState(start);
+</script>
+
+</body>
+</html>
