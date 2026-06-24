@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Clipman — Snippets editor mockup</title>
+    <link rel="stylesheet" href="tokens.css">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-7);
+            background:
+                radial-gradient(circle at 30% 20%, rgba(137, 180, 250, 0.06), transparent 60%),
+                radial-gradient(circle at 80% 80%, rgba(203, 166, 247, 0.05), transparent 50%),
+                var(--bg-crust);
+        }
+        body.theme-light {
+            background:
+                radial-gradient(circle at 30% 20%, rgba(37, 99, 235, 0.06), transparent 60%),
+                radial-gradient(circle at 80% 80%, rgba(147, 51, 234, 0.05), transparent 50%),
+                var(--bg-crust);
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: var(--space-4);
+            right: var(--space-4);
+            background: var(--bg-overlay);
+            border-radius: var(--radius-pill);
+            padding: 6px 14px;
+            font-size: var(--size-meta);
+            color: var(--fg-subtext);
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            z-index: 10;
+        }
+        .theme-toggle button {
+            padding: 4px 10px;
+            border-radius: var(--radius-pill);
+            color: var(--fg-subtext);
+            transition: all var(--time-fast) var(--ease);
+        }
+        .theme-toggle button.active {
+            background: var(--accent);
+            color: var(--fg-on-accent);
+            font-weight: var(--weight-semibold);
+        }
+        .state-toggle {
+            position: fixed;
+            top: 56px;
+            right: var(--space-4);
+            background: var(--bg-overlay);
+            border-radius: var(--radius-pill);
+            padding: 6px 14px;
+            font-size: var(--size-meta);
+            color: var(--fg-subtext);
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            z-index: 10;
+        }
+        .state-toggle button {
+            padding: 4px 10px;
+            border-radius: var(--radius-pill);
+            color: var(--fg-subtext);
+            transition: all var(--time-fast) var(--ease);
+        }
+        .state-toggle button.active {
+            background: var(--accent);
+            color: var(--fg-on-accent);
+            font-weight: var(--weight-semibold);
+        }
+
+        /* ==================================================================
+           Adw.Dialog: NavigationSplitView (master-detail)
+           ================================================================== */
+
+        .snip-window {
+            width: 820px;
+            height: 560px;
+            background: var(--bg-base);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-window);
+            display: grid;
+            grid-template-rows: auto 1fr;
+            grid-template-columns: 280px 1fr;
+            grid-template-areas:
+                "lh rh"
+                "list edit";
+            overflow: hidden;
+            border: 1px solid var(--border-soft);
+        }
+
+        /* HeaderBars — split-view has TWO headerbars (master + detail) */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-2) var(--space-3);
+            background: var(--bg-mantle);
+            border-bottom: 1px solid var(--divider);
+            min-height: 42px;
+            -webkit-app-region: drag;
+        }
+        .header-l { grid-area: lh; border-right: 1px solid var(--divider); }
+        .header-r { grid-area: rh; }
+        .header .title {
+            font-weight: var(--weight-semibold);
+            font-size: var(--size-title);
+            color: var(--fg-text);
+            letter-spacing: -0.01em;
+        }
+        .header .subtitle {
+            font-size: var(--size-caption);
+            color: var(--fg-muted);
+            margin-top: 1px;
+        }
+        .header-btn {
+            -webkit-app-region: no-drag;
+            width: 28px;
+            height: 28px;
+            border-radius: var(--radius-sm);
+            color: var(--fg-subtext);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background var(--time-fast) var(--ease);
+        }
+        .header-btn:hover { background: var(--bg-overlay); color: var(--fg-text); }
+        .header-btn svg { width: 16px; height: 16px; }
+        .header-btn.primary {
+            background: var(--accent);
+            color: var(--fg-on-accent);
+            padding: 0 12px;
+            width: auto;
+            height: 28px;
+            font-weight: var(--weight-semibold);
+            font-size: var(--size-meta);
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .header-btn.primary:hover { background: var(--accent-hover); color: var(--fg-on-accent); }
+
+        /* ----- Left: list pane ------------------------------------------- */
+        .list-pane {
+            grid-area: list;
+            background: var(--bg-mantle);
+            border-right: 1px solid var(--divider);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .list-search {
+            padding: var(--space-3) var(--space-3) var(--space-2);
+            background: var(--bg-mantle);
+        }
+        .search {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: var(--bg-overlay);
+            border-radius: var(--radius-sm);
+            border: 1px solid transparent;
+            transition: border-color var(--time-fast) var(--ease);
+        }
+        .search:focus-within { border-color: var(--accent); background: var(--bg-surface); }
+        .search svg { width: 13px; height: 13px; color: var(--fg-muted); }
+        .search input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--fg-text);
+            font-family: inherit;
+            font-size: var(--size-meta);
+        }
+        .search input::placeholder { color: var(--fg-muted); }
+
+        .list-scroll {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 var(--space-2) var(--space-2);
+        }
+        .list-scroll::-webkit-scrollbar { width: 6px; }
+        .list-scroll::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+        .list-scroll::-webkit-scrollbar-track { background: transparent; }
+
+        .snip-row {
+            display: grid;
+            grid-template-columns: 26px 1fr;
+            gap: 10px;
+            align-items: flex-start;
+            padding: 9px 10px;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: background var(--time-fast) var(--ease);
+            border: 1px solid transparent;
+        }
+        .snip-row + .snip-row { margin-top: 2px; }
+        .snip-row:hover:not(.active) { background: var(--bg-row-hover); }
+        .snip-row.active {
+            background: var(--accent-soft);
+            border-color: rgba(137, 180, 250, 0.25);
+        }
+        body.theme-light .snip-row.active {
+            border-color: rgba(37, 99, 235, 0.30);
+        }
+        .snip-row.dirty .snip-name::after {
+            content: " *";
+            color: var(--accent);
+            font-weight: var(--weight-bold);
+        }
+        .snip-row .ico {
+            width: 26px;
+            height: 26px;
+            border-radius: 7px;
+            background: rgba(249, 226, 175, 0.16);
+            color: var(--type-snip);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        body.theme-light .snip-row .ico { background: rgba(180, 83, 9, 0.14); }
+        .snip-row .ico svg { width: 13px; height: 13px; }
+        .snip-row.active .ico { background: var(--bg-surface); color: var(--accent); }
+
+        .snip-row .body { min-width: 0; }
+        .snip-name {
+            font-size: var(--size-body);
+            font-weight: var(--weight-medium);
+            color: var(--fg-text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .snip-row.active .snip-name { color: var(--accent); font-weight: var(--weight-semibold); }
+        .snip-preview {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: var(--fg-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 2px;
+        }
+        .snip-meta {
+            font-size: 10px;
+            color: var(--fg-faint);
+            margin-top: 2px;
+            display: flex;
+            gap: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        /* Footer of list pane: total count */
+        .list-footer {
+            padding: 8px 14px;
+            font-size: var(--size-caption);
+            color: var(--fg-muted);
+            background: var(--bg-mantle);
+            border-top: 1px solid var(--divider);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* ----- Right: edit pane ------------------------------------------ */
+        .edit-pane {
+            grid-area: edit;
+            background: var(--bg-base);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .edit-pane::-webkit-scrollbar { width: 8px; }
+        .edit-pane::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+        .edit-pane::-webkit-scrollbar-track { background: transparent; }
+
+        .form {
+            padding: var(--space-4) var(--space-5);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-4);
+        }
+
+        .field-label {
+            font-size: var(--size-caption);
+            font-weight: var(--weight-semibold);
+            color: var(--fg-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .entry {
+            width: 100%;
+            padding: 9px 12px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-md);
+            font-family: inherit;
+            font-size: var(--size-body);
+            color: var(--fg-text);
+            outline: none;
+            transition: border-color var(--time-fast) var(--ease),
+                        box-shadow var(--time-fast) var(--ease);
+        }
+        .entry:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+        }
+
+        .textarea-wrap {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-md);
+            position: relative;
+            transition: border-color var(--time-fast) var(--ease),
+                        box-shadow var(--time-fast) var(--ease);
+        }
+        .textarea-wrap:focus-within {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-soft);
+        }
+        .textarea {
+            width: 100%;
+            min-height: 200px;
+            padding: 10px 12px 28px;
+            background: transparent;
+            border: none;
+            outline: none;
+            font-family: var(--font-mono);
+            font-size: 12.5px;
+            line-height: 1.55;
+            color: var(--fg-text);
+            resize: vertical;
+        }
+        .textarea-toolbar {
+            position: absolute;
+            right: 8px;
+            bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 10px;
+            color: var(--fg-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            pointer-events: none;
+        }
+        .textarea-toolbar .pill {
+            background: var(--bg-overlay);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-variant-numeric: tabular-nums;
+            font-family: var(--font-mono);
+            font-size: 10px;
+            letter-spacing: 0;
+            text-transform: none;
+        }
+
+        /* Toolbar above the textarea: monospace / variables / etc. */
+        .textarea-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 6px;
+        }
+        .pill-row {
+            display: flex;
+            gap: 4px;
+        }
+        .pill {
+            padding: 3px 9px;
+            font-size: 10.5px;
+            background: var(--bg-overlay);
+            color: var(--fg-subtext);
+            border-radius: var(--radius-pill);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all var(--time-fast) var(--ease);
+            font-weight: var(--weight-medium);
+        }
+        .pill:hover { color: var(--fg-text); border-color: var(--border-strong); }
+        .pill.var { font-family: var(--font-mono); }
+
+        /* Footer of edit pane: Save / Cancel / Copy / Duplicate / Delete */
+        .edit-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-3) var(--space-4);
+            background: var(--bg-mantle);
+            border-top: 1px solid var(--divider);
+            gap: var(--space-3);
+        }
+        .edit-footer .group {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        /* Icon-only secondary actions (Copy / Duplicate / Delete) */
+        .icon-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            color: var(--fg-subtext);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--time-fast) var(--ease);
+            background: transparent;
+            position: relative;
+        }
+        .icon-btn:hover {
+            background: var(--bg-overlay);
+            color: var(--fg-text);
+        }
+        .icon-btn.is-danger:hover {
+            background: rgba(243, 139, 168, 0.18);
+            color: var(--error);
+        }
+        body.theme-light .icon-btn.is-danger:hover {
+            background: rgba(220, 38, 38, 0.10);
+            color: var(--error);
+        }
+        .icon-btn svg { width: 15px; height: 15px; }
+
+        /* Visual separator between icon-btn groups */
+        .vsep {
+            width: 1px;
+            height: 18px;
+            background: var(--border-soft);
+            margin: 0 4px;
+        }
+
+        /* Filled buttons */
+        .btn {
+            padding: 7px 16px;
+            font-size: var(--size-meta);
+            font-weight: var(--weight-semibold);
+            border-radius: var(--radius-sm);
+            transition: all var(--time-fast) var(--ease);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            min-height: 32px;
+            letter-spacing: -0.005em;
+        }
+        .btn svg { width: 14px; height: 14px; }
+        .btn-primary {
+            background: var(--accent);
+            color: var(--fg-on-accent);
+            box-shadow: 0 1px 0 rgba(0,0,0,0.10);
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-primary:disabled, .btn-primary.disabled {
+            background: var(--bg-overlay);
+            color: var(--fg-faint);
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        .btn-outline {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-strong);
+            color: var(--fg-text);
+            font-weight: var(--weight-medium);
+        }
+        .btn-outline:hover {
+            background: var(--bg-overlay);
+            border-color: var(--fg-muted);
+        }
+
+        /* Dirty pill — a small status badge near the title, not a caption in the footer */
+        .dirty-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 2px 8px;
+            background: var(--accent-soft);
+            color: var(--accent);
+            border-radius: var(--radius-pill);
+            font-size: 10.5px;
+            font-weight: var(--weight-semibold);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            vertical-align: middle;
+        }
+        .dirty-pill::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent);
+        }
+
+        /* Tooltip hint shown inside icon-button on hover (CSS-only) */
+        .icon-btn[title] { /* native tooltip is fine */ }
+
+        /* ----- StatusPage (empty state for the right pane) --------------- */
+        .status-page {
+            grid-area: edit;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: var(--space-7);
+            color: var(--fg-muted);
+        }
+        .status-icon {
+            width: 80px;
+            height: 80px;
+            border-radius: 22px;
+            background: linear-gradient(135deg, var(--accent-soft), rgba(180, 83, 9, 0.12));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: var(--space-4);
+            color: var(--accent);
+        }
+        body.theme-light .status-icon {
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.10), rgba(180, 83, 9, 0.10));
+        }
+        .status-icon svg { width: 40px; height: 40px; }
+        .status-title {
+            font-size: 20px;
+            font-weight: var(--weight-semibold);
+            color: var(--fg-text);
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
+        }
+        .status-desc {
+            font-size: var(--size-body);
+            color: var(--fg-subtext);
+            margin-bottom: var(--space-5);
+            max-width: 40ch;
+            line-height: 1.5;
+        }
+        .kbd {
+            font-family: var(--font);
+            font-size: 11px;
+            padding: 2px 7px;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-soft);
+            border-radius: 5px;
+            color: var(--fg-subtext);
+            font-weight: var(--weight-medium);
+            box-shadow: 0 1px 0 var(--border-strong);
+        }
+        .status-kbd { margin-top: var(--space-4); font-size: var(--size-caption); color: var(--fg-muted); display: flex; gap: 6px; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body class="theme-dark">
+
+<div class="theme-toggle">
+    <span>theme</span>
+    <button class="active" onclick="document.body.className='theme-dark'; refreshThemeActive(this)">Dark</button>
+    <button onclick="document.body.className='theme-light'; refreshThemeActive(this)">Light</button>
+</div>
+<div class="state-toggle">
+    <span>state</span>
+    <button id="state-editing" class="active" onclick="showState('editing')">Editing</button>
+    <button id="state-empty" onclick="showState('empty')">Empty</button>
+</div>
+
+<!-- ============ EDITING STATE: list with snippets + edit form ============ -->
+<div class="snip-window" id="window-editing">
+
+    <header class="header header-l">
+        <div>
+            <div class="title">Snippets</div>
+            <div class="subtitle">7 saved</div>
+        </div>
+        <button class="header-btn primary" title="New snippet (Ctrl+N)">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 4v8M4 8h8"/></svg>
+            New
+        </button>
+    </header>
+
+    <header class="header header-r">
+        <div>
+            <div class="title">
+                Standup template
+                <span class="dirty-pill">unsaved</span>
+            </div>
+            <div class="subtitle">Used 14 times · last 2 hours ago</div>
+        </div>
+        <button class="header-btn" title="Close (Esc)">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+    </header>
+
+    <!-- LEFT: list pane -->
+    <aside class="list-pane">
+        <div class="list-search">
+            <div class="search">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3" stroke-linecap="round"/>
+                </svg>
+                <input type="text" placeholder="Search snippets…" />
+            </div>
+        </div>
+        <div class="list-scroll">
+            <div class="snip-row active dirty">
+                <span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="10" height="10" rx="2"/><path d="M6 7h4M6 9.5h3" stroke-linecap="round"/></svg></span>
+                <div class="body">
+                    <div class="snip-name">Standup template</div>
+                    <div class="snip-preview">yesterday: {{prev}}  today: {{today}}  blockers: {{block}}</div>
+                    <div class="snip-meta"><span>used 14×</span></div>
+                </div>
+            </div>
+            <div class="snip-row">
+                <span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 4l-3 4 3 4M11 4l3 4-3 4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <div class="body">
+                    <div class="snip-name">git rebase recipe</div>
+                    <div class="snip-preview">git fetch --prune &amp;&amp; git rebase -i origin/main</div>
+                    <div class="snip-meta"><span>used 8×</span></div>
+                </div>
+            </div>
+            <div class="snip-row">
+                <span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="6" r="3"/><path d="M3 14c0-2.76 2.24-5 5-5s5 2.24 5 5"/></svg></span>
+                <div class="body">
+                    <div class="snip-name">Email signature</div>
+                    <div class="snip-preview">— Mohammed Elsayed · github.com/MohammedEl-sayedAhmed</div>
+                    <div class="snip-meta"><span>used 22×</span></div>
+                </div>
+            </div>
+            <div class="snip-row">
+                <span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6h12" stroke-linecap="round"/></svg></span>
+                <div class="body">
+                    <div class="snip-name">PR description template</div>
+                    <div class="snip-preview">## Summary\n## Test plan\n- [ ]</div>
+                    <div class="snip-meta"><span>used 11×</span></div>
+                </div>
+            </div>
+            <div class="snip-row">
+                <span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 4l-3 4 3 4M11 4l3 4-3 4" stroke-linecap="round"/></svg></span>
+                <div class="body">
+                    <div class="snip-name">curl JSON post</div>
+                    <div class="snip-preview">curl -sS -X POST -H 'Content-Type: application/json' \\</div>
+                    <div class="snip-meta"><span>used 5×</span></div>
+                </div>
+            </div>
+            <div class="snip-row">
+                <span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="10" height="10" rx="2"/><path d="M6 7h4M6 9.5h3" stroke-linecap="round"/></svg></span>
+                <div class="body">
+                    <div class="snip-name">Bug report scaffold</div>
+                    <div class="snip-preview">**What I expected:**\n**What happened:**\n**Repro:**</div>
+                    <div class="snip-meta"><span>used 3×</span></div>
+                </div>
+            </div>
+            <div class="snip-row">
+                <span class="ico"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 8h10M10 5l3 3-3 3" stroke-linecap="round"/></svg></span>
+                <div class="body">
+                    <div class="snip-name">Quick deploy</div>
+                    <div class="snip-preview">ssh prod 'cd /srv/clipman &amp;&amp; ./deploy.sh'</div>
+                    <div class="snip-meta"><span>used 9×</span></div>
+                </div>
+            </div>
+        </div>
+        <div class="list-footer">7 snippets · sorted by use count</div>
+    </aside>
+
+    <!-- RIGHT: edit pane -->
+    <main class="edit-pane">
+        <div class="form">
+            <div>
+                <label class="field-label">Name</label>
+                <input class="entry" value="Standup template" placeholder="e.g. Email signature" />
+            </div>
+            <div>
+                <div class="textarea-meta">
+                    <label class="field-label" style="margin-bottom: 0">Content</label>
+                    <div class="pill-row">
+                        <button class="pill" title="Insert today's date">{{date}}</button>
+                        <button class="pill" title="Insert current time">{{time}}</button>
+                        <button class="pill" title="Insert clipboard">{{clipboard}}</button>
+                    </div>
+                </div>
+                <div class="textarea-wrap">
+                    <textarea class="textarea" placeholder="Snippet content…">### Standup — {{date}}
+
+**Yesterday:** finished the libadwaita preferences mockup, opened PR #69
+**Today:** snippets editor redesign, fix lingering type-icon contrast
+**Blockers:** none</textarea>
+                    <div class="textarea-toolbar">
+                        <span class="pill">147 chars · 5 lines</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="edit-footer">
+            <div class="group">
+                <button class="icon-btn" title="Copy to clipboard">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M3 11V3.5A1.5 1.5 0 014.5 2H11"/></svg>
+                </button>
+                <button class="icon-btn" title="Duplicate this snippet">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="9" height="9" rx="1.5"/><rect x="2" y="2" width="9" height="9" rx="1.5"/></svg>
+                </button>
+                <span class="vsep"></span>
+                <button class="icon-btn is-danger" title="Delete snippet">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 5h10M6 5V3.5A1 1 0 017 2.5h2a1 1 0 011 1V5M5 5l1 8.5A1 1 0 007 14h2a1 1 0 001-1L11 5"/></svg>
+                </button>
+            </div>
+            <div class="group">
+                <button class="btn btn-outline">Cancel</button>
+                <button class="btn btn-primary" title="Save (Ctrl+S)">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5l3 3 7-7"/></svg>
+                    Save
+                </button>
+            </div>
+        </div>
+    </main>
+
+</div>
+
+<!-- ============ EMPTY STATE: zero snippets ============ -->
+<div class="snip-window" id="window-empty" style="display:none">
+
+    <header class="header header-l">
+        <div>
+            <div class="title">Snippets</div>
+            <div class="subtitle">0 saved</div>
+        </div>
+        <button class="header-btn primary" title="New snippet (Ctrl+N)">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 4v8M4 8h8"/></svg>
+            New
+        </button>
+    </header>
+
+    <header class="header header-r">
+        <div>
+            <div class="title">No snippet selected</div>
+        </div>
+        <button class="header-btn" title="Close (Esc)">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+        </button>
+    </header>
+
+    <aside class="list-pane">
+        <div class="list-search">
+            <div class="search">
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3" stroke-linecap="round"/>
+                </svg>
+                <input type="text" placeholder="Search snippets…" disabled />
+            </div>
+        </div>
+        <div style="flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding: var(--space-5) var(--space-4); text-align:center; gap: var(--space-3); color: var(--fg-muted);">
+            <div style="font-size: var(--size-body); color: var(--fg-muted);">No snippets yet</div>
+            <div style="font-size: var(--size-meta); line-height: 1.45; max-width: 18ch;">Your saved snippets will appear here.</div>
+        </div>
+        <div class="list-footer">0 snippets</div>
+    </aside>
+
+    <main class="status-page">
+        <div class="status-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="4" width="16" height="16" rx="3"/>
+                <path d="M8 10h8M8 13h6M8 16h4"/>
+            </svg>
+        </div>
+        <div class="status-title">Save text you reuse often</div>
+        <div class="status-desc">Snippets stay one keystroke away from any window. Standup notes, command recipes, signatures — drop in <span class="kbd">{{date}}</span> or <span class="kbd">{{clipboard}}</span> for smarter inserts.</div>
+        <button class="btn btn-primary" style="font-size: var(--size-body); padding: 9px 18px;">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 4v8M4 8h8"/></svg>
+            Add your first snippet
+        </button>
+        <div class="status-kbd">or press <span class="kbd">Ctrl</span> + <span class="kbd">N</span></div>
+    </main>
+
+</div>
+
+<script>
+    function refreshThemeActive(btn) {
+        document.querySelectorAll('.theme-toggle button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+
+    function showState(state) {
+        document.getElementById('window-editing').style.display = (state === 'editing') ? 'grid' : 'none';
+        document.getElementById('window-empty').style.display   = (state === 'empty')   ? 'grid' : 'none';
+        document.getElementById('state-editing').classList.toggle('active', state === 'editing');
+        document.getElementById('state-empty').classList.toggle('active', state === 'empty');
+    }
+
+    // Allow ?state=empty for screenshot scripting
+    const params = new URLSearchParams(location.search);
+    const initial = params.get('state');
+    if (initial === 'empty') showState('empty');
+</script>
+
+</body>
+</html>

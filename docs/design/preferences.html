@@ -1,0 +1,903 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Clipman — Preferences mockup</title>
+    <link rel="stylesheet" href="tokens.css">
+    <style>
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-7);
+            background:
+                radial-gradient(circle at 30% 20%, rgba(137, 180, 250, 0.06), transparent 60%),
+                radial-gradient(circle at 80% 80%, rgba(203, 166, 247, 0.05), transparent 50%),
+                var(--bg-crust);
+        }
+        body.theme-light {
+            background:
+                radial-gradient(circle at 30% 20%, rgba(37, 99, 235, 0.06), transparent 60%),
+                radial-gradient(circle at 80% 80%, rgba(147, 51, 234, 0.05), transparent 50%),
+                var(--bg-crust);
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: var(--space-4);
+            right: var(--space-4);
+            background: var(--bg-overlay);
+            border-radius: var(--radius-pill);
+            padding: 6px 14px;
+            font-size: var(--size-meta);
+            color: var(--fg-subtext);
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            z-index: 10;
+        }
+        .theme-toggle button {
+            padding: 4px 10px;
+            border-radius: var(--radius-pill);
+            color: var(--fg-subtext);
+            transition: all var(--time-fast) var(--ease);
+        }
+        .theme-toggle button.active {
+            background: var(--accent);
+            color: var(--fg-on-accent);
+            font-weight: var(--weight-semibold);
+        }
+
+        /* ==================================================================
+           AdwPreferencesWindow shell
+           ================================================================== */
+
+        .prefs-window {
+            width: 820px;
+            height: 600px;
+            background: var(--bg-base);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-window);
+            display: grid;
+            grid-template-rows: auto 1fr;
+            grid-template-columns: 220px 1fr;
+            grid-template-areas:
+                "headerbar headerbar"
+                "sidebar   content";
+            overflow: hidden;
+            border: 1px solid var(--border-soft);
+        }
+
+        /* HeaderBar spanning the full width */
+        .prefs-headerbar {
+            grid-area: headerbar;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-2) var(--space-3);
+            background: var(--bg-mantle);
+            border-bottom: 1px solid var(--divider);
+            min-height: 42px;
+            -webkit-app-region: drag;
+        }
+        .prefs-headerbar .title {
+            font-weight: var(--weight-semibold);
+            font-size: var(--size-title);
+            color: var(--fg-text);
+            letter-spacing: -0.01em;
+        }
+        .prefs-headerbar .header-btn {
+            -webkit-app-region: no-drag;
+            width: 28px;
+            height: 28px;
+            border-radius: var(--radius-sm);
+            color: var(--fg-subtext);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background var(--time-fast) var(--ease);
+        }
+        .prefs-headerbar .header-btn:hover {
+            background: var(--bg-overlay);
+            color: var(--fg-text);
+        }
+        .prefs-headerbar .header-btn svg { width: 16px; height: 16px; }
+
+        /* Sidebar (libadwaita 1.4+ NavigationSplitView) */
+        .prefs-sidebar {
+            grid-area: sidebar;
+            background: var(--bg-mantle);
+            border-right: 1px solid var(--divider);
+            padding: var(--space-3) var(--space-2);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            overflow-y: auto;
+        }
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: 8px 12px;
+            border-radius: var(--radius-md);
+            color: var(--fg-subtext);
+            font-size: var(--size-body);
+            font-weight: var(--weight-medium);
+            cursor: pointer;
+            transition: all var(--time-fast) var(--ease);
+            border: 1px solid transparent;
+        }
+        .nav-item:hover:not(.active) {
+            background: var(--bg-row-hover);
+            color: var(--fg-text);
+        }
+        .nav-item.active {
+            background: var(--accent-soft);
+            color: var(--accent);
+            font-weight: var(--weight-semibold);
+        }
+        .nav-item svg {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+        }
+
+        /* Content area */
+        .prefs-content {
+            grid-area: content;
+            background: var(--bg-base);
+            overflow-y: auto;
+            padding: var(--space-5) var(--space-6);
+        }
+        .prefs-content::-webkit-scrollbar { width: 8px; }
+        .prefs-content::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+        .prefs-content::-webkit-scrollbar-track { background: transparent; }
+
+        /* AdwPreferencesGroup */
+        .group + .group { margin-top: var(--space-6); }
+        .group-title {
+            font-size: var(--size-meta);
+            font-weight: var(--weight-semibold);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--fg-muted);
+            margin: 0 0 var(--space-2);
+            padding: 0 4px;
+        }
+        .group-desc {
+            font-size: var(--size-meta);
+            color: var(--fg-muted);
+            margin: 0 4px var(--space-3);
+            line-height: 1.5;
+            max-width: 56ch;
+        }
+        .group-rows {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        /* AdwActionRow / AdwSwitchRow / AdwComboRow / AdwSpinRow */
+        .row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: var(--space-4);
+            align-items: center;
+            padding: 12px 14px;
+            background: var(--bg-surface);
+            transition: background var(--time-fast) var(--ease);
+        }
+        .row + .row { box-shadow: 0 -1px 0 var(--divider); }
+        .row.interactive { cursor: pointer; }
+        .row.interactive:hover { background: var(--bg-row-hover); }
+
+        .row .label-wrap { min-width: 0; }
+        .row .label {
+            font-size: var(--size-body);
+            font-weight: var(--weight-medium);
+            color: var(--fg-text);
+        }
+        .row .desc {
+            font-size: var(--size-meta);
+            color: var(--fg-muted);
+            margin-top: 2px;
+            line-height: 1.4;
+        }
+
+        /* Switch */
+        .switch {
+            width: 40px;
+            height: 22px;
+            background: var(--border-strong);
+            border-radius: var(--radius-pill);
+            position: relative;
+            cursor: pointer;
+            transition: background var(--time-fast) var(--ease);
+        }
+        .switch::after {
+            content: "";
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+            transition: transform var(--time-base) var(--ease);
+        }
+        .switch.on {
+            background: var(--accent);
+        }
+        .switch.on::after {
+            transform: translateX(18px);
+        }
+
+        /* Slider */
+        .slider-wrap {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            min-width: 220px;
+        }
+        .slider {
+            flex: 1;
+            height: 6px;
+            background: var(--bg-overlay);
+            border-radius: var(--radius-pill);
+            position: relative;
+        }
+        .slider .fill {
+            height: 100%;
+            background: var(--accent);
+            border-radius: var(--radius-pill);
+        }
+        .slider .thumb {
+            width: 16px;
+            height: 16px;
+            background: var(--accent);
+            border: 2px solid var(--bg-surface);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 1px 4px rgba(0,0,0,0.18);
+        }
+        .slider-value {
+            font-variant-numeric: tabular-nums;
+            font-size: var(--size-meta);
+            color: var(--fg-subtext);
+            min-width: 38px;
+            text-align: right;
+        }
+
+        /* Segmented control (theme picker) */
+        .segmented {
+            display: inline-flex;
+            background: var(--bg-overlay);
+            border-radius: var(--radius-md);
+            padding: 2px;
+            gap: 2px;
+        }
+        .segmented button {
+            padding: 5px 14px;
+            font-size: var(--size-meta);
+            font-weight: var(--weight-medium);
+            color: var(--fg-subtext);
+            border-radius: var(--radius-sm);
+            transition: all var(--time-fast) var(--ease);
+        }
+        .segmented button.active {
+            background: var(--bg-surface);
+            color: var(--fg-text);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.12);
+        }
+
+        /* Combo */
+        .combo {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            background: var(--bg-overlay);
+            border-radius: var(--radius-sm);
+            color: var(--fg-text);
+            font-size: var(--size-body);
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all var(--time-fast) var(--ease);
+        }
+        .combo:hover { border-color: var(--border-strong); }
+        .combo svg { width: 12px; height: 12px; color: var(--fg-muted); }
+
+        /* Color swatches */
+        .swatches {
+            display: flex;
+            gap: 6px;
+        }
+        .swatch {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all var(--time-fast) var(--ease);
+            position: relative;
+        }
+        .swatch.selected {
+            border-color: var(--fg-text);
+            transform: scale(1.05);
+        }
+        .swatch.selected::after {
+            content: "✓";
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .swatch.default {
+            background: var(--bg-surface);
+            border: 2px solid var(--border-strong);
+            color: var(--fg-text);
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        /* Key binding capture */
+        .kbd-group {
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+        }
+        .kbd {
+            font-family: var(--font);
+            font-size: 11px;
+            padding: 3px 7px;
+            background: var(--bg-overlay);
+            border: 1px solid var(--border-soft);
+            border-radius: 5px;
+            color: var(--fg-text);
+            font-weight: var(--weight-medium);
+            box-shadow: 0 1px 0 var(--border-strong);
+        }
+        .kbd-plus {
+            color: var(--fg-muted);
+            font-size: 11px;
+        }
+        .kbd-change {
+            margin-left: 8px;
+            font-size: var(--size-meta);
+            color: var(--accent);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .kbd-change:hover { text-decoration: underline; }
+
+        /* Buttons */
+        .btn {
+            padding: 6px 14px;
+            font-size: var(--size-meta);
+            font-weight: var(--weight-medium);
+            border-radius: var(--radius-sm);
+            transition: all var(--time-fast) var(--ease);
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: var(--fg-on-accent);
+        }
+        .btn-primary:hover { background: var(--accent-hover); }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border-strong);
+            color: var(--fg-text);
+        }
+        .btn-outline:hover { background: var(--bg-overlay); }
+        .btn-danger {
+            background: transparent;
+            color: var(--error);
+            border: 1px solid transparent;
+        }
+        .btn-danger:hover {
+            background: rgba(243, 139, 168, 0.14);
+            border-color: rgba(243, 139, 168, 0.3);
+        }
+        body.theme-light .btn-danger:hover {
+            background: rgba(220, 38, 38, 0.08);
+            border-color: rgba(220, 38, 38, 0.2);
+        }
+
+        /* Status indicator (Updates section) */
+        .status-line {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: var(--size-meta);
+            color: var(--fg-subtext);
+        }
+        .status-line .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 8px rgba(166, 227, 161, 0.6);
+        }
+        body.theme-light .status-line .dot {
+            box-shadow: 0 0 8px rgba(22, 163, 74, 0.4);
+        }
+
+        /* Stats inline display */
+        .stats {
+            display: flex;
+            gap: var(--space-5);
+            padding: var(--space-3) var(--space-3);
+            background: var(--bg-surface);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-md);
+            margin-top: var(--space-2);
+        }
+        .stat .num {
+            font-size: 20px;
+            font-weight: var(--weight-bold);
+            color: var(--fg-text);
+            letter-spacing: -0.02em;
+            font-variant-numeric: tabular-nums;
+        }
+        .stat .lbl {
+            font-size: var(--size-caption);
+            color: var(--fg-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+    </style>
+</head>
+<body class="theme-dark">
+
+<div class="theme-toggle">
+    <span>theme</span>
+    <button class="active" onclick="document.body.className='theme-dark'; refreshActive(this)">Dark</button>
+    <button onclick="document.body.className='theme-light'; refreshActive(this)">Light</button>
+</div>
+
+<div class="prefs-window">
+
+    <!-- ============ HeaderBar ============ -->
+    <header class="prefs-headerbar">
+        <span class="title">Preferences</span>
+        <button class="header-btn" title="Close">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <path d="M4 4l8 8M12 4l-8 8"/>
+            </svg>
+        </button>
+    </header>
+
+    <!-- ============ Sidebar ============ -->
+    <nav class="prefs-sidebar">
+        <div class="nav-item active">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="8" cy="8" r="5.5"/>
+                <path d="M8 2.5v11M2.5 8h11" />
+            </svg>
+            <span>Appearance</span>
+        </div>
+        <div class="nav-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="7" width="10" height="7" rx="1.5"/>
+                <path d="M5 7V5a3 3 0 016 0v2"/>
+            </svg>
+            <span>Privacy</span>
+        </div>
+        <div class="nav-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="2" y="5" width="12" height="6" rx="1.5"/>
+                <path d="M5 8h1M8 8h1M11 8h1" stroke-linecap="round"/>
+            </svg>
+            <span>Shortcuts</span>
+        </div>
+        <div class="nav-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <ellipse cx="8" cy="4" rx="5" ry="1.5"/>
+                <path d="M3 4v8c0 .83 2.24 1.5 5 1.5s5-.67 5-1.5V4"/>
+                <path d="M3 8c0 .83 2.24 1.5 5 1.5s5-.67 5-1.5"/>
+            </svg>
+            <span>Storage</span>
+        </div>
+        <div class="nav-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="8" cy="8" r="5.5"/>
+                <path d="M8 5v3.5l2.2 1.3" stroke-linecap="round"/>
+            </svg>
+            <span>Updates</span>
+        </div>
+        <div style="flex: 1"></div>
+        <div class="nav-item">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="8" cy="8" r="5.5"/>
+                <path d="M8 5.5v3M8 10.5h.01" stroke-linecap="round"/>
+            </svg>
+            <span>About</span>
+        </div>
+    </nav>
+
+    <!-- ============ Content: Appearance ============ -->
+    <main class="prefs-content" id="pane-appearance">
+
+        <div class="group">
+            <div class="group-title">Theme</div>
+            <p class="group-desc">Choose how Clipman looks. The popup matches this setting automatically.</p>
+            <div class="group-rows">
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Color scheme</div>
+                        <div class="desc">Dark uses Catppuccin Mocha; Light uses warm stone with brand accents.</div>
+                    </div>
+                    <div class="segmented">
+                        <button class="active">Dark</button>
+                        <button>Light</button>
+                        <button>Follow system</button>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Accent color for clip text</div>
+                        <div class="desc">Applied to the primary text in clipboard rows. Reset with the default chip.</div>
+                    </div>
+                    <div class="swatches">
+                        <div class="swatch default" title="Default theme color">A</div>
+                        <div class="swatch" style="background:#a6e3a1" title="Green"></div>
+                        <div class="swatch" style="background:#fab387" title="Peach"></div>
+                        <div class="swatch selected" style="background:#cba6f7" title="Mauve"></div>
+                        <div class="swatch" style="background:#f5c2e7" title="Pink"></div>
+                        <div class="swatch" style="background:#94e2d5" title="Teal"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="group">
+            <div class="group-title">Layout</div>
+            <div class="group-rows">
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Window opacity</div>
+                        <div class="desc">100 % keeps the popup fully opaque. Lower values let what's behind show through.</div>
+                    </div>
+                    <div class="slider-wrap">
+                        <div class="slider"><div class="fill" style="width: 100%"></div><div class="thumb" style="left: 100%"></div></div>
+                        <span class="slider-value">100 %</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Font size</div>
+                        <div class="desc">Affects clipboard content only — UI chrome stays legible regardless.</div>
+                    </div>
+                    <div class="slider-wrap">
+                        <div class="slider"><div class="fill" style="width: 40%"></div><div class="thumb" style="left: 40%"></div></div>
+                        <span class="slider-value">12 px</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Show item count badges</div>
+                        <div class="desc">Display counts next to each filter tab (All, Text, Images, Snippets).</div>
+                    </div>
+                    <div class="switch on"></div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ============ Content: Privacy ============ -->
+    <main class="prefs-content" id="pane-privacy" hidden>
+
+        <div class="group">
+            <div class="group-title">Incognito mode</div>
+            <p class="group-desc">When on, Clipman ignores clipboard changes — nothing is recorded. Existing history stays untouched.</p>
+            <div class="group-rows">
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Pause recording</div>
+                        <div class="desc">Toggle from the headerbar 🕶 icon for quick access during sensitive work.</div>
+                    </div>
+                    <div class="switch"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="group">
+            <div class="group-title">Sensitive data</div>
+            <p class="group-desc">Clipman detects passwords, tokens, and credit-card-shaped strings, then auto-clears them after a delay. Sensitive clips appear as <code style="font-family:var(--font-mono);background:var(--bg-overlay);padding:1px 5px;border-radius:4px;font-size:11px;color:var(--fg-muted);">•••••••</code> in the list.</p>
+            <div class="group-rows">
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Auto-detect sensitive clipboard data</div>
+                        <div class="desc">Patterns: passwords (from x11-clipboard mime), JWT/PEM, credit-card numbers, API tokens.</div>
+                    </div>
+                    <div class="switch on"></div>
+                </div>
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Auto-clear delay</div>
+                        <div class="desc">How long before sensitive entries are removed from history.</div>
+                    </div>
+                    <div class="slider-wrap">
+                        <div class="slider"><div class="fill" style="width: 20%"></div><div class="thumb" style="left: 20%"></div></div>
+                        <span class="slider-value">60 s</span>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Mask sensitive entries in list</div>
+                        <div class="desc">Replace the preview with dots until you click the row.</div>
+                    </div>
+                    <div class="switch on"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="group">
+            <div class="group-title">Paste behavior</div>
+            <div class="group-rows">
+                <div class="row interactive">
+                    <div class="label-wrap">
+                        <div class="label">When I select a clip</div>
+                        <div class="desc">"Auto-paste" simulates a keyboard paste into the focused app; "Copy to clipboard" leaves it for you to paste manually.</div>
+                    </div>
+                    <div class="combo">Auto-paste (Shift+Insert)
+                        <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 5l3 3 3-3"/></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ============ Content: Shortcuts ============ -->
+    <main class="prefs-content" id="pane-shortcuts" hidden>
+
+        <div class="group">
+            <div class="group-title">Global shortcut</div>
+            <p class="group-desc">The GNOME Shell extension binds this combination to toggle the popup. Changing it here updates the extension on the next daemon restart.</p>
+            <div class="group-rows">
+                <div class="row interactive">
+                    <div class="label-wrap">
+                        <div class="label">Toggle clipboard popup</div>
+                        <div class="desc">Press the key combination, then click "Set". <span style="color:var(--accent)">Escape</span> cancels.</div>
+                    </div>
+                    <div>
+                        <span class="kbd-group">
+                            <span class="kbd">Super</span><span class="kbd-plus">+</span><span class="kbd">V</span>
+                        </span>
+                        <a class="kbd-change">Change…</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="group">
+            <div class="group-title">In-popup shortcuts</div>
+            <p class="group-desc">These work whenever the clipboard popup has focus. They aren't customisable (yet).</p>
+            <div class="group-rows">
+                <div class="row">
+                    <div class="label-wrap"><div class="label">Search</div></div>
+                    <span class="kbd-group"><span class="kbd">Ctrl</span><span class="kbd-plus">+</span><span class="kbd">F</span></span>
+                </div>
+                <div class="row">
+                    <div class="label-wrap"><div class="label">Navigate clips</div></div>
+                    <span class="kbd-group"><span class="kbd">↑</span><span class="kbd-plus">/</span><span class="kbd">↓</span></span>
+                </div>
+                <div class="row">
+                    <div class="label-wrap"><div class="label">Paste highlighted</div></div>
+                    <span class="kbd-group"><span class="kbd">Enter</span></span>
+                </div>
+                <div class="row">
+                    <div class="label-wrap"><div class="label">Copy without pasting</div></div>
+                    <span class="kbd-group"><span class="kbd">Ctrl</span><span class="kbd-plus">+</span><span class="kbd">Enter</span></span>
+                </div>
+                <div class="row">
+                    <div class="label-wrap"><div class="label">Pin / unpin highlighted</div></div>
+                    <span class="kbd-group"><span class="kbd">Ctrl</span><span class="kbd-plus">+</span><span class="kbd">P</span></span>
+                </div>
+                <div class="row">
+                    <div class="label-wrap"><div class="label">Delete highlighted</div></div>
+                    <span class="kbd-group"><span class="kbd">Delete</span></span>
+                </div>
+                <div class="row">
+                    <div class="label-wrap"><div class="label">Close popup</div></div>
+                    <span class="kbd-group"><span class="kbd">Esc</span></span>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ============ Content: Storage ============ -->
+    <main class="prefs-content" id="pane-storage" hidden>
+
+        <div class="group">
+            <div class="group-title">History</div>
+            <p class="group-desc">Clipboard entries are stored in a local SQLite database at <code style="font-family:var(--font-mono);background:var(--bg-overlay);padding:1px 5px;border-radius:4px;font-size:11px;color:var(--fg-muted);">~/.local/share/clipman/clipman.db</code>.</p>
+            <div class="group-rows">
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Maximum entries to keep</div>
+                        <div class="desc">Older entries roll off when the cap is reached. Pinned items don't count.</div>
+                    </div>
+                    <div class="slider-wrap">
+                        <div class="slider"><div class="fill" style="width: 10%"></div><div class="thumb" style="left: 10%"></div></div>
+                        <span class="slider-value">500</span>
+                    </div>
+                </div>
+            </div>
+            <div class="stats">
+                <div class="stat"><div class="num">42</div><div class="lbl">clips</div></div>
+                <div class="stat"><div class="num">2</div><div class="lbl">pinned</div></div>
+                <div class="stat"><div class="num">7</div><div class="lbl">snippets</div></div>
+                <div class="stat"><div class="num">3.8 MB</div><div class="lbl">db size</div></div>
+            </div>
+        </div>
+
+        <div class="group">
+            <div class="group-title">Backup &amp; restore</div>
+            <p class="group-desc">Export your history (clips, snippets, pins, settings) as a portable file. Restoring replaces the current database.</p>
+            <div class="group-rows">
+                <div class="row interactive">
+                    <div class="label-wrap">
+                        <div class="label">Export backup</div>
+                        <div class="desc">Saves a <code style="font-family:var(--font-mono);background:var(--bg-overlay);padding:1px 5px;border-radius:4px;font-size:11px;color:var(--fg-muted);">.clipman.gz</code> file you can store off-machine.</div>
+                    </div>
+                    <button class="btn btn-outline">Export…</button>
+                </div>
+                <div class="row interactive">
+                    <div class="label-wrap">
+                        <div class="label">Restore from backup</div>
+                        <div class="desc">Replaces all current history. You'll be asked to confirm.</div>
+                    </div>
+                    <button class="btn btn-outline">Restore…</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="group">
+            <div class="group-title">Danger zone</div>
+            <div class="group-rows">
+                <div class="row interactive">
+                    <div class="label-wrap">
+                        <div class="label" style="color: var(--error)">Clear all history</div>
+                        <div class="desc">Permanently delete every non-pinned clip. Pinned items and snippets are preserved.</div>
+                    </div>
+                    <button class="btn btn-danger">Clear non-pinned…</button>
+                </div>
+                <div class="row interactive">
+                    <div class="label-wrap">
+                        <div class="label" style="color: var(--error)">Reset Clipman</div>
+                        <div class="desc">Wipes everything — history, snippets, pins, settings. Use only as a last resort.</div>
+                    </div>
+                    <button class="btn btn-danger">Reset all…</button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ============ Content: Updates ============ -->
+    <main class="prefs-content" id="pane-updates" hidden>
+
+        <div class="group">
+            <div class="group-title">Update channel</div>
+            <p class="group-desc">Clipman checks for new releases via the GitHub API. The daemon polls at most once per 12 hours.</p>
+            <div class="group-rows">
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Check for updates automatically</div>
+                        <div class="desc">Shows an in-app banner when a newer version is available. No telemetry is sent.</div>
+                    </div>
+                    <div class="switch on"></div>
+                </div>
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Current version</div>
+                        <div class="desc">
+                            <span class="status-line">
+                                <span class="dot"></span>
+                                v1.0.6 — up to date · last checked 4 minutes ago
+                            </span>
+                        </div>
+                    </div>
+                    <button class="btn btn-outline">Check now</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="group">
+            <div class="group-title">Package source</div>
+            <div class="group-rows">
+                <div class="row">
+                    <div class="label-wrap">
+                        <div class="label">Installed via</div>
+                        <div class="desc">Detected automatically. Updates flow through your package manager when possible.</div>
+                    </div>
+                    <span style="font-size: var(--size-meta); color: var(--fg-subtext);">snap (latest/stable)</span>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- ============ Content: About ============ -->
+    <main class="prefs-content" id="pane-about" hidden>
+        <div style="display: flex; flex-direction: column; align-items: center; padding: 32px 0 24px; gap: 12px;">
+            <div style="width: 72px; height: 72px; border-radius: 18px; background: linear-gradient(135deg, var(--accent), var(--type-image)); display: flex; align-items: center; justify-content: center; font-size: 36px; color: white; box-shadow: 0 8px 24px -8px rgba(0,0,0,0.4);">📋</div>
+            <div style="font-size: 24px; font-weight: var(--weight-bold); letter-spacing: -0.02em; color: var(--fg-text);">Clipman</div>
+            <div style="font-size: var(--size-body); color: var(--fg-subtext);">A clipboard history manager for Wayland</div>
+            <div style="font-size: var(--size-meta); color: var(--fg-muted); margin-top: 4px;">Version 1.0.6 · GPL-3.0-or-later</div>
+        </div>
+
+        <div class="group">
+            <div class="group-rows">
+                <div class="row interactive">
+                    <div class="label-wrap"><div class="label">Website</div></div>
+                    <span style="font-size: var(--size-meta); color: var(--accent);">github.com/MohammedEl-sayedAhmed/clipman →</span>
+                </div>
+                <div class="row interactive">
+                    <div class="label-wrap"><div class="label">Report an issue</div></div>
+                    <span style="font-size: var(--size-meta); color: var(--accent);">Open GitHub issue →</span>
+                </div>
+                <div class="row interactive">
+                    <div class="label-wrap"><div class="label">View changelog</div></div>
+                    <span style="font-size: var(--size-meta); color: var(--accent);">CHANGELOG.md →</span>
+                </div>
+                <div class="row interactive">
+                    <div class="label-wrap"><div class="label">View license</div></div>
+                    <span style="font-size: var(--size-meta); color: var(--accent);">GPL-3.0 →</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="group">
+            <div class="group-title">Acknowledgements</div>
+            <p class="group-desc">Built with GTK4 + libadwaita. Catppuccin palette by the Catppuccin community. Translations contributed by the community (see <code style="font-family:var(--font-mono);background:var(--bg-overlay);padding:1px 5px;border-radius:4px;font-size:11px;color:var(--fg-muted);">po/</code>).</p>
+        </div>
+
+    </main>
+
+</div>
+
+<script>
+    function refreshActive(btn) {
+        document.querySelectorAll('.theme-toggle button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+
+    // Sidebar navigation (defensive: drives both active class and pane visibility off PANE index)
+    const PANES = ['appearance', 'privacy', 'shortcuts', 'storage', 'updates', 'about'];
+    const navItems = Array.from(document.querySelectorAll('.nav-item'));
+    function showPane(name) {
+        const idx = PANES.indexOf(name);
+        if (idx < 0) return;
+        PANES.forEach((p, i) => {
+            document.getElementById('pane-' + p).hidden = (i !== idx);
+        });
+        navItems.forEach((n, i) => n.classList.toggle('active', i === idx));
+    }
+    navItems.forEach((item, idx) => item.addEventListener('click', () => showPane(PANES[idx])));
+
+    // Initial pane: from ?pane= URL, else default to appearance. Always called so
+    // the active class is set by JS (not by the hardcoded one in HTML).
+    const params = new URLSearchParams(location.search);
+    const initial = params.get('pane');
+    showPane(PANES.includes(initial) ? initial : 'appearance');
+</script>
+
+</body>
+</html>
