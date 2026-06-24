@@ -841,7 +841,17 @@ function renderPopulatedRows() {
 
 function renderState(name) {
     const s = STATES[name];
-    if (!s) { win.innerHTML = '<div style="padding:20px;color:var(--fg-muted)">Unknown state: ' + name + '</div>'; return; }
+    if (!s) {
+        // Fallback path. Use textContent — never innerHTML with a value
+        // sourced from location.search — to avoid the js/xss CodeQL flag.
+        win.replaceChildren();
+        const msg = document.createElement('div');
+        msg.style.padding = '20px';
+        msg.style.color = 'var(--fg-muted)';
+        msg.textContent = 'Unknown state';
+        win.appendChild(msg);
+        return;
+    }
 
     win.className = 'window' + (s.incognito ? ' is-incognito' : '');
 
