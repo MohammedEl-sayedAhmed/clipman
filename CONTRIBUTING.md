@@ -141,6 +141,21 @@ The UI stylesheet lives in `clipman/style.css` as a `string.Template` file:
 4. Commit with a clear message describing what and why
 5. Push and open a Pull Request
 
+### Optional: local git hooks (maintainers)
+
+The repo ships opt-in local hooks under [`.githooks/`](.githooks/) that
+guard against AI-tool footprints and wrong-account commits. They are
+**not required** to contribute; CI does not run them. If you maintain
+multiple GitHub accounts on one machine and want belt-and-suspenders,
+run once:
+
+```sh
+scripts/install-hooks.sh
+```
+
+See [docs/hooks.md](docs/hooks.md) for what each hook checks and how to
+opt out.
+
 ## How a PR gets reviewed
 
 - **Timeline.** A single maintainer reviews PRs (see GOVERNANCE.md). Typical first response within a week.

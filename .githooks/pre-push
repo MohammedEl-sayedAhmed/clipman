@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# pre-push hook: final defense before commits leave the machine.
+#
+# git invokes this with arguments (<remote-name> <remote-url>) and feeds
+# <local-ref> <local-sha> <remote-ref> <remote-sha>\n lines on stdin for
+# each ref being pushed.
+
+# shellcheck source=.githooks/_lib.sh
+. "$(dirname -- "$(readlink -f -- "$0" 2>/dev/null || printf '%s' "$0")")/_lib.sh"
+
+remote_name="${1:-origin}"
+remote_url="${2:-$(git remote get-url --push "$remote_name" 2>/dev/null || true)}"
+
+failed=0
+
+# ----- Push URL check ------------------------------------------------------
+
+bad_urls=()
+while IFS= read -r url; do
+    [ -z "$url" ] && continue
+    if contains_denied_identity "$url"; then
+        bad_urls+=("$url")
+    fi
+done < <(printf '%s\n' "$remote_url"; collect_push_urls)
+
+if [ "${#bad_urls[@]}" -gt 0 ]; then
+    hook_error "push URL points to a denied account ($(denied_list_for_message))"
+    for u in "${bad_urls[@]}"; do hook_detail "$u"; done
+    hook_detail "Reset: git remote set-url --push $remote_name git@github.com:MohammedEl-sayedAhmed/clipman.git"
+    failed=1
+fi
+
+# ----- gh active account warning ------------------------------------------
+
+active=$(gh_active_login)
+if [ -n "$active" ] && contains_denied_identity "$active"; then
+    hook_warn "gh-CLI active account is '$active' (denylisted)"
+    hook_detail "ssh push is unaffected, but 'gh pr create / gh pr merge' would use this account."
+    hook_detail "Switch: gh auth switch -u MohammedEl-sayedAhmed"
+fi
+
+# ----- Per-commit scan ----------------------------------------------------
+
+zero=0000000000000000000000000000000000000000
+
+scan_commit() {
+    local sha="$1"
+    local local_failed=0
+
+    # Author + committer identity
+    local ae ce an cn ident
+    ae=$(git log -1 --format='%ae' "$sha")
+    ce=$(git log -1 --format='%ce' "$sha")
+    an=$(git log -1 --format='%an' "$sha")
+    cn=$(git log -1 --format='%cn' "$sha")
+    for ident in "$ae" "$ce" "$an" "$cn"; do
+        if [ -n "$ident" ] && contains_denied_identity "$ident"; then
+            hook_error "commit $sha attributed to denied account"
+            hook_detail "  $ident"
+            local_failed=1
+        fi
+    done
+
+    # Trailers via git's own parser
+    local trailers
+    trailers=$(git log -1 --format='%B' "$sha" | git interpret-trailers --parse --no-divider 2>/dev/null)
+    if [ -n "$trailers" ]; then
+        while IFS=$'\t' read -r key value; do
+            [ -z "$key$value" ] && continue
+            if contains_denied_identity "$value"; then
+                hook_error "commit $sha has trailer citing a denied account"
+                hook_detail "  $key: $value"
+                local_failed=1
+            fi
+        done <<<"$trailers"
+    fi
+
+    # Footprint scan: message
+    local message
+    message=$(git log -1 --format='%B' "$sha")
+    if ! printf '%s' "$message" | scan_footprints; then
+        hook_error "commit $sha message contains a footprint"
+        hook_detail "  $(git log -1 --format='%h %s' "$sha")"
+        local_failed=1
+    fi
+
+    # Footprint scan: added content in non-allowlisted files (BYPASS-12)
+    # We compare each commit against its parent; for root commits, against
+    # an empty tree.
+    local parents parent diffrange added_files
+    parents=$(git log -1 --format='%P' "$sha")
+    if [ -z "$parents" ]; then
+        # Root commit
+        diffrange="4b825dc642cb6eb9a060e54bf8d69288fbee4904..$sha"
+    else
+        parent=${parents%% *}  # first parent only (merge commits)
+        diffrange="${parent}..${sha}"
+    fi
+
+    added_files=$(git diff --name-only --diff-filter=AM "$diffrange" 2>/dev/null || true)
+    if [ -n "$added_files" ]; then
+        local aggregated=""
+        while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            if is_path_allowlisted "$path"; then continue; fi
+            local file_add
+            file_add=$(git diff --no-color --diff-filter=AM "$diffrange" -- "$path" 2>/dev/null \
+                       | awk '/^\+\+\+ /{next} /^\+/{print}')
+            if [ -n "$file_add" ]; then
+                aggregated="${aggregated}${file_add}"$'\n'
+            fi
+        done <<<"$added_files"
+
+        if [ -n "$aggregated" ]; then
+            if ! printf '%s' "$aggregated" | scan_footprints; then
+                hook_error "commit $sha diff contains a footprint"
+                hook_detail "  $(git log -1 --format='%h %s' "$sha")"
+                local_failed=1
+            fi
+        fi
+    fi
+
+    return "$local_failed"
+}
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+    [ -z "$local_sha" ] && continue
+    [ "$local_sha" = "$zero" ] && continue  # branch deletion
+
+    if [ "$remote_sha" = "$zero" ]; then
+        # New branch — find ancestors reachable from local_sha but NOT from
+        # the remote's *tracking* default branch. This is safer than the
+        # `--not --remotes=<remote>` pattern which silently drops commits
+        # already pushed to ANY other ref on this remote (BYPASS-10).
+        default_branch=$(git symbolic-ref --short "refs/remotes/${remote_name}/HEAD" 2>/dev/null \
+                         | sed "s|^${remote_name}/||" || true)
+        if [ -n "$default_branch" ] \
+           && git rev-parse --verify --quiet "refs/remotes/${remote_name}/${default_branch}" >/dev/null; then
+            commits=$(git rev-list "${local_sha}" "^refs/remotes/${remote_name}/${default_branch}" 2>/dev/null)
+        else
+            # Fall back to a bounded local-only scan (last 200 commits) so we
+            # don't iterate ALL of history on a brand-new remote.
+            commits=$(git rev-list "$local_sha" --max-count=200)
+        fi
+    else
+        commits=$(git rev-list "${remote_sha}..${local_sha}")
+    fi
+
+    [ -z "$commits" ] && continue
+
+    while IFS= read -r sha; do
+        [ -z "$sha" ] && continue
+        if ! scan_commit "$sha"; then
+            failed=1
+        fi
+    done <<<"$commits"
+done
+
+if [ "$failed" -ne 0 ]; then
+    hook_section "push aborted"
+    hook_detail "To fix: amend or interactive-rebase the offending commit(s)."
+    hook_detail "Bypass once (NOT recommended): git push --no-verify"
+    exit 1
+fi
+
+hook_ok "push: identity + commits clean"
+exit 0

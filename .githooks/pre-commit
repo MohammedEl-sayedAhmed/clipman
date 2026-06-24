@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# pre-commit hook: identity denylist + staged-diff footprint scan.
+
+# shellcheck source=.githooks/_lib.sh
+. "$(dirname -- "$(readlink -f -- "$0" 2>/dev/null || printf '%s' "$0")")/_lib.sh"
+
+failed=0
+
+# ----- Identity denylist check ---------------------------------------------
+
+bad_ident_lines=()
+while IFS= read -r ident; do
+    [ -z "$ident" ] && continue
+    if contains_denied_identity "$ident"; then
+        bad_ident_lines+=("$ident")
+    fi
+done < <(collect_local_identities)
+
+if [ "${#bad_ident_lines[@]}" -gt 0 ]; then
+    hook_error "git identity matches the personal denylist ($(denied_list_for_message))"
+    for line in "${bad_ident_lines[@]}"; do
+        hook_detail "$line"
+    done
+    hook_detail "Fix one of:"
+    hook_detail "  git config user.email mohammedelsayed4648@gmail.com"
+    hook_detail "  git config user.name  MohammedEl-sayedAhmed"
+    hook_detail "  unset GIT_AUTHOR_EMAIL GIT_COMMITTER_EMAIL  (if env shadowed config)"
+    hook_detail "  git config --show-origin --get user.email   (to see which file set it)"
+    failed=1
+fi
+
+# ----- Staged-diff footprint scan ------------------------------------------
+#
+# Walk modified-or-added files; skip the allowlisted paths (which legitimately
+# reference example footprints in their content); scan additions on the rest.
+
+staged_files=$(git diff --cached --name-only --diff-filter=AM 2>/dev/null || true)
+
+if [ -n "$staged_files" ]; then
+    aggregated=""
+    while IFS= read -r path; do
+        [ -z "$path" ] && continue
+        if is_path_allowlisted "$path"; then
+            continue
+        fi
+        # Get the additions for just this file
+        file_add=$(git diff --cached --no-color --diff-filter=AM -- "$path" 2>/dev/null \
+                   | awk '/^\+\+\+ /{next} /^\+/{print}')
+        if [ -n "$file_add" ]; then
+            aggregated="${aggregated}${file_add}"$'\n'
+        fi
+    done <<<"$staged_files"
+
+    if [ -n "$aggregated" ]; then
+        if ! printf '%s' "$aggregated" | scan_footprints; then
+            hook_section "staged changes contain AI footprints"
+            hook_detail "Remove the highlighted lines from your changes before committing."
+            hook_detail "If this is a legitimate reference (e.g. a real person named Claude),"
+            hook_detail "you can bypass once with: git commit --no-verify"
+            hook_detail "Or, if the file BY DESIGN documents the patterns (like docs/hooks.md),"
+            hook_detail "add its path to HOOKS_PATH_ALLOWLIST in .githooks/_lib.sh."
+            failed=1
+        fi
+    fi
+fi
+
+if [ "$failed" -ne 0 ]; then
+    exit 1
+fi
+
+hook_ok "identity + staged diff: clean"
+exit 0
