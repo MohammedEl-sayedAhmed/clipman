@@ -1,0 +1,667 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Clipman — main window mockup</title>
+    <link rel="stylesheet" href="tokens.css">
+    <style>
+        /* ------------------------------------------------------------------
+           Page chrome (mockup viewer only — not part of the design itself)
+           ------------------------------------------------------------------ */
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-7);
+            background:
+                radial-gradient(circle at 30% 20%, rgba(137, 180, 250, 0.06), transparent 60%),
+                radial-gradient(circle at 80% 80%, rgba(203, 166, 247, 0.05), transparent 50%),
+                var(--bg-crust);
+        }
+        body.theme-light {
+            background:
+                radial-gradient(circle at 30% 20%, rgba(37, 99, 235, 0.06), transparent 60%),
+                radial-gradient(circle at 80% 80%, rgba(147, 51, 234, 0.05), transparent 50%),
+                var(--bg-crust);
+        }
+
+        .theme-toggle {
+            position: fixed;
+            top: var(--space-4);
+            right: var(--space-4);
+            background: var(--bg-overlay);
+            border-radius: var(--radius-pill);
+            padding: 6px 14px;
+            font-size: var(--size-meta);
+            color: var(--fg-subtext);
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .theme-toggle button {
+            padding: 4px 10px;
+            border-radius: var(--radius-pill);
+            color: var(--fg-subtext);
+            transition: all var(--time-fast) var(--ease);
+        }
+        .theme-toggle button.active {
+            background: var(--accent);
+            color: var(--fg-on-accent);
+            font-weight: var(--weight-semibold);
+        }
+
+        /* ------------------------------------------------------------------
+           THE ACTUAL DESIGN: Clipman main popup window
+           ------------------------------------------------------------------ */
+
+        .window {
+            width: 420px;
+            height: 640px;
+            background: var(--bg-base);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-window);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            /* libadwaita-style outer border for the window itself */
+            border: 1px solid var(--border-soft);
+        }
+
+        /* --- HeaderBar (Adw.HeaderBar) ----------------------------------- */
+        .headerbar {
+            display: flex;
+            align-items: center;
+            padding: var(--space-2) var(--space-3);
+            background: var(--bg-mantle);
+            border-bottom: 1px solid var(--divider);
+            min-height: 38px;
+            -webkit-app-region: drag;       /* desktop-window drag affordance */
+        }
+        .headerbar .title-wrap {
+            flex: 1;
+            text-align: center;
+        }
+        .headerbar .title {
+            font-size: var(--size-title);
+            font-weight: var(--weight-semibold);
+            letter-spacing: -0.01em;
+            color: var(--fg-text);
+        }
+        .headerbar .title .pin-dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+            opacity: 0.7;
+        }
+        .header-btn {
+            -webkit-app-region: no-drag;
+            width: 28px;
+            height: 28px;
+            border-radius: var(--radius-sm);
+            color: var(--fg-subtext);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background var(--time-fast) var(--ease),
+                        color var(--time-fast) var(--ease);
+        }
+        .header-btn:hover {
+            background: var(--bg-overlay);
+            color: var(--fg-text);
+        }
+        .header-btn svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* --- Toolbar: search + filter switcher --------------------------- */
+        .toolbar {
+            padding: var(--space-3) var(--space-3) var(--space-2);
+            background: var(--bg-base);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+        }
+        .search {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            background: var(--bg-overlay);
+            padding: 7px 10px;
+            border-radius: var(--radius-md);
+            border: 1px solid transparent;
+            transition: border-color var(--time-fast) var(--ease),
+                        background var(--time-fast) var(--ease);
+        }
+        .search:focus-within {
+            border-color: var(--accent);
+            background: var(--bg-surface);
+        }
+        .search svg {
+            width: 14px;
+            height: 14px;
+            color: var(--fg-muted);
+            flex-shrink: 0;
+        }
+        .search input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--fg-text);
+            font-family: inherit;
+            font-size: var(--size-body);
+        }
+        .search input::placeholder {
+            color: var(--fg-muted);
+        }
+        .search .kbd {
+            font-family: var(--font);
+            font-size: 10px;
+            padding: 2px 6px;
+            background: var(--bg-base);
+            border: 1px solid var(--border-soft);
+            border-radius: 4px;
+            color: var(--fg-muted);
+            font-weight: var(--weight-medium);
+        }
+
+        /* ViewSwitcher: pill segmented control */
+        .switcher {
+            display: flex;
+            gap: 2px;
+            padding: 2px;
+            background: var(--bg-overlay);
+            border-radius: var(--radius-md);
+            align-self: flex-start;
+        }
+        .switcher button {
+            padding: 5px 12px;
+            font-size: var(--size-meta);
+            font-weight: var(--weight-medium);
+            color: var(--fg-subtext);
+            border-radius: var(--radius-sm);
+            transition: all var(--time-fast) var(--ease);
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .switcher button .count {
+            font-size: 10px;
+            padding: 1px 5px;
+            background: var(--bg-base);
+            border-radius: 8px;
+            color: var(--fg-muted);
+            font-variant-numeric: tabular-nums;
+        }
+        .switcher button:hover:not(.active) {
+            color: var(--fg-text);
+        }
+        .switcher button.active {
+            background: var(--bg-base);
+            color: var(--fg-text);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+        }
+        .switcher button.active .count {
+            background: var(--accent-soft);
+            color: var(--accent);
+        }
+
+        /* --- Scroll area / day groups ------------------------------------ */
+        .content {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--space-2) var(--space-3) var(--space-3);
+        }
+        .content::-webkit-scrollbar { width: 6px; }
+        .content::-webkit-scrollbar-thumb {
+            background: var(--border-strong);
+            border-radius: 3px;
+        }
+        .content::-webkit-scrollbar-track { background: transparent; }
+
+        .group + .group { margin-top: var(--space-4); }
+
+        .group-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-2) var(--space-2) var(--space-1);
+            font-size: var(--size-caption);
+            font-weight: var(--weight-semibold);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--fg-muted);
+        }
+        .group-header.pinned {
+            color: var(--pin);
+        }
+
+        .group-rows {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-soft);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+        }
+
+        /* --- Clip row (AdwActionRow) ------------------------------------- */
+        .row {
+            display: grid;
+            grid-template-columns: 32px 1fr auto;
+            gap: var(--space-3);
+            align-items: center;
+            padding: 10px var(--space-3);
+            background: var(--bg-surface);
+            cursor: pointer;
+            transition: background var(--time-fast) var(--ease);
+        }
+        .row + .row {
+            box-shadow: 0 -1px 0 var(--divider);
+        }
+        .row:hover {
+            background: var(--bg-row-hover);
+        }
+        .row.is-pinned {
+            background: linear-gradient(90deg,
+                rgba(249, 226, 175, 0.06) 0%,
+                var(--bg-surface) 12%);
+        }
+
+        /* Type icon (left, color-coded) */
+        .row .type-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-md);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .row .type-icon svg { width: 16px; height: 16px; }
+        .type-text  .type-icon { background: rgba(137, 180, 250, 0.14); color: var(--type-text); }
+        .type-image .type-icon { background: rgba(203, 166, 247, 0.14); color: var(--type-image); }
+        .type-link  .type-icon { background: rgba(116, 199, 236, 0.14); color: var(--type-link); }
+        .type-code  .type-icon { background: rgba(148, 226, 213, 0.14); color: var(--type-code); }
+        .type-snip  .type-icon { background: rgba(249, 226, 175, 0.16); color: var(--type-snip); }
+
+        body.theme-light .type-text  .type-icon { background: rgba(37, 99, 235, 0.12); }
+        body.theme-light .type-image .type-icon { background: rgba(147, 51, 234, 0.12); }
+        body.theme-light .type-link  .type-icon { background: rgba(8, 145, 178, 0.12); }
+        body.theme-light .type-code  .type-icon { background: rgba(13, 148, 136, 0.12); }
+        body.theme-light .type-snip  .type-icon { background: rgba(180, 83, 9, 0.14); }
+
+        /* Image preview (small thumbnail) */
+        .row .thumb {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-md);
+            background: var(--bg-overlay);
+            background-image: linear-gradient(135deg,
+                #74c7ec 0%, #cba6f7 60%, #f5c2e7 100%);
+            flex-shrink: 0;
+            box-shadow: 0 0 0 1px var(--border-soft) inset;
+        }
+
+        /* Text content */
+        .row .body {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .row .preview {
+            color: var(--fg-text);
+            font-size: var(--size-body);
+            font-weight: var(--weight-medium);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            letter-spacing: -0.005em;
+        }
+        .row.is-pinned .preview::before {
+            content: "★";
+            color: var(--pin);
+            margin-right: 6px;
+            font-size: 11px;
+            vertical-align: 1px;
+        }
+        .row.is-sensitive .preview {
+            font-family: var(--font-mono);
+            color: var(--fg-muted);
+            letter-spacing: 0.1em;
+        }
+        .row .meta {
+            font-size: var(--size-caption);
+            color: var(--fg-muted);
+            display: flex;
+            gap: var(--space-2);
+            align-items: center;
+        }
+        .row .meta .dot { color: var(--fg-faint); }
+
+        /* Suffix actions (hover-revealed) */
+        .row .actions {
+            display: flex;
+            gap: 2px;
+            opacity: 0;
+            transition: opacity var(--time-fast) var(--ease);
+        }
+        .row:hover .actions,
+        .row.is-pinned .actions {
+            opacity: 1;
+        }
+        .row .actions button {
+            width: 28px;
+            height: 28px;
+            border-radius: var(--radius-sm);
+            color: var(--fg-muted);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: all var(--time-fast) var(--ease);
+        }
+        .row .actions button:hover {
+            background: var(--bg-overlay);
+            color: var(--fg-text);
+        }
+        .row .actions button.pin.is-active {
+            color: var(--pin);
+            opacity: 1;
+        }
+        .row .actions button.danger:hover {
+            background: rgba(243, 139, 168, 0.14);
+            color: var(--error);
+        }
+        .row .actions svg { width: 14px; height: 14px; }
+
+        /* --- Footer (Adw.HeaderBar bottom) ------------------------------- */
+        .footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-2) var(--space-3);
+            background: var(--bg-mantle);
+            border-top: 1px solid var(--divider);
+            font-size: var(--size-meta);
+            color: var(--fg-muted);
+        }
+        .footer .count {
+            font-variant-numeric: tabular-nums;
+        }
+        .footer .right {
+            display: flex;
+            gap: var(--space-2);
+            align-items: center;
+        }
+        .footer .incognito-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            background: rgba(180, 190, 254, 0.14);
+            color: var(--incognito);
+            border-radius: var(--radius-pill);
+            font-size: 11px;
+            font-weight: var(--weight-medium);
+        }
+        body.theme-light .footer .incognito-pill {
+            background: rgba(124, 58, 237, 0.12);
+        }
+        .footer .incognito-pill svg { width: 10px; height: 10px; }
+        .footer .text-btn {
+            color: var(--fg-subtext);
+            font-size: var(--size-meta);
+            padding: 3px 8px;
+            border-radius: var(--radius-sm);
+            transition: all var(--time-fast) var(--ease);
+        }
+        .footer .text-btn:hover {
+            background: var(--bg-overlay);
+            color: var(--fg-text);
+        }
+        .footer .text-btn.danger:hover {
+            color: var(--error);
+        }
+    </style>
+</head>
+<body class="theme-dark">
+
+<div class="theme-toggle">
+    <span>theme</span>
+    <button class="active" onclick="document.body.className='theme-dark'; refreshActive(this)">Dark</button>
+    <button onclick="document.body.className='theme-light'; refreshActive(this)">Light</button>
+</div>
+
+<div class="window">
+
+    <!-- ============ Adw.HeaderBar ============ -->
+    <header class="headerbar">
+        <button class="header-btn" title="Incognito mode" aria-label="Toggle incognito mode">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="4" cy="11" r="2.5"/>
+                <circle cx="12" cy="11" r="2.5"/>
+                <path d="M2 8h12M5 8c1.5-3 4.5-3 6 0"/>
+            </svg>
+        </button>
+        <div class="title-wrap">
+            <span class="title">Clipman</span>
+        </div>
+        <button class="header-btn" title="Menu" aria-label="Open menu">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <path d="M3 5h10M3 8h10M3 11h10"/>
+            </svg>
+        </button>
+    </header>
+
+    <!-- ============ Toolbar (search + view switcher) ============ -->
+    <div class="toolbar">
+        <div class="search">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="7" cy="7" r="4.5"/>
+                <path d="M10.5 10.5l3 3" stroke-linecap="round"/>
+            </svg>
+            <input type="text" placeholder="Search clipboard history…" value="" />
+            <span class="kbd">⌘ /</span>
+        </div>
+        <nav class="switcher" aria-label="Filter">
+            <button class="active">All <span class="count">42</span></button>
+            <button>Text <span class="count">28</span></button>
+            <button>Images <span class="count">7</span></button>
+            <button>Snippets <span class="count">7</span></button>
+        </nav>
+    </div>
+
+    <!-- ============ Content ============ -->
+    <div class="content">
+
+        <!-- Pinned group (always at top, gold-tinted) -->
+        <section class="group">
+            <div class="group-header pinned">
+                <span>★ Pinned</span>
+                <span>2</span>
+            </div>
+            <div class="group-rows">
+                <div class="row is-pinned type-snip">
+                    <div class="type-icon">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="3" width="10" height="10" rx="2"/>
+                            <path d="M6 7h4M6 9.5h3" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="body">
+                        <div class="preview">Standup template — yesterday / today / blockers</div>
+                        <div class="meta"><span>Snippet</span><span class="dot">•</span><span>used 14×</span></div>
+                    </div>
+                    <div class="actions">
+                        <button class="pin is-active" title="Unpin">
+                            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg>
+                        </button>
+                        <button class="danger" title="Delete">
+                            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="row is-pinned type-link">
+                    <div class="type-icon">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M7 5h4a3 3 0 010 6h-1M9 11H5a3 3 0 010-6h1" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <div class="body">
+                        <div class="preview">https://github.com/MohammedEl-sayedAhmed/clipman</div>
+                        <div class="meta"><span>URL</span><span class="dot">•</span><span>github.com</span></div>
+                    </div>
+                    <div class="actions">
+                        <button class="pin is-active" title="Unpin">
+                            <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg>
+                        </button>
+                        <button class="danger" title="Delete">
+                            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Today -->
+        <section class="group">
+            <div class="group-header"><span>Today</span></div>
+            <div class="group-rows">
+                <div class="row type-text">
+                    <div class="type-icon">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 5h10M3 8h10M3 11h6"/></svg>
+                    </div>
+                    <div class="body">
+                        <div class="preview">A number is a mathematical object used to count, measure…</div>
+                        <div class="meta"><span>just now</span><span class="dot">•</span><span>150 chars</span></div>
+                    </div>
+                    <div class="actions">
+                        <button class="pin" title="Pin"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button>
+                        <button class="danger" title="Delete"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg></button>
+                    </div>
+                </div>
+                <div class="row type-image">
+                    <div class="thumb"></div>
+                    <div class="body">
+                        <div class="preview">Screenshot — design review notes</div>
+                        <div class="meta"><span>2 min ago</span><span class="dot">•</span><span>1.2 MB</span><span class="dot">•</span><span>1280×720</span></div>
+                    </div>
+                    <div class="actions">
+                        <button class="pin"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button>
+                        <button class="danger"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg></button>
+                    </div>
+                </div>
+                <div class="row type-code">
+                    <div class="type-icon">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4L2 8l3 4M11 4l3 4-3 4"/></svg>
+                    </div>
+                    <div class="body">
+                        <div class="preview">git log --oneline --grep='hooks' --since='1 week ago'</div>
+                        <div class="meta"><span>14 min ago</span><span class="dot">•</span><span>Code</span></div>
+                    </div>
+                    <div class="actions">
+                        <button class="pin"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button>
+                        <button class="danger"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg></button>
+                    </div>
+                </div>
+                <div class="row type-text is-sensitive">
+                    <div class="type-icon">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3.5" y="7" width="9" height="6" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></svg>
+                    </div>
+                    <div class="body">
+                        <div class="preview">•••••••••••••</div>
+                        <div class="meta"><span>32 min ago</span><span class="dot">•</span><span style="color: var(--warning)">Sensitive — auto-clear in 27 s</span></div>
+                    </div>
+                    <div class="actions">
+                        <button class="danger"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg></button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Yesterday -->
+        <section class="group">
+            <div class="group-header"><span>Yesterday</span></div>
+            <div class="group-rows">
+                <div class="row type-text">
+                    <div class="type-icon">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 5h10M3 8h10M3 11h6"/></svg>
+                    </div>
+                    <div class="body">
+                        <div class="preview">Viewing the concept of zero as a number distinct from…</div>
+                        <div class="meta"><span>Yesterday, 18:42</span><span class="dot">•</span><span>94 chars</span></div>
+                    </div>
+                    <div class="actions">
+                        <button class="pin"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button>
+                        <button class="danger"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg></button>
+                    </div>
+                </div>
+                <div class="row type-link">
+                    <div class="type-icon">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 5h4a3 3 0 010 6h-1M9 11H5a3 3 0 010-6h1" stroke-linecap="round"/></svg>
+                    </div>
+                    <div class="body">
+                        <div class="preview">https://docs.flathub.org/docs/for-app-authors/requirements</div>
+                        <div class="meta"><span>Yesterday, 12:08</span><span class="dot">•</span><span>docs.flathub.org</span></div>
+                    </div>
+                    <div class="actions">
+                        <button class="pin"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button>
+                        <button class="danger"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg></button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Earlier -->
+        <section class="group">
+            <div class="group-header"><span>Earlier this week</span></div>
+            <div class="group-rows">
+                <div class="row type-text">
+                    <div class="type-icon">
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 5h10M3 8h10M3 11h6"/></svg>
+                    </div>
+                    <div class="body">
+                        <div class="preview">In mathematics, the notion of number has been extended…</div>
+                        <div class="meta"><span>Tue, 09:14</span><span class="dot">•</span><span>94 chars</span></div>
+                    </div>
+                    <div class="actions">
+                        <button class="pin"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button>
+                        <button class="danger"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M5 5l6 6M11 5l-6 6"/></svg></button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </div>
+
+    <!-- ============ Footer ============ -->
+    <footer class="footer">
+        <span class="count">42 items</span>
+        <div class="right">
+            <span class="incognito-pill" title="Incognito mode off">
+                <svg viewBox="0 0 16 16" fill="currentColor"><circle cx="4" cy="11" r="2.5"/><circle cx="12" cy="11" r="2.5"/></svg>
+                Recording
+            </span>
+            <button class="text-btn danger">Clear all</button>
+        </div>
+    </footer>
+
+</div>
+
+<script>
+    function refreshActive(btn) {
+        document.querySelectorAll('.theme-toggle button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    }
+</script>
+
+</body>
+</html>
