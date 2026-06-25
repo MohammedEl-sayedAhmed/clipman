@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="../logo.svg">
     <link rel="apple-touch-icon" href="../logo.svg">
     <title>Clipman — Preferences mockup</title>
@@ -458,6 +459,56 @@
             color: var(--fg-muted);
             text-transform: uppercase;
             letter-spacing: 0.06em;
+        }
+
+        /* ------------------------------------------------------------
+           Mobile: 820px window is too wide for any phone. Collapse the
+           sidebar into a horizontal scrollable pill row above the
+           content; let the whole window be 100% of the viewport with a
+           reasonable max-width; drop the vertical centering and let the
+           page scroll.
+           ------------------------------------------------------------ */
+        @media (max-width: 640px) {
+            body {
+                min-height: auto;
+                align-items: flex-start;
+                padding: 16px;
+                overflow-x: hidden;
+            }
+            .theme-toggle {
+                position: static;
+                margin: 0 auto 12px;
+            }
+            .prefs-window {
+                width: 100%;
+                max-width: 100%;
+                height: auto;
+                min-height: 540px;
+                grid-template-columns: 1fr;
+                grid-template-areas:
+                    "headerbar"
+                    "sidebar"
+                    "content";
+            }
+            .prefs-sidebar {
+                grid-area: sidebar;
+                flex-direction: row;
+                overflow-x: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--divider);
+                padding: 8px 12px;
+                gap: 4px;
+                scrollbar-width: none;
+            }
+            .prefs-sidebar::-webkit-scrollbar { display: none; }
+            .nav-item {
+                white-space: nowrap;
+                flex-shrink: 0;
+                padding: 6px 12px;
+            }
+            .prefs-content {
+                padding: 16px;
+            }
         }
     </style>
 <script src="theme.js" defer></script>
