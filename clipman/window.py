@@ -21,7 +21,7 @@ import gi
 # CodeQL flags as a cyclic import (window <-> clipman package).
 from gettext import gettext as _
 
-from clipman import updates
+import clipman.updates as updates
 from clipman._version import __version__
 
 logger = logging.getLogger(__name__)

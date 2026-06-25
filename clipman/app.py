@@ -8,7 +8,7 @@ gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
 from gi.repository import Adw, GLib
 
-from clipman import updates
+import clipman.updates as updates
 from clipman.database import ClipboardDB
 from clipman.clipboard_monitor import ClipboardMonitor
 from clipman.window import ClipmanWindow

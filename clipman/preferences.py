@@ -23,7 +23,8 @@ import gi
 # CodeQL flags as a cyclic import (preferences <-> clipman package).
 from gettext import gettext as _
 
-from clipman import keybindings, updates
+import clipman.keybindings as keybindings
+import clipman.updates as updates
 from clipman._version import __version__
 from clipman.database import DB_PATH
 
