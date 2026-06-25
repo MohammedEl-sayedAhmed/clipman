@@ -35,10 +35,11 @@
     </ul>
   </description>
 
-  <url type="homepage">https://github.com/MohammedEl-sayedAhmed/clipman</url>
+  <url type="homepage">https://mohammedel-sayedahmed.github.io/clipman/</url>
   <url type="bugtracker">https://github.com/MohammedEl-sayedAhmed/clipman/issues</url>
   <url type="vcs-browser">https://github.com/MohammedEl-sayedAhmed/clipman</url>
   <url type="donation">https://github.com/sponsors/MohammedEl-sayedAhmed</url>
+  <url type="faq">https://mohammedel-sayedahmed.github.io/clipman/#faq</url>
 
   <launchable type="desktop-id">com.clipman.Clipman.desktop</launchable>
 
