@@ -18,13 +18,20 @@ Thank you for your interest in contributing to Clipman!
 clipman/
 ├── clipman.py                  # Entry point (start daemon / toggle popup)
 ├── clipman/
-│   ├── __init__.py             # i18n/gettext setup
-│   ├── app.py                  # GTK Application lifecycle
+│   ├── __init__.py             # i18n/gettext setup; re-exports __version__
+│   ├── _version.py             # Single source of truth for __version__
+│   ├── app.py                  # Adw.Application lifecycle
 │   ├── clipboard_monitor.py    # Event-driven clipboard change handling
 │   ├── database.py             # SQLite storage layer
 │   ├── dbus_service.py         # D-Bus IPC (toggle, clipboard events)
-│   ├── window.py               # GTK3 popup window UI and event handlers
-│   └── style.css               # CSS theme template (Catppuccin, $variable syntax)
+│   ├── edge_states.py          # 16 declarative StateSpec entries dispatched
+│   │                           #   into Adw.StatusPage / Adw.Banner / Adw.AlertDialog
+│   ├── keybindings.py          # gsettings helpers for Super+V customization
+│   ├── preferences.py          # Adw.PreferencesWindow (6 panes)
+│   ├── snippets_dialog.py      # Adw.NavigationSplitView master-detail snippet editor
+│   ├── updates.py              # Anonymous update-check against GitHub Releases
+│   ├── window.py               # Adw.ApplicationWindow + Adw.HeaderBar history popup
+│   └── style.css               # libadwaita @-token overrides + Catppuccin palette
 ├── extension/
 │   ├── extension.js            # GNOME Shell extension (clipboard detection, paste)
 │   └── metadata.json           # Extension metadata
@@ -93,10 +100,36 @@ Introspect or call them with `gdbus`:
 ### Key Constraints
 
 - **Wayland only** — no X11-specific APIs in the daemon
-- **GTK3** — the UI uses GTK3 (not GTK4) for Ubuntu 22.04+ compatibility
+- **GTK 4 + libadwaita 1.4+** — the UI is built on `Adw.ApplicationWindow`,
+  `Adw.PreferencesWindow`, `Adw.NavigationSplitView`, `Adw.ActionRow`,
+  `Adw.StatusPage`, `Adw.Banner`, and `Adw.AlertDialog`. Ubuntu 22.04 is no
+  longer the floor; 24.04+ is the supported baseline.
 - **GNOME Shell extension** — runs inside the compositor; changes require logout/login to take effect
 - **No polling** — clipboard detection is event-driven via D-Bus
 - **Single-threaded** — all code runs on the GLib main loop
+
+### Dev system packages
+
+Ubuntu 24.04+ (and other Debian-family distros with GTK 4):
+
+```bash
+sudo apt-get install -y \
+    python3 python3-gi python3-dbus \
+    gir1.2-gtk-4.0 gir1.2-adw-1 libadwaita-1-0 \
+    wl-clipboard libcairo2-dev libgirepository-2.0-dev \
+    gnome-shell-extensions
+```
+
+Fedora:
+
+```bash
+sudo dnf install -y \
+    python3-gobject python3-dbus gtk4 libadwaita \
+    wl-clipboard cairo-devel gobject-introspection-devel \
+    gnome-extensions-app
+```
+
+See [docs/development.md](docs/development.md) for the full setup.
 
 ### i18n (Translations)
 
@@ -118,20 +151,31 @@ status.set_text(_("{count} items").format(count=total))
 
 ### CSS Theming
 
-The UI stylesheet lives in `clipman/style.css` as a `string.Template` file:
+The UI stylesheet lives in `clipman/style.css`. With the move to
+GTK 4 + libadwaita, theming is layered:
 
-```css
-.entry-row {
-    background-color: $bg_surface0;
-    font-size: ${font_size}px;
-}
-```
+1. **libadwaita `@named-color` tokens** (e.g. `@accent_color`,
+   `@window_bg_color`, `@card_bg_color`) carry the bulk of the
+   palette. The stylesheet redefines these tokens so every Adw
+   widget — `Adw.ActionRow`, `Adw.PreferencesWindow`,
+   `Adw.HeaderBar`, `Adw.Banner`, etc. — picks up the Catppuccin
+   Mocha or Latte palette automatically without per-widget rules.
+2. **Catppuccin palette overlay**: light- and dark-variant
+   selectors (`window.dark @define-color …` / `window.light …`)
+   write the chosen palette into the `@named-color` slots at theme
+   switch time.
+3. **`string.Template` substitution** is still used for the
+   runtime-tunable knobs (font size, opacity) — variables like
+   `${font_size}px` are substituted before the CSS is handed to
+   `Gtk.CssProvider.load_from_string()`.
 
-- Theme colors use `$variable` syntax (e.g., `$bg_crust`, `$text_primary`, `$accent`)
-- Use `${variable}` when followed by letters/digits (e.g., `${font_size}px`)
-- Variables are substituted at runtime from the theme dictionary in `window.py`
-- Do **not** use CSS custom properties (`var(--name)`) — GTK3's CSS engine does not support them
-- Never commit `clipman/style.css` with `$variable` placeholders substituted — the runtime template substitution would then double-substitute and the daemon would fail to load the CSS.
+- Prefer overriding `@named-color` tokens over writing per-widget
+  CSS — the Adw widgets honour the tokens consistently.
+- Use `${variable}` when followed by letters/digits (e.g.,
+  `${font_size}px`) for runtime substitution.
+- Never commit `clipman/style.css` with `$variable` placeholders
+  substituted — the runtime template substitution would then
+  double-substitute and the daemon would fail to load the CSS.
 
 ## Submitting Changes
 

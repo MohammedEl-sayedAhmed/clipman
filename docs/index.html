@@ -39,7 +39,7 @@
       "description": "Clipman is an open-source, Wayland-native clipboard history manager for Ubuntu/GNOME and any compositor with wl-clipboard. Press Super+V to browse, search, pin and paste from a local SQLite-backed history. Privacy is built in: incognito mode pauses recording, sensitive data (passwords, tokens, cards) is auto-cleared after 30 seconds, and nothing leaves the machine.",
       "url": "https://mohammedel-sayedahmed.github.io/clipman/",
       "downloadUrl": "https://github.com/MohammedEl-sayedAhmed/clipman",
-      "softwareVersion": "1.0.6",
+      "softwareVersion": "1.1.0",
       "programmingLanguage": "Python",
       "license": "https://opensource.org/licenses/Apache-2.0",
       "isAccessibleForFree": true,
@@ -1244,7 +1244,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
 
       <div class="feature">
         <div class="feature-copy">
-          <h3>Fifteen polished states for the moments that matter.</h3>
+          <h3>Sixteen polished states for the moments that matter.</h3>
           <p>Empty history, no-results, incognito paused, sensitive auto-cleared, first-run, extension missing, backup failed — every edge is intentional and consistent across the app, with a tone that never shouts.</p>
           <div style="margin-top: 18px;">
             <a class="btn" href="design/states.html">Browse every state →</a>
@@ -1365,7 +1365,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
       </div>
     </div>
     <div class="legal">
-      <span>© 2026 Mohammed El-sayed Ahmed · <span class="mono">v1.0.6</span></span>
+      <span>© 2026 Mohammed El-sayed Ahmed · <span class="mono">v1.1.0</span></span>
       <span class="mono">cmd-K • super+V • <a href="https://github.com/MohammedEl-sayedAhmed/clipman">github</a></span>
     </div>
   </div>
@@ -1429,12 +1429,12 @@ footer.site .legal .mono { font-size: 0.78rem; }
                   hint: 'After install, run <span class="mono">./install.sh</span> from a source checkout to register the GNOME Shell extension and the keybinding. · <a href="https://pypi.org/project/clipman-clipboard/">pypi.org/project/clipman-clipboard</a>' },
         aur:    { cmd: 'yay -S clipman-clipboard   # or: paru -S clipman-clipboard',
                   hint: 'AUR package builds and registers everything for you. · <a href="https://aur.archlinux.org/packages/clipman-clipboard">aur.archlinux.org/packages/clipman-clipboard</a>' },
-        deb:    { cmd: 'sudo apt install ./clipman_1.0.6_amd64.deb',
+        deb:    { cmd: 'sudo apt install ./clipman_1.1.0_amd64.deb',
                   hint: 'Download the .deb from the GitHub Releases page first. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/releases">releases</a>' },
-        rpm:    { cmd: 'sudo dnf install ./clipman-1.0.6-1.x86_64.rpm',
+        rpm:    { cmd: 'sudo dnf install ./clipman-1.1.0-1.x86_64.rpm',
                   hint: 'Download the .rpm from the GitHub Releases page first. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/releases">releases</a>' },
         source: { cmd: 'git clone https://github.com/MohammedEl-sayedAhmed/clipman\ncd clipman && ./install.sh',
-                  hint: 'Requires Python 3.10+, GTK3, and either the GNOME Shell extension or wl-clipboard. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CONTRIBUTING.md">contributing guide</a>' },
+                  hint: 'Requires Python 3.10+, GTK 4 + libadwaita 1.4+, and either the GNOME Shell extension or wl-clipboard. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CONTRIBUTING.md">contributing guide</a>' },
     };
     const tabBtns = document.querySelectorAll('.tabs button');
     const tabCmd  = document.getElementById('tab-cmd');

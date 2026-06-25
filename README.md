@@ -12,7 +12,7 @@ Like Windows `Win+V` — but for Linux.
 [![Tests](https://img.shields.io/github/actions/workflow/status/MohammedEl-sayedAhmed/clipman/test.yml?branch=main&label=tests)](https://github.com/MohammedEl-sayedAhmed/clipman/actions)
 [![GitHub Stars](https://img.shields.io/github/stars/MohammedEl-sayedAhmed/clipman?style=flat&logo=github&label=Stars)](https://github.com/MohammedEl-sayedAhmed/clipman/stargazers)
 [![GitHub Downloads](https://img.shields.io/github/downloads/MohammedEl-sayedAhmed/clipman/total?logo=github&label=Downloads)](https://github.com/MohammedEl-sayedAhmed/clipman/releases)
-[![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04+-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04+-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com)
 [![GNOME](https://img.shields.io/badge/GNOME-46--48-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
 [![Wayland](https://img.shields.io/badge/Wayland-native-yellow)](https://wayland.freedesktop.org)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
@@ -35,13 +35,13 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 
 <br>
 
-<sub><i>Above: the current GTK3 popup. A redesigned GTK4 + libadwaita UI is in design — <a href="https://mohammedel-sayedahmed.github.io/clipman/#design">browse the mockups</a> or <a href="https://mohammedel-sayedahmed.github.io/clipman/">visit the project page</a>. The redesign is designs, not shipped code yet.</i></sub>
+<sub><i>Above: the shipped GTK 4 + libadwaita popup. The full settings surface is an <code>Adw.PreferencesWindow</code>, the snippets editor is an <code>Adw.NavigationSplitView</code> dialog, and the 16 edge states (empty, no-results, incognito, sensitive-cleared, first-run, errors…) render as Adwaita <code>StatusPage</code> / <code>Banner</code> / <code>AlertDialog</code> with a shared Catppuccin overlay. <a href="https://mohammedel-sayedahmed.github.io/clipman/#design">Browse the mockups</a> · <a href="https://mohammedel-sayedahmed.github.io/clipman/">project page</a>.</i></sub>
 
 </div>
 
 ---
 
-Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extension — no polling, no subprocesses, no screen flicker. It detects clipboard changes through `Meta.Selection` signals and communicates over D-Bus, making it fundamentally different from tools that rely on `wl-paste --watch` or timer-based polling. Privacy is built in: incognito mode, automatic sensitive data detection with 30-second auto-clear, and restrictive file permissions. The entire app is Python + GTK3 — no Electron, no heavy frameworks.
+Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extension — no polling, no subprocesses, no screen flicker. It detects clipboard changes through `Meta.Selection` signals and communicates over D-Bus, making it fundamentally different from tools that rely on `wl-paste --watch` or timer-based polling. Privacy is built in: incognito mode, automatic sensitive data detection with 30-second auto-clear, and restrictive file permissions. The entire app is Python + GTK 4 + libadwaita — no Electron, no heavy frameworks.
 
 ---
 
@@ -104,13 +104,13 @@ Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extensi
 - **Zero polling** — event-driven via `Meta.Selection` signals and D-Bus
 - **SHA256 deduplication** — copying the same content bumps it to the top without creating duplicates
 - **Configurable history** — 50 to 5,000 entries
-- **Lightweight** — Python + GTK3, no Electron or heavy frameworks
+- **Lightweight** — Python + GTK 4 + libadwaita, no Electron or heavy frameworks
 
 ## Requirements
 
-- Ubuntu 22.04+ with GNOME 46–48 and Wayland
+- Ubuntu 24.04+ with GNOME 46–48 and Wayland
 - Python 3.10+
-- GTK 3
+- GTK 4 + libadwaita 1.4+
 
 > Dependencies are installed automatically by the install script.
 
@@ -152,7 +152,9 @@ Snap users still need the [GNOME Shell extension](https://extensions.gnome.org/e
 
 ```bash
 # System dependencies (pip can't install these)
-sudo apt install python3-gi python3-dbus gir1.2-gtk-3.0 wl-clipboard
+sudo apt install python3-gi python3-dbus \
+    gir1.2-gtk-4.0 gir1.2-adw-1 libadwaita-1-0 \
+    wl-clipboard
 
 pip install clipman-clipboard
 ```
@@ -244,22 +246,32 @@ Or with paru: `paru -S clipman-clipboard`
 
 ### Settings
 
-Click the gear icon to access settings. The panel is organised into five sections:
+Click the gear icon to open the `Adw.PreferencesWindow`. It carries six panes:
 
-| Section | Setting | Description |
-|---------|---------|-------------|
-| **APPEARANCE** | Theme | Segmented control: Dark (Catppuccin Mocha) / Light (Catppuccin Latte) |
+| Pane | Setting | Description |
+|------|---------|-------------|
+| **Appearance** | Theme | Segmented control: Dark (Catppuccin Mocha) / Light (Catppuccin Latte) |
 | | Font size | Text size for entries (8–20px) |
 | | Font color | Default, Green, Peach, Mauve, Pink, or Teal |
 | | Opacity | Window transparency (30%–100%) |
-| **HISTORY** | Max history | Number of entries to keep (50–5,000) |
-| **SHORTCUTS** | Toggle shortcut | Customize the popup-toggle keybinding (default Super+V) via an in-app capture dialog |
+| **Privacy** | Start in incognito mode | Launch with clipboard recording paused |
+| | Auto-clear delay | Seconds before detected sensitive entries are purged (default 30) |
+| | Purge sensitive entries now | One-tap removal of all stored sensitive entries |
+| **Shortcuts** | Toggle shortcut | Customize the popup-toggle keybinding (default Super+V) via an in-app capture dialog |
 | | Paste mode | How Clipman pastes after copy: **Auto-detect** (default — Ctrl+Shift+V in terminals, Ctrl+V elsewhere), **Ctrl+V**, **Ctrl+Shift+V**, or **Shift+Insert** |
-| **UPDATES** | Check for updates | Toggle the daily anonymous check against GitHub Releases. Default: ON for source / PyPI / AUR, OFF for Snap and Flatpak (they auto-refresh). See [ADR 0007](docs/adr/0007-in-app-update-notifications.md) |
+| **Storage** | Max entries | Number of entries to keep (50–5,000) |
+| | Database location | Path to the SQLite database |
+| | Backup / Restore | Export and import your clipboard database |
+| **Updates** | Check for updates | Toggle the daily anonymous check against GitHub Releases. Default: ON for source / PyPI / AUR, OFF for Snap and Flatpak (they auto-refresh). See [ADR 0007](docs/adr/0007-in-app-update-notifications.md) |
 | | Check now | Manual check button — bypasses the 24h cooldown |
-| **DATA** | Backup / Restore | Export and import your clipboard database |
+| **About** | Version + links | Version string (sourced from `clipman/_version.py`), license, homepage, and acknowledgements |
 
 Settings are saved automatically and persist across sessions.
+
+Snippets get their own surface: clicking **Edit snippets** opens an
+`Adw.NavigationSplitView` master-detail dialog (`clipman/snippets_dialog.py`)
+with a searchable list on the left and an editor form on the right —
+template variables (`${date}`, `${time}`, `${clipboard}`) included.
 
 ## How It Works
 
@@ -273,10 +285,10 @@ Settings are saved automatically and persist across sessions.
 ### Architecture
 
 Clipman is split into a GNOME Shell extension that detects clipboard
-changes natively and a Python + GTK3 daemon that stores history in a
-local SQLite database. The two halves talk over D-Bus on the session
-bus; there is no polling, no telemetry, and only one network call
-(the daily anonymous update check, opt-out — see
+changes natively and a Python + GTK 4 + libadwaita daemon that stores
+history in a local SQLite database. The two halves talk over D-Bus on
+the session bus; there is no polling, no telemetry, and only one
+network call (the daily anonymous update check, opt-out — see
 [ADR 0007](docs/adr/0007-in-app-update-notifications.md)).
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full process model,
@@ -290,15 +302,26 @@ backlinks.
 clipman/
 ├── clipman.py                     # Entry point (start daemon / toggle popup)
 ├── clipman/
-│   ├── __init__.py                # __version__ + i18n/gettext setup
-│   ├── app.py                     # GTK Application lifecycle
+│   ├── __init__.py                # i18n/gettext setup; re-exports __version__
+│   ├── _version.py                # Single source of truth for __version__
+│   ├── app.py                     # Adw.Application lifecycle
 │   ├── clipboard_monitor.py       # Event-driven clipboard monitor
 │   ├── database.py                # SQLite storage with dedup/search/pin/snippets
 │   ├── dbus_service.py            # D-Bus IPC for toggle and clipboard events
+│   ├── edge_states.py             # 16 declarative StateSpec entries +
+│   │                              #   render_edge_state dispatch (StatusPage /
+│   │                              #   Banner / AlertDialog) for empty,
+│   │                              #   no-results, incognito, sensitive-cleared,
+│   │                              #   first-run, errors, …
 │   ├── keybindings.py             # gsettings helpers for Super+V customization
+│   ├── preferences.py             # Adw.PreferencesWindow (Appearance, Privacy,
+│   │                              #   Shortcuts, Storage, Updates, About)
+│   ├── snippets_dialog.py         # Adw.NavigationSplitView master-detail editor
 │   ├── updates.py                 # Anonymous update-check against GitHub Releases
-│   ├── window.py                  # GTK3 popup window UI
-│   └── style.css                  # CSS theme template (Catppuccin, $variable syntax)
+│   ├── window.py                  # Adw.ApplicationWindow + Adw.HeaderBar +
+│   │                              #   Adw.ActionRow history list
+│   └── style.css                  # libadwaita @-token overrides + Catppuccin
+│                                  #   palette overlay (Mocha / Latte)
 ├── extension/
 │   ├── extension.js               # GNOME Shell extension (clipboard detection + paste)
 │   └── metadata.json              # Extension metadata

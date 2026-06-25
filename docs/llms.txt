@@ -1,5 +1,5 @@
 # Clipman
-> Wayland-native clipboard history manager for Linux. Press Super+V to search, pin and paste from a local SQLite-backed history. No telemetry; sensitive data auto-clears.
+> Wayland-native clipboard history manager for Linux, built with GTK 4 and libadwaita. Press Super+V to search, pin and paste from a local SQLite-backed history. No telemetry; sensitive data auto-clears.
 
 - [Project page](https://mohammedel-sayedahmed.github.io/clipman/)
 - [Source](https://github.com/MohammedEl-sayedAhmed/clipman)
@@ -9,8 +9,9 @@
 ## Features
 
 - Wayland-native: GNOME Shell extension over D-Bus, wl-clipboard fallback for KDE/Sway/Hyprland
+- libadwaita UI: Adw.ApplicationWindow popup, Adw.PreferencesWindow settings (six panes), Adw.NavigationSplitView snippets editor, Catppuccin Mocha / Latte palette overlay
 - Privacy: incognito mode, sensitive-data auto-clear, restrictive file permissions
-- Search + pinning + reusable snippets with template variables ({{date}}, {{clipboard}})
+- Search + pinning + reusable snippets with template variables (${date}, ${time}, ${clipboard})
 - Open source, Apache-2.0, distributed on Snap Store / PyPI / AUR / .deb / .rpm
 
 ## Distribution
