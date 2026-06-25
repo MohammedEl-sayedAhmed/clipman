@@ -1,4 +1,4 @@
-"""Pure-data declarations for the 15 edge states from the mockups.
+"""Pure-data declarations for the 16 edge states from the mockups.
 
 Each ``StateSpec`` captures everything the renderer needs:
 - ``id``: stable identifier used by ``window.py`` to look the state up.
@@ -34,6 +34,7 @@ this submodule loads, so the translation domain is set correctly.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from gettext import gettext as _
 
@@ -59,8 +60,12 @@ class StateSpec:
 
 
 # ---------------------------------------------------------------------
-# The 15 specs. Order matches the mockup picker (states.html), reading
+# The 16 specs. Order matches the mockup picker (states.html), reading
 # top-to-bottom: Baseline / Informational / Privacy / Setup / Errors.
+# "populated" is a sentinel: it represents the normal list-view popup,
+# is never actually rendered through ``render_edge_state`` (the list
+# takes over), but stays in STATES so the dispatcher can compare
+# against a single canonical id set.
 # ---------------------------------------------------------------------
 
 STATES: dict[str, StateSpec] = {
@@ -239,7 +244,11 @@ _TONE_CSS = {
 }
 
 
-def render_edge_state(state_id: str, parent_window=None):
+def render_edge_state(
+    state_id: str,
+    parent_window=None,
+    on_action: Callable[[str], None] | None = None,
+):
     """Construct the Adw widget that visualises ``state_id``.
 
     Returns:
@@ -248,9 +257,21 @@ def render_edge_state(state_id: str, parent_window=None):
         - ``Adw.AlertDialog`` for ``kind == "alertdialog"``.
 
     ``parent_window`` is only consulted for alert dialogs (which need
-    a transient parent before ``present()``). The button signals do
-    nothing here; callers wire ``action_id`` to behaviour via
-    ``connect`` after the widget is returned.
+    a transient parent before ``present()``).
+
+    ``on_action`` is an optional callback ``fn(action_id: str) -> None``.
+    When provided, every button in the rendered widget tree is wired to
+    invoke it with the ``action_id`` declared on the matching
+    ``spec.primary_action`` / ``spec.secondary_action`` tuple. The host
+    window decides what each ``action_id`` means; unknown ids are the
+    caller's problem (the dispatcher in ``window.py`` logs a warning).
+
+    Wiring details:
+        - ``StatusPage``: each ``Gtk.Button`` child connects ``clicked``
+          -> ``on_action(button.action_id)``.
+        - ``Banner``: ``button-clicked`` -> ``on_action(primary_action_id)``.
+        - ``AlertDialog``: ``response`` -> ``on_action(response_id)``
+          (the response id is exactly the action id we registered).
 
     GTK / libadwaita are imported lazily here so the module stays
     importable on machines without them (CI test runners, headless
@@ -270,13 +291,20 @@ def render_edge_state(state_id: str, parent_window=None):
     if spec.kind == "banner":
         banner = Adw.Banner()
         banner.set_title(spec.title)
+        primary_action_id: str | None = None
         if spec.primary_action is not None:
             banner.set_button_label(spec.primary_action[0])
-            banner.action_id = spec.primary_action[1]
+            primary_action_id = spec.primary_action[1]
+            banner.action_id = primary_action_id
         banner.set_revealed(True)
         if spec.tone in _TONE_CSS:
             banner.add_css_class(_TONE_CSS[spec.tone])
         banner.state_spec = spec
+        if on_action is not None and primary_action_id is not None:
+            banner.connect(
+                "button-clicked",
+                lambda _b, _aid=primary_action_id: on_action(_aid),
+            )
         return banner
 
     if spec.kind == "alertdialog":
@@ -297,6 +325,17 @@ def render_edge_state(state_id: str, parent_window=None):
                     Adw.ResponseAppearance.DESTRUCTIVE,
                 )
         dialog.state_spec = spec
+        if on_action is not None:
+            # AlertDialog responses are already action_ids (we registered
+            # them as the response identifier above). The ``close-dialog``
+            # fallback covers Escape / programmatic close where Adw emits
+            # a synthetic "close" response that wasn't registered.
+            dialog.connect(
+                "response",
+                lambda _dlg, response_id: on_action(
+                    response_id if response_id else "close-dialog"
+                ),
+            )
         return dialog
 
     # Default: status page.
@@ -315,12 +354,22 @@ def render_edge_state(state_id: str, parent_window=None):
         if spec.secondary_action is not None:
             btn = Gtk.Button(label=spec.secondary_action[0])
             btn.action_id = spec.secondary_action[1]
+            if on_action is not None:
+                btn.connect(
+                    "clicked",
+                    lambda _b, _aid=spec.secondary_action[1]: on_action(_aid),
+                )
             button_box.append(btn)
         if spec.primary_action is not None:
             btn = Gtk.Button(label=spec.primary_action[0])
             btn.add_css_class("suggested-action")
             btn.add_css_class("pill")
             btn.action_id = spec.primary_action[1]
+            if on_action is not None:
+                btn.connect(
+                    "clicked",
+                    lambda _b, _aid=spec.primary_action[1]: on_action(_aid),
+                )
             button_box.append(btn)
         page.set_child(button_box)
 
