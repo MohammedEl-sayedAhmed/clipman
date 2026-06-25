@@ -796,6 +796,125 @@ footer.site .legal {
 }
 footer.site .legal .mono { font-size: 0.78rem; }
 
+/* ================================================================
+   IMAGE LIGHTBOX (click any screenshot to open full-size)
+   ================================================================ */
+
+.hero-visual img,
+.feature-visual img {
+    cursor: zoom-in;
+}
+.img-modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.82);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    z-index: 1000;
+    -webkit-tap-highlight-color: transparent;
+}
+.img-modal[aria-hidden="false"] {
+    display: flex;
+}
+.img-modal-inner {
+    position: relative;
+    max-width: min(1100px, 100%);
+    max-height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.img-modal img {
+    max-width: 100%;
+    max-height: 88vh;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    border-radius: var(--r-lg);
+    box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.6);
+    background: var(--bg);
+}
+.img-modal-close {
+    position: absolute;
+    top: -12px;
+    right: -12px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: #1c1917;
+    color: #fff;
+    font-size: 22px;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.4);
+}
+.img-modal-close:hover { background: #292524; }
+@media (max-width: 640px) {
+    .img-modal { padding: 16px; }
+    .img-modal-close { top: 4px; right: 4px; }
+}
+
+/* ================================================================
+   MOBILE — narrow-viewport polish (≤640px)
+   Fills the gap below the existing 880 / 700 / 540 / 500 breakpoints.
+   Targets the issues the audit flagged: nav overflow, footer cramming,
+   touch-target sizes, install-tab wrap, and code/wrap padding.
+   ================================================================ */
+
+@media (max-width: 640px) {
+
+    /* Tighten the page gutter so 327px content -> 343px content. */
+    .wrap { padding: 0 16px; }
+
+    /* The in-page anchor links push the header off-screen on iPhone SE.
+       Hide them on mobile — the page is short enough to scroll, and the
+       theme toggle stays accessible. "source" lives in the footer too. */
+    header.site nav a { display: none; }
+    .theme-toggle {
+        width: 44px;
+        height: 44px;     /* WCAG-AA touch target */
+    }
+
+    /* Hero CTA buttons: meet the 44px touch-target minimum. */
+    .btn {
+        padding: 12px 18px;
+        min-height: 44px;
+    }
+
+    /* Install tabs: same. */
+    .tabs button {
+        padding: 12px 14px;
+        min-height: 44px;
+    }
+
+    /* Footer: 2-col-at-700 still cramps on phones. Single column under
+       640px. */
+    footer.site .columns {
+        grid-template-columns: 1fr;
+        gap: 28px;
+    }
+    footer.site .legal {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    /* FAQ chevron: shrink the right padding the page reserves. */
+    .faq summary { padding-right: 36px; }
+
+    /* Code blocks: a single horizontal scroll is fine, but keep the
+       padding compact so more code is visible per line. */
+    .tab-panel pre {
+        padding: 14px 16px;
+        font-size: 0.82rem;
+    }
+}
+
 </style>
 </head>
 <body>
@@ -1301,8 +1420,75 @@ footer.site .legal .mono { font-size: 0.78rem; }
     } else {
         loadNumbers();
     }
+
+    // ---- Image lightbox ---------------------------------------------
+    // Click any hero / feature screenshot to open it full-size in a
+    // modal. Close on backdrop click, X button, or Escape.
+    function initLightbox() {
+        const modal    = document.getElementById('img-modal');
+        const modalImg = document.getElementById('img-modal-img');
+        const closeBtn = document.getElementById('img-modal-close');
+        if (!modal || !modalImg || !closeBtn) return;
+
+        let lastFocus = null;
+
+        function open(src, alt) {
+            lastFocus = document.activeElement;
+            modalImg.src = src;
+            modalImg.alt = alt || '';
+            modal.setAttribute('aria-hidden', 'false');
+            document.body.style.overflow = 'hidden';
+            closeBtn.focus();
+        }
+        function close() {
+            modal.setAttribute('aria-hidden', 'true');
+            // Drop the loaded src so a future open from a different
+            // theme doesn't briefly flash the previous image.
+            modalImg.removeAttribute('src');
+            document.body.style.overflow = '';
+            if (lastFocus && typeof lastFocus.focus === 'function') lastFocus.focus();
+        }
+
+        document.querySelectorAll('.hero-visual img, .feature-visual img').forEach(img => {
+            img.addEventListener('click', () => open(img.currentSrc || img.src, img.alt));
+            // Keyboard affordance — Enter / Space when the image is focused.
+            img.setAttribute('tabindex', '0');
+            img.setAttribute('role', 'button');
+            img.setAttribute('aria-label', (img.alt || 'Open screenshot') + ' (open full size)');
+            img.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    open(img.currentSrc || img.src, img.alt);
+                }
+            });
+        });
+
+        closeBtn.addEventListener('click', close);
+        modal.addEventListener('click', (e) => {
+            // Backdrop click closes; clicks on the image itself don't.
+            if (e.target === modal) close();
+        });
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && modal.getAttribute('aria-hidden') === 'false') close();
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initLightbox);
+    } else {
+        initLightbox();
+    }
 })();
 </script>
+
+<!-- Image lightbox modal — populated by initLightbox() above. -->
+<div id="img-modal" class="img-modal" role="dialog" aria-modal="true"
+     aria-label="Full-size screenshot" aria-hidden="true">
+  <div class="img-modal-inner">
+    <button type="button" id="img-modal-close" class="img-modal-close"
+            aria-label="Close screenshot">&times;</button>
+    <img id="img-modal-img" alt="">
+  </div>
+</div>
 
 </body>
 </html>
