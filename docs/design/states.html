@@ -58,36 +58,34 @@
             max-width: 800px;
         }
 
-        /* Embedded mode: iframed from the marketing page — hide picker + theme
-           toggle so the host page owns those controls and only the popup
-           shows. The host iframe provides the frame (border + shadow), so the
-           .window's own shadow and outer border are suppressed to avoid a
-           heavy black double-frame on the light theme. */
+        /* Embedded mode: iframed from the marketing page. The intent is for
+           the popup to LOOK identical to the standalone design workspace
+           (soft gradient backdrop, popup-as-card with its own shadow). The
+           only differences vs. standalone: hide the right-rail picker and
+           the theme toggle (the marketing page owns those). The host iframe
+           must NOT add its own shadow — the popup-as-card carries that. */
         body.embed {
-            padding: 0;
-            background: transparent;
+            padding: 24px;
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            overflow: hidden;
         }
         body.embed .layout {
-            grid-template-columns: 1fr;
+            grid-template-columns: minmax(0, 420px);
             gap: 0;
             max-width: 100%;
             width: 100%;
+            justify-content: center;
         }
-        body.embed .picker { display: none; }
-        body.embed .theme-toggle { display: none; }
+        body.embed .picker        { display: none; }
+        body.embed .theme-toggle  { display: none; }
         body.embed .window {
-            box-shadow: none;
-            border: none;
-            /* Responsive in embed mode — never wider than the iframe viewport. */
+            /* Keep the .window's standard shadow + border — that's the
+               "card" the reference design uses. Just constrain width so it
+               never overflows the iframe viewport on narrow widths. */
             width: 100%;
             max-width: 420px;
-            height: 100%;
-            max-height: 100vh;
         }
 
         /* Window shell (same dimensions as main-window.html) */

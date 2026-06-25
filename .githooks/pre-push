@@ -122,15 +122,12 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
     if [ "$remote_sha" = "$zero" ]; then
         # New branch — find ancestors reachable from local_sha but NOT from
-        # the remote's *tracking* default branch. This is safer than the
-        # `--not --remotes=<remote>` pattern which silently drops commits
-        # already pushed to ANY other ref on this remote (BYPASS-10).
-        default_branch=$(git symbolic-ref --short "refs/remotes/${remote_name}/HEAD" 2>/dev/null \
-                         | sed "s|^${remote_name}/||" || true)
-        if [ -n "$default_branch" ] \
-           && git rev-parse --verify --quiet "refs/remotes/${remote_name}/${default_branch}" >/dev/null; then
-            commits=$(git rev-list "${local_sha}" "^refs/remotes/${remote_name}/${default_branch}" 2>/dev/null)
-        else
+        # ANY ref on the remote. This is the safest framing for the common
+        # case (maintainer creating a feature branch off main): we only
+        # scan the commits this push is actually contributing, not the
+        # history the remote already has.
+        commits=$(git rev-list "$local_sha" --not --remotes="$remote_name" 2>/dev/null)
+        if [ -z "$commits" ]; then
             # Fall back to a bounded local-only scan (last 200 commits) so we
             # don't iterate ALL of history on a brand-new remote.
             commits=$(git rev-list "$local_sha" --max-count=200)

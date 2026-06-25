@@ -523,45 +523,32 @@ section h2 .accent { color: var(--accent); }
     font-weight: 600;
 }
 .demo-stage {
-    padding: 40px;
-    background:
-        radial-gradient(circle at 30% 20%, rgba(203, 166, 247, 0.06), transparent 60%),
-        radial-gradient(circle at 80% 80%, rgba(137, 180, 250, 0.05), transparent 50%),
-        var(--surface);
+    padding: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-}
-html[data-theme="light"] .demo-stage {
-    background:
-        radial-gradient(circle at 30% 20%, rgba(147, 51, 234, 0.06), transparent 60%),
-        radial-gradient(circle at 80% 80%, rgba(37, 99, 235, 0.05), transparent 50%),
-        var(--surface);
+    background: transparent;
 }
 .demo-stage iframe {
-    border-radius: var(--r-lg);
+    /* The embedded popup (states.html?embed=1) already renders as a
+       proper card with its own shadow on a soft gradient — exactly like
+       the standalone design workspace. The iframe wrapper therefore
+       carries NO border and NO shadow; it's just a transparent window
+       into the same scene. */
     border: none;
-    /* Soft shadow per-theme via tokens — hardcoded dark rgba reads as a
-       black ring on the light theme. */
-    box-shadow: 0 16px 40px -16px rgba(0, 0, 0, 0.25),
-                0 4px  12px  -4px rgba(0, 0, 0, 0.10);
-    background: var(--surface);
+    box-shadow: none;
+    background: transparent;
     display: block;
-    /* Responsive sizing — never overflow the demo-stage. The popup is
-       ~420×640; clamp the iframe to that on desktop, scale down on mobile. */
+    /* Responsive sizing — never overflow the demo-stage. */
     width: 100%;
-    max-width: 440px;
-    height: 660px;
-    aspect-ratio: 440 / 660;
+    max-width: 480px;
+    height: 720px;
+    aspect-ratio: 480 / 720;
 }
 @media (max-width: 540px) {
-    .demo-stage { padding: 20px 12px; }
-    .demo-stage iframe { height: auto; min-height: 580px; }
-}
-html[data-theme="light"] .demo-stage iframe {
-    box-shadow: 0 16px 40px -16px rgba(28, 25, 23, 0.12),
-                0 4px  12px  -4px rgba(28, 25, 23, 0.06);
+    .demo-stage { padding: 12px 0; }
+    .demo-stage iframe { height: auto; min-height: 620px; }
 }
 .demo-foot {
     padding: 16px 20px;
