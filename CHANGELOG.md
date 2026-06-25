@@ -4,13 +4,101 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-06-25
+
+### Highlights
+
+The full **GTK 3 → GTK 4 + libadwaita** port lands in this release.
+The popup, the settings surface, the snippets editor, and every edge
+state were rebuilt from the ground up against modern Adwaita widgets,
+and the Catppuccin palette is now applied as a `@named-color`
+overlay so the entire UI picks up the theme without per-widget CSS.
+No D-Bus contracts changed (`com.clipman.Daemon` and
+`org.gnome.Shell.Extensions.clipman` are byte-identical), the SQLite
+schema is unchanged, and no settings keys were renamed — per
+[ADR 0010](docs/adr/0010-versioning-policy.md) this is a MINOR
+release, not a MAJOR. Existing users keep their history,
+preferences, and snippets.
+
+### Compatibility
+
+- **Toolkit floor:** GTK 4 ≥ 4.10 and libadwaita ≥ 1.4. Ubuntu 22.04
+  no longer ships a recent-enough libadwaita; the supported baseline
+  is **Ubuntu 24.04+** (or any distro with libadwaita 1.4 in its
+  default repos).
+- **Python:** 3.10 – 3.12 (unchanged).
+- **GNOME Shell:** 45 – 48 (unchanged).
+- **Extension `metadata.json` version:** 5 (unchanged — no D-Bus
+  signature changes).
+
+### Install / upgrade
+
+| Channel | Command |
+|---------|---------|
+| **PyPI** | `pip install --upgrade clipman-clipboard` |
+| **Snap** | auto-refresh, or `snap refresh clipman` |
+| **AUR** | `yay -S clipman-clipboard` (or `paru -S clipman-clipboard`) |
+| **Source** | `git pull && ./install.sh` |
+
+### Changed (UI / runtime)
+
+- **GTK 3 → GTK 4 + libadwaita.** Every UI module was reworked:
+  - `clipman/window.py` is now an `Adw.ApplicationWindow` with an
+    `Adw.HeaderBar` and an `Adw.ActionRow`-driven history list.
+  - `clipman/preferences.py` extracts settings out of the popup into
+    a dedicated `Adw.PreferencesWindow` with **six panes** —
+    Appearance, History, Shortcuts, Updates, Data, About — replacing
+    the cramped inline settings panel from 1.0.x.
+  - `clipman/snippets_dialog.py` ships the snippets editor as an
+    `Adw.NavigationSplitView` master-detail dialog, with a searchable
+    list on the left and an editor form (template variables
+    included) on the right.
+  - `clipman/edge_states.py` declares **16 `StateSpec` entries** for
+    the empty, no-results, incognito, sensitive-cleared, first-run,
+    extension-missing, backup-failed, and other edge states, all
+    dispatched at render time by `render_edge_state` into one of
+    `Adw.StatusPage`, `Adw.Banner`, or `Adw.AlertDialog`. The state
+    set matches the design-workspace mockups one-to-one.
+- **Catppuccin palette overlay.** `clipman/style.css` now overrides
+  libadwaita's `@named-color` tokens (`@accent_color`,
+  `@window_bg_color`, `@card_bg_color`, …) with Catppuccin Mocha for
+  dark and Catppuccin Latte for light, so every Adwaita surface
+  picks up the theme automatically — no per-widget CSS rules
+  required. Matches the marketing mockup exactly.
+- **Version literal** moved out of `clipman/__init__.py` into a leaf
+  module `clipman/_version.py` to break a cyclic-import path that
+  CodeQL was flagging as `py/cyclic-import`. The public
+  `clipman.__version__` API is unchanged (`__init__.py` re-exports
+  from `_version`) and `scripts/bump-version.sh` patches the literal
+  in its new home.
+
+### Internal / packaging
+
+- `install.sh`, `snap/snapcraft.yaml`, and `aur/PKGBUILD` already
+  declare GTK 4 + libadwaita dependencies (`gir1.2-gtk-4.0`,
+  `gir1.2-adw-1`, `libadwaita-1-0` on Debian/Ubuntu; `gtk4`,
+  `libadwaita` on Arch; `gtk4`, `libadwaita` stage-packages on
+  snap). The lockstep bump landed in `#83` ahead of the code port.
+- `pyproject.toml` `project.description` now reads "A Wayland-native
+  clipboard history manager built with GTK 4 and libadwaita".
+
 ### Documentation
 
+- `README.md`, `ARCHITECTURE.md`, `CONTRIBUTING.md`,
+  `docs/index.html`, `docs/llms.txt`, and `docs/llms-full.txt`
+  refreshed to describe the new UI surface (Adw widgets, six-pane
+  preferences, snippets dialog, 16 edge states, Catppuccin overlay)
+  and the new toolkit floor (Ubuntu 24.04 / GTK 4 + libadwaita 1.4).
+- AppStream metainfo files (`data/com.clipman.Clipman.metainfo.xml`,
+  `data/io.github.MohammedEl_sayedAhmed.Clipman.metainfo.xml`) gain
+  a `<release version="1.1.0">` entry describing the port.
+
+### Documentation (carried over from the 1.0.6 → 1.1.0 cycle)
+
 A comprehensive nine-PR documentation overhaul (PRs #40 through #48)
-lands the missing high-level docs that downstream packagers,
-contributors, translators, and security reviewers have been asking
-for. None of the changes ship code; the release pipeline, install
-channels, and runtime behavior are unchanged.
+landed during the 1.0.6 → 1.1.0 cycle, alongside the toolkit port.
+The release pipeline, install channels, and runtime behavior were
+not affected by these docs PRs.
 
 - `docs/adr/0010-versioning-policy.md` — codifies SemVer 2.0.0 with
   clipman-specific MAJOR/MINOR/PATCH triggers (D-Bus contracts on
@@ -22,7 +110,7 @@ channels, and runtime behavior are unchanged.
   branch hygiene, Dependabot triage, GHAS handling, AUR/Snap channel
   notes.
 - `ARCHITECTURE.md` — top-level walkthrough of the daemon ↔ extension
-  split, the D-Bus surface, the SQLite store, and the GTK3 popup.
+  split, the D-Bus surface, the SQLite store, and the popup window.
 - `GOVERNANCE.md` — project governance, decision-making, and the role
   of ADRs.
 - `docs/translating.md` — how to add a new locale and run the

@@ -5,23 +5,41 @@
 Clipman is a Wayland-native clipboard manager built as two cooperating
 processes: a GNOME Shell extension that detects clipboard changes
 natively via `Meta.Selection`'s `owner-changed` signal, and a Python +
-GTK3 daemon that persists history in a local SQLite database. The two
-halves communicate over D-Bus on the session bus, so there is no
-polling, no screen flicker, and no telemetry. A `wl-paste --watch`
-fallback inside the daemon covers Wayland sessions where the extension
-is not available.
+GTK 4 / libadwaita daemon that persists history in a local SQLite
+database. The two halves communicate over D-Bus on the session bus,
+so there is no polling, no screen flicker, and no telemetry. A
+`wl-paste --watch` fallback inside the daemon covers Wayland sessions
+where the extension is not available.
 
 ## Process model
 
 ### Daemon
 
-The daemon (`clipman.py` plus the `clipman/` package) is a single GTK
-`Gio.Application` running on one GLib main loop. Python 3.10 through
+The daemon (`clipman.py` plus the `clipman/` package) is a single
+`Adw.Application` running on one GLib main loop. Python 3.10 through
 3.12 are supported, with dbus-python and PyGObject providing the
-runtime bindings. All clipboard ingest, database I/O, and GTK signal
-handling happen on the main thread; SQLite access is intentionally
-serialized through the loop (see the `check_same_thread=False` comment
-in `clipman/database.py`).
+runtime bindings against GTK 4 and libadwaita 1.4+. All clipboard
+ingest, database I/O, and GTK signal handling happen on the main
+thread; SQLite access is intentionally serialized through the loop
+(see the `check_same_thread=False` comment in `clipman/database.py`).
+
+The UI tree is libadwaita-first: `clipman/window.py` builds an
+`Adw.ApplicationWindow` with an `Adw.HeaderBar` and an
+`Adw.ActionRow`-driven history list; `clipman/preferences.py` ships
+the settings surface as an `Adw.PreferencesWindow` with six panes
+(Appearance, History, Shortcuts, Updates, Data, About);
+`clipman/snippets_dialog.py` is an `Adw.NavigationSplitView`
+master-detail editor. The 16 declarative edge states from the
+mockups live as `StateSpec` entries in `clipman/edge_states.py` and
+are dispatched at render time by `render_edge_state` into one of
+`Adw.StatusPage`, `Adw.Banner`, or `Adw.AlertDialog`. The
+`clipman/style.css` stylesheet overrides libadwaita's
+`@named-color` tokens with the Catppuccin Mocha and Latte palettes
+so the entire surface picks up the theme without per-widget CSS.
+The package's runtime version literal lives in the leaf module
+`clipman/_version.py` and is re-exported from `clipman/__init__.py`,
+breaking the cyclic import that would otherwise let submodules
+re-enter the package root.
 
 The one exception is the optional update-check worker described in
 [ADR 0007](docs/adr/0007-in-app-update-notifications.md): a background
@@ -159,7 +177,7 @@ No analytics, no crash reporting, no third-party services.
 
 <p align="center">
   <img src="docs/architecture.svg"
-       alt="Clipman architecture: GNOME Shell extension and Python/GTK3 daemon communicate over D-Bus; clipboard changes flow from the Wayland clipboard via owner-changed signals through the extension (or wl-paste fallback) into the daemon, which deduplicates by SHA256 and persists to a SQLite WAL store."
+       alt="Clipman architecture: GNOME Shell extension and Python/GTK 4 + libadwaita daemon communicate over D-Bus; clipboard changes flow from the Wayland clipboard via owner-changed signals through the extension (or wl-paste fallback) into the daemon, which deduplicates by SHA256 and persists to a SQLite WAL store."
        width="100%">
 </p>
 
@@ -183,7 +201,7 @@ flowchart LR
 
     Clip["Wayland clipboard"]:::gshell
 
-    subgraph DAEMON ["clipman daemon (Python, GTK3)"]
+    subgraph DAEMON ["clipman daemon (Python, GTK 4 + libadwaita)"]
         DbusSvc["dbus_service.py<br/>(com.clipman.Daemon)"]:::daemon
         Monitor["clipboard_monitor.py<br/>(dedupe + sensitive detect)"]:::daemon
         Window["window.py<br/>(GTK popup + settings)"]:::daemon
