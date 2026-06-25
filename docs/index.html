@@ -989,11 +989,22 @@ footer.site .legal .mono { font-size: 0.78rem; }
         align-items: stretch;
         gap: 12px;
     }
+    /* User-reported (v2): the state-picker pill was horizontally
+       scrollable, which felt broken because the pills inside don't
+       hint that they slide. Switch to flex-wrap so the four pills
+       wrap onto a second row when they don't fit. */
     .demo-states {
-        overflow-x: auto;
-        scrollbar-width: none;
+        flex-wrap: wrap;
+        justify-content: center;
+        overflow: visible;
+        padding: 6px;
+        border-radius: var(--r-md);
     }
-    .demo-states::-webkit-scrollbar { display: none; }
+    .demo-states button {
+        padding: 8px 14px;
+        font-size: 0.8rem;
+        min-height: 36px;
+    }
 }
 
 </style>
