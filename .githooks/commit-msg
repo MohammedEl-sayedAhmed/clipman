@@ -9,14 +9,19 @@ msg_file="${1:?commit-msg hook requires the message file path}"
 
 failed=0
 
-# Footprint scan on the full message body. (Trailer-by-trailer identity
-# checks were intentionally removed: Co-Authored-By / Signed-off-by /
-# Reviewed-by routinely name external contributors who are not on the
-# personal allowlist, and blocking those breaks normal PR-accepting flow.
-# The Claude/Anthropic footprint regex set in scan_footprints already
-# catches AI-tool attribution in any trailer line, which is the actual
-# concern here.)
+# Footprint scan on the full message body — catches AI/Claude-style
+# attribution patterns no matter where they appear in the message.
 if ! scan_footprints "$msg_file"; then
+    failed=1
+fi
+
+# Trailer-identity scan. Only safe identity classes are allowed in
+# Co-Authored-By / Signed-off-by / Reviewed-by / etc. trailers: the
+# owner allowlist, GitHub privacy-alias noreplies, and GitHub's
+# web-flow merge identity. Raw personal/work domain emails are blocked
+# at this layer — use the privacy-alias form of the email instead.
+# (See is_safe_trailer_email in _lib.sh for the exact policy.)
+if ! scan_trailer_identities "$msg_file"; then
     failed=1
 fi
 

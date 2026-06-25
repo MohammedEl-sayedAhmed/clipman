@@ -61,12 +61,21 @@ scan_commit() {
         fi
     done
 
-    # Trailer-by-trailer identity check intentionally not done here:
-    # Co-Authored-By / Signed-off-by / Reviewed-by routinely name external
-    # contributors who are not on the personal allowlist, and rejecting
-    # those would break normal PR-accepting flow. The Claude/Anthropic
-    # footprint regex set in scan_footprints (below) already catches AI
-    # attribution in any trailer line, which is the actual concern.
+    # Trailer-identity allowlist. Co-Authored-By / Signed-off-by /
+    # Reviewed-by / Tested-by trailers must carry an email from one of
+    # the safe identity classes (owner allowlist, GitHub privacy-alias
+    # noreplies, or GitHub's web-flow identity). Raw personal/work
+    # domain emails are rejected here — use the privacy-alias form
+    # instead. See is_safe_trailer_email in _lib.sh.
+    local tmp_msg
+    tmp_msg=$(mktemp)
+    git log -1 --format='%B' "$sha" > "$tmp_msg"
+    if ! scan_trailer_identities "$tmp_msg"; then
+        hook_error "commit $sha has a non-allowlisted trailer identity"
+        hook_detail "  $(git log -1 --format='%h %s' "$sha")"
+        local_failed=1
+    fi
+    rm -f "$tmp_msg"
 
     # Footprint scan: message
     local message
