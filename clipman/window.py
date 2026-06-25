@@ -400,6 +400,29 @@ class ClipmanWindow(Adw.ApplicationWindow):
         bar.set_valign(Gtk.Align.FILL)
         row.add_prefix(bar)
 
+        # Image entries get a 32x32 thumbnail so users can scan the list
+        # visually instead of relying on the literal ``[Image]`` title.
+        if ctype == "image":
+            image_path = entry.get("image_path")
+            from clipman.database import _safe_image_path
+
+            if image_path and _safe_image_path(image_path):
+                try:
+                    texture = Gdk.Texture.new_from_filename(image_path)
+                    thumb = Gtk.Picture.new_for_paintable(texture)
+                    thumb.set_can_shrink(True)
+                    thumb.set_content_fit(Gtk.ContentFit.COVER)
+                    thumb.set_size_request(32, 32)
+                    thumb.set_valign(Gtk.Align.CENTER)
+                    thumb.add_css_class("clip-thumb")
+                    row.add_prefix(thumb)
+                except Exception:
+                    # Corrupt file or unsupported format — fall back to
+                    # the bare ``[Image]`` label rather than crashing.
+                    logger.debug(
+                        "thumbnail failed for %r", image_path, exc_info=True
+                    )
+
         pin_btn = Gtk.Button.new_from_icon_name(
             "starred-symbolic" if entry["pinned"]
             else "non-starred-symbolic"
@@ -502,6 +525,45 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 # requests but don't surface a popup error.
                 logger.debug("wl-copy fallback failed", exc_info=True)
 
+    def _copy_image_to_clipboard(self, image_path):
+        """Push an image file at ``image_path`` onto the system clipboard.
+
+        ``image_path`` must have already passed ``database._safe_image_path``
+        — we re-check defensively here so a poisoned DB row can't reach
+        ``Gdk.Texture.new_from_filename`` with a path outside ``IMAGES_DIR``.
+        Returns ``True`` on success so callers know whether to simulate
+        a paste.
+        """
+        from clipman.database import _safe_image_path
+
+        if not image_path or not _safe_image_path(image_path):
+            logger.debug("refusing image with unsafe path: %r", image_path)
+            return False
+        if self.monitor:
+            self.monitor.set_self_copy(True)
+        try:
+            texture = Gdk.Texture.new_from_filename(image_path)
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.set_texture(texture)
+            return True
+        except Exception:
+            logger.debug(
+                "Gdk.Texture clipboard set failed; trying wl-copy fallback",
+                exc_info=True,
+            )
+        try:
+            with open(image_path, "rb") as fh:
+                proc = subprocess.Popen(
+                    ["wl-copy", "--type", "image/png"],
+                    stdin=fh,
+                    stderr=subprocess.DEVNULL,
+                )
+                proc.communicate()
+            return proc.returncode == 0
+        except OSError:
+            logger.debug("wl-copy image fallback failed", exc_info=True)
+            return False
+
     def _simulate_paste(self):
         """Fire ctrl+v through wtype, falling back to ydotool. Both binaries
         are common on Wayland sessions; if neither is installed the user
@@ -525,10 +587,18 @@ class ClipmanWindow(Adw.ApplicationWindow):
         return False
 
     def _paste_entry(self, entry):
-        text = entry.get("content_text") or ""
-        if not text:
-            return
-        self._copy_to_clipboard(text)
+        ctype = entry.get("content_type") or "text"
+        if ctype == "image":
+            image_path = entry.get("image_path")
+            if not self._copy_image_to_clipboard(image_path):
+                # Couldn't load the image — leave the popup open so the
+                # user notices the failure rather than silently swallowing.
+                return
+        else:
+            text = entry.get("content_text") or ""
+            if not text:
+                return
+            self._copy_to_clipboard(text)
         if entry.get("id"):
             self.db.update_accessed(entry["id"])
         self.set_visible(False)
