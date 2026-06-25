@@ -1,7 +1,7 @@
 [project]
 name = "clipman-clipboard"
 version = "1.0.6"
-description = "A clipboard history manager for Ubuntu/GNOME on Wayland"
+description = "A Wayland-native clipboard history manager built with GTK 4 and libadwaita"
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.10"

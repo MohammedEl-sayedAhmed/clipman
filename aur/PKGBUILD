@@ -10,7 +10,8 @@ depends=(
     'python>=3.10'
     'python-gobject'
     'python-dbus'
-    'gtk3'
+    'gtk4'
+    'libadwaita'
     'wl-clipboard'
 )
 optdepends=(

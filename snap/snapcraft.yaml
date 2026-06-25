@@ -65,11 +65,14 @@ parts:
     build-packages:
       - libgdk-pixbuf2.0-dev
       - libglib2.0-dev
+      - libadwaita-1-dev
     stage-packages:
       - python3
       - python3-gi
       - python3-dbus
-      - gir1.2-gtk-3.0
+      - gir1.2-gtk-4.0
+      - gir1.2-adw-1
+      - libadwaita-1-0
       - adwaita-icon-theme
       - hicolor-icon-theme
       - librsvg2-common
