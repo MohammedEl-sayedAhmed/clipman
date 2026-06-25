@@ -8,8 +8,8 @@ is pushed.
 ## How a release happens
 
 1. Bump versions with `./scripts/bump-version.sh <new-version>` —
-   updates `pyproject.toml`, `snap/snapcraft.yaml`, `flathub/*.json`,
-   and `aur/PKGBUILD` in one shot.
+   updates `pyproject.toml`, `snap/snapcraft.yaml`, and `aur/PKGBUILD`
+   in one shot.
 2. Rename the `## [Unreleased]` section in `CHANGELOG.md` to
    `## [<new-version>] - YYYY-MM-DD`.
 3. Commit, tag (`git tag v<new-version>`), and push (`git push --tags`).

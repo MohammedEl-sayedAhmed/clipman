@@ -1,0 +1,20 @@
+# Clipman
+> Wayland-native clipboard history manager for Linux. Press Super+V to search, pin and paste from a local SQLite-backed history. No telemetry; sensitive data auto-clears.
+
+- [Project page](https://mohammedel-sayedahmed.github.io/clipman/)
+- [Source](https://github.com/MohammedEl-sayedAhmed/clipman)
+- [Design workspace](https://mohammedel-sayedahmed.github.io/clipman/design/index.html)
+- [Changelog](https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CHANGELOG.md)
+
+## Features
+
+- Wayland-native: GNOME Shell extension over D-Bus, wl-clipboard fallback for KDE/Sway/Hyprland
+- Privacy: incognito mode, sensitive-data auto-clear, restrictive file permissions
+- Search + pinning + reusable snippets with template variables ({{date}}, {{clipboard}})
+- Open source, Apache-2.0, distributed on Snap Store / PyPI / AUR / .deb / .rpm
+
+## Distribution
+
+- Snap: `sudo snap install clipman`
+- PyPI: `pipx install clipman-clipboard`
+- AUR: `yay -S clipman-clipboard`

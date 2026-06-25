@@ -5,7 +5,7 @@ that catch two specific classes of mistake before they leave your machine:
 
 1. **Wrong-account commits/pushes** — the maintainer has multiple GitHub
    logins on one machine; the hooks refuse commits whose git identity
-   matches a personal denylist.
+   is not on a personal allowlist.
 2. **AI-tool footprints** — Claude/Anthropic attributions, robot emojis,
    `Co-Authored-By: Claude`, "Generated with Claude Code", etc.
 
@@ -29,28 +29,23 @@ idempotent.
 
 | Hook | When it runs | What it does |
 |---|---|---|
-| `commit-msg` | After you save the commit message | Scans the message for AI footprints (Claude/Anthropic/🤖); rejects trailers (`Co-Authored-By:`, `Signed-off-by:`, …) that cite a denylisted account. |
-| `pre-commit` | Before the commit-msg editor opens | Compares your active git identity (config, env vars, `GIT_AUTHOR_IDENT`) against the denylist. Scans the **added** lines in your staged diff for footprints. |
-| `pre-push` | Before commits leave the machine | Final defense: scans each commit being pushed (author/committer/Co-Authored-By/message). Rejects pushes whose remote URL points at a denylisted account's fork. Warns if your `gh` CLI active account is denylisted. |
+| `commit-msg` | After you save the commit message | Scans the message for AI footprints (Claude/Anthropic/🤖); rejects trailers (`Co-Authored-By:`, `Signed-off-by:`, …) that cite an account not on the allowlist. |
+| `pre-commit` | Before the commit-msg editor opens | Compares your active git identity (config, env vars, `GIT_AUTHOR_IDENT`) against the allowlist. Scans the **added** lines in your staged diff for footprints. |
+| `pre-push` | Before commits leave the machine | Final defense: scans each commit being pushed (author/committer/Co-Authored-By/message). Rejects pushes whose remote URL points at a fork whose owner is not on the allowlist. Warns if your `gh` CLI active account is not on the allowlist. |
 
-## The denylist
+## The allowlist
 
-Default denied account names:
+Default allowed account name:
 
-- `mammar97`
-- `salmaamr129`
+- `MohammedEl-sayedAhmed`
 
 Override with an env var (one-off or via shell rc):
 
 ```sh
-export CLIPMAN_HOOKS_DENY="mammar97 salmaamr129 some-other-account"
+export CLIPMAN_HOOKS_ALLOW="MohammedEl-sayedAhmed another-account"
 ```
 
-The match is **case-insensitive substring** against git identity strings,
-remote URLs, gh login names, and commit trailers. This is intentionally
-narrow: only the names you list are blocked. Everyone else — external
-contributors, Dependabot, `github-actions[bot]`, anyone with their own
-email — passes through untouched.
+Match is case-insensitive substring against git identity strings, remote URLs, gh login names, and commit trailers. If the local identity doesn't contain any allowlisted name as a substring, the hook refuses the commit or push. External contributors don't install these hooks (per the opt-in note above), so they aren't affected.
 
 ## Bypass
 

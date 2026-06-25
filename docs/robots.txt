@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://mohammedel-sayedahmed.github.io/clipman/sitemap.xml

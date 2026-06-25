@@ -1,0 +1,39 @@
+# Clipman
+
+> Wayland-native clipboard history manager for Linux. Press Super+V to search, pin and paste from a local SQLite-backed history. No telemetry; sensitive data auto-clears.
+
+- [Project page](https://mohammedel-sayedahmed.github.io/clipman/)
+- [Source](https://github.com/MohammedEl-sayedAhmed/clipman)
+- [Design workspace](https://mohammedel-sayedahmed.github.io/clipman/design/index.html)
+- [Changelog](https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CHANGELOG.md)
+
+## Overview
+
+Clipman is a clipboard history manager built specifically for modern Linux desktops running Wayland. Unlike X11-era tools that poll the clipboard or rely on root-window hacks, Clipman cooperates with the compositor through documented protocols: a GNOME Shell extension talking over D-Bus on GNOME sessions, and `wl-clipboard` (`wl-paste --watch`) as a fallback on KDE Plasma, Sway, Hyprland, and other wlroots-based compositors. The daemon runs as a user systemd service and is stateless beyond a single SQLite database at `~/.local/share/clipman/history.db`.
+
+## Architecture
+
+Clipman is written in Python 3.11+ and split into three processes: a long-lived daemon that watches clipboard selections and writes to SQLite, a GTK4/libadwaita GUI (`clipman` command) that opens on the global shortcut, and a thin CLI for scripting (`clipman list`, `clipman copy`, `clipman pin`). The daemon exposes a private D-Bus session-bus interface (`sa.redacted.Clipman1`) for IPC; the GNOME Shell extension calls into it to enrich window-focus metadata. All storage is local: no network calls, no telemetry, no analytics.
+
+## Supported compositors
+
+- GNOME 45+ (Mutter / Wayland) via the bundled Shell extension
+- KDE Plasma 6 (KWin / Wayland) via `wl-clipboard`
+- Sway, Hyprland, river, Niri and other wlroots compositors via `wl-clipboard`
+- X11 sessions are intentionally unsupported; legacy tools cover that case
+
+## Privacy and security
+
+Sensitive entries (passwords detected via heuristics, content marked secret by the source application, anything captured during an explicit incognito toggle) are auto-cleared after a configurable TTL (default 45 seconds). The SQLite file is created mode `0600`, the daemon refuses to start if permissions are loose, and the threat model is documented at `docs/threat-model.md`. Image clips are stored as content-addressed blobs under `~/.local/share/clipman/blobs/` and pruned with the parent entry.
+
+## Features
+
+- Full-text search across history with FTS5
+- Pinning to keep entries past the history-size cap
+- Reusable snippets with template variables (`{{date}}`, `{{clipboard}}`, `{{cursor}}`)
+- Catppuccin Mocha and Latte themes; respects system dark/light preference
+- 70 translatable strings in `po/clipman.pot`, community translations welcome
+
+## Distribution
+
+Released under Apache-2.0. Packaged for Snap Store, PyPI (`pipx install clipman-clipboard`), AUR (`clipman-clipboard`), and as standalone `.deb` / `.rpm` artifacts attached to each GitHub release.

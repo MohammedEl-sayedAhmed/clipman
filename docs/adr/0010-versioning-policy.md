@@ -11,9 +11,7 @@ deciders: MohammedEl-sayedAhmed
 Clipman has shipped through eight 1.0.x releases on PyPI, Snap, AUR,
 and the GitHub Releases page (`.deb` / `.rpm` / AppImage artifacts),
 plus an out-of-band cadence for the GNOME Shell extension on
-extensions.gnome.org. (Flathub is not a current channel — a manifest
-is kept under `flathub/` for possible future use, but there is no
-submission in flight.) Until now the meaning of each version bump has
+extensions.gnome.org. Until now the meaning of each version bump has
 lived only in the maintainer's head and in the release-checklist
 prose. That worked while the public surface was small, but it has
 grown:
@@ -32,8 +30,8 @@ grown:
   Ubuntu 22.04+.
 - A toolkit choice (GTK3) that downstream packagers depend on.
 
-Without a written policy, downstreams (AUR, Snap, distro packagers,
-plus any future Flathub submission) cannot tell from a tag alone
+Without a written policy, downstreams (AUR, Snap, distro packagers)
+cannot tell from a tag alone
 whether a release will require a rebuild against new system libraries,
 a schema migration, or a new extension version. They also cannot tell whether the extension's
 `metadata.json` `version` integer — bumped 4→5 in ADR 0005 — is the
@@ -78,8 +76,8 @@ clipman's specific public surface.
   don't write it.
 - New user-visible features (UI rows, keystroke recipes, etc.) that
   don't touch the contracts above.
-- Acceptance into a new install channel (e.g. Flathub stable) where
-  the channel's presence is itself a user-visible feature.
+- Acceptance into a new install channel where the channel's presence
+  is itself a user-visible feature.
 
 **PATCH (`Z` bump) — no change to any public contract:**
 
@@ -122,8 +120,8 @@ library do so at their own risk.
   Releases, or the install channels — so existing tooling
   (`scripts/bump-version.sh`, the release workflows, `update-aur.sh`)
   continues to work unchanged. `scripts/bump-version.sh X.Y.Z` keeps
-  rewriting `pyproject.toml`, `snap/snapcraft.yaml`, `flathub/*.json`,
-  `aur/PKGBUILD`, and `clipman/__init__.py` in lockstep.
+  rewriting `pyproject.toml`, `snap/snapcraft.yaml`, `aur/PKGBUILD`,
+  and `clipman/__init__.py` in lockstep.
 - The release-checklist and maintaining flow stay unchanged; this ADR
   just documents which of MAJOR / MINOR / PATCH applies to a given
   diff before the bump happens.

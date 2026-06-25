@@ -11,7 +11,7 @@
 #     (their own emails, normal Signed-off-by, Reviewed-by trailers, etc.)
 #
 # This script only exercises the FOOTPRINT scanner via scan_footprints.
-# Identity denylist checks are deterministic substring matches and are
+# Identity allowlist checks are deterministic substring matches and are
 # unit-tested separately at the bottom of this script.
 
 set -uo pipefail
@@ -52,7 +52,7 @@ decode_input() {
 while IFS=$'\t' read -r idx category outcome reason input; do
     input=$(decode_input "$input")
     # JSON-shaped inputs represent git-state, not commit messages — they
-    # exercise identity logic, which is covered by the contains_denied_identity
+    # exercise identity logic, which is covered by the contains_allowed_identity
     # unit tests below. Skip from the message scanner.
     if [[ "$input" =~ ^[[:space:]]*\{.*\}[[:space:]]*$ ]]; then
         continue
@@ -81,29 +81,26 @@ while IFS=$'\t' read -r idx category outcome reason input; do
     fi
 done < <("${parser[@]}")
 
-# ----- Identity denylist unit tests ---------------------------------------
+# ----- Identity allowlist unit tests --------------------------------------
 
 ident_tests=(
-    # input | expect_match(0=denied,1=allowed)
-    "mammar97|0"
-    "MAMMAR97|0"
-    "salmaamr129|0"
-    "Mohammed (mammar97@users.noreply.github.com)|0"
+    # input | expect_match(1=allowed,0=blocked)
     "MohammedEl-sayedAhmed|1"
-    "ngtw@dev.net|1"
-    "mohammedelsayed4648@gmail.com|1"
     "57391064+MohammedEl-sayedAhmed@users.noreply.github.com|1"
-    "dependabot[bot]|1"
-    "ckoch786|1"
+    "outside-account|0"
+    "alice@example.com|0"
+    "Mohammed Other (other@example.com)|0"
+    "dependabot[bot]|0"
+    "Random Stranger <stranger@example.com>|0"
 )
 
 for entry in "${ident_tests[@]}"; do
     input="${entry%|*}"
     expect="${entry##*|}"
-    if contains_denied_identity "$input"; then
-        actual=0
-    else
+    if contains_allowed_identity "$input"; then
         actual=1
+    else
+        actual=0
     fi
     if [ "$actual" = "$expect" ]; then
         pass=$((pass+1))
