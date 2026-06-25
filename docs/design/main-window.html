@@ -450,12 +450,22 @@
                 position: static;
                 margin: 0 auto 12px;
             }
+            /* Bump toggle hit area to satisfy the 44px touch-target rule. */
+            .theme-toggle button {
+                min-height: 36px;
+                padding: 8px 14px;
+            }
             .window {
                 width: 100%;
                 max-width: 360px;
                 height: auto;
                 min-height: 580px;
             }
+        }
+        /* Galaxy Fold / very narrow phones — drop the "theme" caption so the
+           pill never has to scroll horizontally to expose the buttons. */
+        @media (max-width: 360px) {
+            .theme-toggle > span { display: none; }
         }
     </style>
 <script src="theme.js" defer></script>
