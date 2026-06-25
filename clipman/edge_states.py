@@ -16,19 +16,26 @@ Each ``StateSpec`` captures everything the renderer needs:
 The widget construction in ``render_edge_state`` is intentionally thin
 — it knows the three Adw families but nothing about the daemon's
 business logic. All wiring lives in ``window.py``.
+
+Import policy: this module must stay importable on machines without
+GTK / libadwaita installed. The CI test runner has no system GTK, and
+the ``test_module_importable_without_widgets`` test asserts the
+``StateSpec`` + ``STATES`` dict round-trip without a display. Therefore
+all ``gi.require_version`` calls and ``from gi.repository import ...``
+statements live *inside* ``render_edge_state``, not at module scope.
+
+The module also intentionally avoids ``from clipman import _`` — that
+back-reference into the package creates a cyclic import (window <->
+edge_states <-> clipman package) that CodeQL flags as ``py/cyclic-import``.
+We bind ``_`` directly to ``gettext.gettext`` instead; the package's
+``__init__.py`` has already called ``textdomain("clipman")`` by the time
+this submodule loads, so the translation domain is set correctly.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-import gi
-
-from clipman import _
-
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk  # noqa: E402
+from gettext import gettext as _
 
 
 @dataclass(frozen=True)
@@ -244,7 +251,17 @@ def render_edge_state(state_id: str, parent_window=None):
     a transient parent before ``present()``). The button signals do
     nothing here; callers wire ``action_id`` to behaviour via
     ``connect`` after the widget is returned.
+
+    GTK / libadwaita are imported lazily here so the module stays
+    importable on machines without them (CI test runners, headless
+    builds). Callers are responsible for only invoking this function
+    in contexts where GTK is actually available.
     """
+    import gi
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw, Gtk
+
     spec = STATES.get(state_id)
     if spec is None:
         # Defensive fallback — a misspelled id shouldn't crash the popup.

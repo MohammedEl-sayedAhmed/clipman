@@ -8,6 +8,7 @@ are preserved so the rest of the daemon keeps resolving against this
 module without changes.
 """
 
+import logging
 import os
 import subprocess
 import time
@@ -17,6 +18,8 @@ from string import Template
 import gi
 
 from clipman import _, __version__, updates
+
+logger = logging.getLogger(__name__)
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
@@ -452,7 +455,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 stderr=subprocess.DEVNULL,
             )
         except OSError:
-            pass
+            # xdg-open isn't installed or the URL handler is broken;
+            # log for diagnostics but don't break the popup.
+            logger.debug("xdg-open failed for %s", url, exc_info=True)
 
     # ------------------------------------------------------------------
     # Paste path — GTK 4 clipboard API with wl-copy + wtype/ydotool fallback
@@ -465,6 +470,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
             clipboard = Gdk.Display.get_default().get_clipboard()
             clipboard.set(text)
         except Exception:
+            # GTK clipboard API can fail under Xwayland or before the
+            # display is ready; fall through to the wl-copy CLI which
+            # is more reliable on Wayland sessions.
+            logger.debug("GTK clipboard.set failed", exc_info=True)
             try:
                 proc = subprocess.Popen(
                     ["wl-copy"],
@@ -473,7 +482,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 )
                 proc.communicate(input=text.encode("utf-8"))
             except OSError:
-                pass
+                # wl-copy isn't installed either — the user will have
+                # to copy manually. Log so we can diagnose support
+                # requests but don't surface a popup error.
+                logger.debug("wl-copy fallback failed", exc_info=True)
 
     def _simulate_paste(self):
         """Fire ctrl+v through wtype, falling back to ydotool. Both binaries
@@ -597,7 +609,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
             try:
                 self.set_opacity(max(0.3, min(1.0, float(value))))
             except (TypeError, ValueError):
-                pass
+                # Non-numeric value persisted by an older daemon — log
+                # and keep the current opacity rather than crashing.
+                logger.debug(
+                    "opacity setting not coercible: %r", value, exc_info=True
+                )
         elif key == "sensitive_timeout":
             try:
                 self._sensitive_timeout = max(10, min(300, int(value)))
@@ -654,8 +670,17 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 proxy, "org.gnome.Shell.Extensions.clipman"
             )
             iface.MoveWindowToCursor("Clipman")
-        except Exception:
-            pass
+        except Exception as exc:
+            # The python-dbus module or the GNOME Shell extension may
+            # be absent — both are expected on non-GNOME desktops, and
+            # dbus raises a wide variety of error types when the bus
+            # name isn't owned. Trace the failure for support requests
+            # but leave the window where the compositor placed it.
+            logger.debug(
+                "Shell extension move-to-cursor unavailable: %s",
+                exc,
+                exc_info=True,
+            )
         return False
 
     # ------------------------------------------------------------------

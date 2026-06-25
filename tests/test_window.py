@@ -26,9 +26,13 @@ try:
     import gi
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gtk  # noqa: F401
+    from gi.repository import Adw  # noqa: F401
     _HAS_GTK = True
-except (ImportError, ValueError):
+except (ImportError, ValueError, AttributeError):
+    # ImportError: pygobject / gi missing on the runner.
+    # ValueError: gi present but the GTK4 / Adw1 typelibs aren't.
+    # AttributeError: a stub ``gi`` shim (some CI sandboxes ship one)
+    # lacks ``require_version`` — same outcome: no widgets available.
     _HAS_GTK = False
 
 _ADW_INIT_OK = False
@@ -130,22 +134,17 @@ class TestEdgeStateDeclaration(unittest.TestCase):
     """
 
     def test_module_importable_without_widgets(self):
-        # We import the module's *data* but skip the function that
-        # requires Adw. The import itself does pull in Gtk via gi —
-        # that's still fine because gi is a dependency declared in
-        # pyproject. If GTK isn't on PATH, the whole package would
-        # fail to import and the rest of the test suite would too.
-        try:
-            from clipman import edge_states  # noqa: F401
-        except (ImportError, ValueError):
-            self.skipTest("clipman.edge_states cannot import without GTK")
+        # ``edge_states`` lazy-imports GTK inside ``render_edge_state``
+        # so the module itself must import on a stock CI runner with
+        # no system GTK installed. If this raises we've regressed the
+        # import-policy invariant — fail loudly instead of skipping.
+        from clipman import edge_states  # noqa: F401
 
     def test_state_specs_have_required_fields(self):
-        try:
-            from clipman.edge_states import STATES
-        except (ImportError, ValueError):
-            self.skipTest("clipman.edge_states cannot import without GTK")
+        from clipman.edge_states import STATES
 
+        # Sanity: the dict is the one the renderer dispatches on.
+        self.assertTrue(STATES, "edge_states.STATES must not be empty")
         for state_id, spec in STATES.items():
             with self.subTest(state_id=state_id):
                 self.assertEqual(spec.id, state_id)

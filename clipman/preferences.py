@@ -12,6 +12,7 @@ The window is constructed with the Adw.PreferencesGroup / Adw.SpinRow
 accessibility roles all match the rest of the desktop.
 """
 
+import logging
 import os
 import subprocess
 import time
@@ -20,6 +21,8 @@ import gi
 
 from clipman import _, __version__, keybindings, updates
 from clipman.database import DB_PATH
+
+logger = logging.getLogger(__name__)
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
@@ -304,7 +307,14 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         try:
             self.db.delete_expired_sensitive(0)
         except Exception:
-            pass
+            # The DB layer can raise OperationalError, IntegrityError,
+            # or a wrapped FileNotFoundError if storage has been moved
+            # mid-session. Trace it and tell the parent window the
+            # purge happened so it refreshes — the user can retry from
+            # the new state.
+            logger.debug(
+                "purge-sensitive failed; treating as no-op", exc_info=True
+            )
         self._on_setting_changed("sensitive_purged", True)
 
     # ------------------------------------------------------------------
@@ -686,7 +696,9 @@ def open_url(url):
             stderr=subprocess.DEVNULL,
         )
     except OSError:
-        pass
+        # xdg-open isn't installed (minimal container) or PATH is
+        # broken. Log for diagnostics; the caller has no recovery path.
+        logger.debug("xdg-open failed for %s", url, exc_info=True)
     return False
 
 
