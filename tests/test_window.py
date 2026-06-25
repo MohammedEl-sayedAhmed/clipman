@@ -44,6 +44,18 @@ if _HAS_GTK:
         # No display available — skip the widget tests.
         _ADW_INIT_OK = False
 
+# CI sets ``CLIPMAN_REQUIRE_GTK4=1`` so an apt-package rename or a
+# missing typelib turns into a HARD failure instead of a silent skip.
+# Locally the variable stays unset, so contributors without GTK4
+# installed still get the rest of the test suite passing.
+if os.environ.get("CLIPMAN_REQUIRE_GTK4") == "1" and not (_HAS_GTK and _ADW_INIT_OK):
+    raise RuntimeError(
+        "CLIPMAN_REQUIRE_GTK4=1 but GTK 4 + libadwaita are not "
+        "importable in this environment. Install gir1.2-gtk-4.0, "
+        "gir1.2-adw-1 and libadwaita-1-0 (and run under xvfb-run if "
+        "no display is available)."
+    )
+
 
 @unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
                      "GTK 4 + libadwaita not available")
