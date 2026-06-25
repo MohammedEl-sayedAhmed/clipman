@@ -271,7 +271,7 @@ Settings are saved automatically and persist across sessions.
 Snippets get their own surface: clicking **Edit snippets** opens an
 `Adw.NavigationSplitView` master-detail dialog (`clipman/snippets_dialog.py`)
 with a searchable list on the left and an editor form on the right —
-template variables (`{{date}}`, `{{clipboard}}`) included.
+template variables (`${date}`, `${time}`, `${clipboard}`) included.
 
 ## How It Works
 
