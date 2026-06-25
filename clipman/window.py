@@ -529,11 +529,43 @@ class ClipmanWindow(Adw.ApplicationWindow):
         )
 
     def _on_prefs_clicked(self, _button):
-        # TODO(phase 2): open Adw.PreferencesWindow with theme / font /
-        # paste-mode / sensitive-timeout / updates settings. The settings
-        # panel from the GTK 3 build is deliberately deferred — Phase 1
-        # only needs to boot and paste.
-        pass
+        from clipman.preferences import ClipmanPreferences
+
+        prefs = ClipmanPreferences(
+            self.db, self, on_setting_changed=self._on_setting_changed
+        )
+        prefs.present()
+
+    def _on_setting_changed(self, key, value):
+        """Hot-reload settings the popup cares about.
+
+        The preferences window calls this from each row's notify
+        handler. Anything not listed here is persisted but applied on
+        next launch (e.g. ``incognito_on_launch``).
+        """
+        if key == "theme":
+            self._theme = value if value in ("dark", "light") else "dark"
+            self._apply_theme()
+        elif key == "font_size":
+            try:
+                self._font_size = max(8, min(20, int(value)))
+            except (TypeError, ValueError):
+                self._font_size = DEFAULT_FONT_SIZE
+            self._apply_css()
+        elif key == "opacity":
+            try:
+                self.set_opacity(max(0.3, min(1.0, float(value))))
+            except (TypeError, ValueError):
+                pass
+        elif key == "sensitive_timeout":
+            try:
+                self._sensitive_timeout = max(10, min(300, int(value)))
+            except (TypeError, ValueError):
+                self._sensitive_timeout = DEFAULT_SENSITIVE_TIMEOUT
+        elif key in ("backup_succeeded", "restore_succeeded",
+                     "sensitive_purged"):
+            if self.get_visible():
+                self.refresh()
 
     def _on_key_pressed(self, _controller, keyval, _keycode, _state):
         if keyval == Gdk.KEY_Escape:
