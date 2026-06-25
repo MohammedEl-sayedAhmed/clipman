@@ -34,6 +34,11 @@ from gi.repository import Adw, Gdk, GLib, Gtk
 DEFAULT_FONT_SIZE = 12
 DEFAULT_THEME = "dark"
 DEFAULT_SENSITIVE_TIMEOUT = 30
+DEFAULT_FONT_COLOR = "default"
+
+# Fallback CSS token used when the user picked the "default" preset.
+# Keeps the .clip-row .title colour aligned with libadwaita's card fg.
+_DEFAULT_FONT_COLOR_TOKEN = "@card_fg_color"
 
 # Hard-coded per-type accent tints — matched to docs/design/tokens.css.
 # Used to colour the 3px prefix bar on each Adw.ActionRow so users can
@@ -83,6 +88,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
             else DEFAULT_THEME
         )
 
+        self._font_color = self.db.get_setting(
+            "font_color", DEFAULT_FONT_COLOR
+        ) or DEFAULT_FONT_COLOR
+
         saved_sensitive = self.db.get_setting(
             "sensitive_timeout", str(DEFAULT_SENSITIVE_TIMEOUT)
         )
@@ -118,18 +127,34 @@ class ClipmanWindow(Adw.ApplicationWindow):
         }.get(self._theme, Adw.ColorScheme.FORCE_DARK)
         Adw.StyleManager.get_default().set_color_scheme(scheme)
 
+    def _resolve_font_color(self):
+        """Translate the ``font_color`` preset id to a CSS colour value.
+
+        ``FONT_COLOR_PRESETS`` lives in ``preferences.py``; we import it
+        lazily because ``preferences`` pulls in Adw at module scope and
+        we want ``window.py`` importable for headless tests.
+        """
+        from clipman.preferences import FONT_COLOR_PRESETS
+
+        for preset_id, hex_value, _tooltip in FONT_COLOR_PRESETS:
+            if preset_id == self._font_color and hex_value:
+                return hex_value
+        return _DEFAULT_FONT_COLOR_TOKEN
+
     def _apply_css(self):
-        """Inject ``style.css`` with a Python ``string.Template`` font-size
-        substitution. The template uses ``${font_size}`` so the same file
-        works for the current 12px default and for whatever the Phase 2
-        preferences window will let users pick.
+        """Inject ``style.css`` with Python ``string.Template`` substitutions.
+
+        The template exposes ``${font_size}`` and ``${font_color}`` so
+        font size and the .clip-row title colour both hot-reload from
+        the preferences window without touching the .css file on disk.
         """
         css_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "style.css"
         )
         with open(css_path, "r", encoding="utf-8") as f:
             css_string = Template(f.read()).safe_substitute(
-                font_size=str(self._font_size)
+                font_size=str(self._font_size),
+                font_color=self._resolve_font_color(),
             )
 
         display = Gdk.Display.get_default()
@@ -777,6 +802,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 self._font_size = max(8, min(20, int(value)))
             except (TypeError, ValueError):
                 self._font_size = DEFAULT_FONT_SIZE
+            self._apply_css()
+        elif key == "font_color":
+            self._font_color = value or DEFAULT_FONT_COLOR
             self._apply_css()
         elif key == "opacity":
             try:
