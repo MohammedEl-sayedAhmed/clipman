@@ -10,6 +10,27 @@ The window is constructed with the Adw.PreferencesGroup / Adw.SpinRow
 / Adw.SwitchRow / Adw.ComboRow / Adw.ActionRow rows that libadwaita
 1.4+ ships — never raw Gtk.Box rows — so spacing, padding, and
 accessibility roles all match the rest of the desktop.
+
+on_setting_changed contract
+---------------------------
+
+The callback receives ``(key: str, value)`` for two distinct
+categories of message:
+
+1. Real settings writes — ``key`` is a row in the ``settings`` table
+   and ``value`` is the new value (already coerced to the row's
+   logical Python type, e.g. ``bool``, ``int``, ``float``, ``str``).
+   Today's keys: ``theme``, ``font_color``, ``opacity``, ``font_size``,
+   ``show_count_badges``, ``incognito_on_launch``, ``sensitive_timeout``,
+   ``paste_mode``, ``max_entries``. Listeners hot-reload CSS / theme /
+   paste behaviour off these.
+
+2. Synthetic UI events — ``key`` is one of the strings in
+   ``EVENT_KEYS`` and ``value`` carries an event-specific payload
+   (a backup file path, an exception message, or ``True``). These are
+   not persisted to the DB; they only exist so the parent window can
+   show a banner / toast. Receivers should ignore unknown synthetic
+   keys instead of writing them back.
 """
 
 import logging
@@ -65,6 +86,24 @@ THEMES = [
     ("light", _("Light")),
 ]
 
+# Synthetic events emitted through on_setting_changed alongside real
+# settings writes. Listed here so listeners (window.py) can branch on
+# the set without duplicating string literals, and so future events
+# get added in exactly one place.
+#
+#   sensitive_purged      value=True             user clicked Purge now
+#   backup_succeeded      value=<dest path str>  export_backup returned
+#   backup_failed         value=<error str>      export_backup raised
+#   restore_succeeded     value=<source path>    import_backup returned
+#   restore_failed        value=<error str>      import_backup raised
+EVENT_KEYS = frozenset({
+    "sensitive_purged",
+    "backup_succeeded",
+    "backup_failed",
+    "restore_succeeded",
+    "restore_failed",
+})
+
 
 class ClipmanPreferences(Adw.PreferencesWindow):
     """Six-pane preferences window.
@@ -105,6 +144,21 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         except Exception:
             # The callback is best-effort. A broken hot-reload must
             # never break the preferences window itself.
+            pass
+
+    def _emit_event(self, key, value):
+        """Fire a synthetic on_setting_changed event (no DB write).
+
+        ``key`` must be a member of ``EVENT_KEYS`` — anything else is
+        a programmer error (the caller probably meant ``_save``).
+        Like ``_save``, the listener's exceptions are swallowed.
+        """
+        assert key in EVENT_KEYS, (
+            f"unknown synthetic event {key!r}; add it to EVENT_KEYS"
+        )
+        try:
+            self._on_setting_changed(key, value)
+        except Exception:
             pass
 
     def _get_float(self, key, default):
@@ -214,9 +268,15 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         )
         opacity_row.set_digits(2)
         opacity_row.set_value(self._get_float("opacity", 1.0))
+        # Adw.SpinRow inherits "changed" from Gtk.Editable, which only
+        # fires while the user is typing into the embedded entry — it
+        # does NOT fire when the stepper arrows or scroll wheel adjust
+        # the value. The "notify::value" notification on the underlying
+        # property is the single source of truth across keyboard,
+        # mouse, and accessibility input.
         opacity_row.connect(
-            "changed",
-            lambda r: self._save("opacity", r.get_value()),
+            "notify::value",
+            lambda r, _p: self._save("opacity", r.get_value()),
         )
         layout_group.add(opacity_row)
 
@@ -225,8 +285,8 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         font_row.set_subtitle(_("Affects clip content; UI chrome unchanged."))
         font_row.set_value(self._get_int("font_size", 12))
         font_row.connect(
-            "changed",
-            lambda r: self._save("font_size", int(r.get_value())),
+            "notify::value",
+            lambda r, _p: self._save("font_size", int(r.get_value())),
         )
         layout_group.add(font_row)
 
@@ -286,8 +346,8 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         timeout_row.set_subtitle(_("Seconds before sensitive entries are purged."))
         timeout_row.set_value(self._get_int("sensitive_timeout", 30))
         timeout_row.connect(
-            "changed",
-            lambda r: self._save("sensitive_timeout", int(r.get_value())),
+            "notify::value",
+            lambda r, _p: self._save("sensitive_timeout", int(r.get_value())),
         )
         sensitive_group.add(timeout_row)
 
@@ -321,7 +381,7 @@ class ClipmanPreferences(Adw.PreferencesWindow):
             logger.debug(
                 "purge-sensitive failed; treating as no-op", exc_info=True
             )
-        self._on_setting_changed("sensitive_purged", True)
+        self._emit_event("sensitive_purged", True)
 
     # ------------------------------------------------------------------
     # Pane 3: Shortcuts
@@ -428,8 +488,8 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         )
         max_row.set_value(self._get_int("max_entries", 500))
         max_row.connect(
-            "changed",
-            lambda r: self._save("max_entries", int(r.get_value())),
+            "notify::value",
+            lambda r, _p: self._save("max_entries", int(r.get_value())),
         )
         cap_group.add(max_row)
 
@@ -512,9 +572,9 @@ class ClipmanPreferences(Adw.PreferencesWindow):
             if file is not None:
                 try:
                     self.db.export_backup(file.get_path())
-                    self._on_setting_changed("backup_succeeded", file.get_path())
+                    self._emit_event("backup_succeeded", file.get_path())
                 except Exception as exc:
-                    self._on_setting_changed("backup_failed", str(exc))
+                    self._emit_event("backup_failed", str(exc))
         chooser.destroy()
 
     def _on_restore_clicked(self, _btn):
@@ -532,12 +592,55 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         if response == Gtk.ResponseType.ACCEPT:
             file = chooser.get_file()
             if file is not None:
-                try:
-                    self.db.import_backup(file.get_path())
-                    self._on_setting_changed("restore_succeeded", file.get_path())
-                except Exception as exc:
-                    self._on_setting_changed("restore_failed", str(exc))
+                self._confirm_restore(file.get_path())
         chooser.destroy()
+
+    def _confirm_restore(self, source_path):
+        """Show a destructive AlertDialog before overwriting the DB.
+
+        Restore is irreversible: the running connection is closed,
+        ``DB_PATH`` is replaced, and any unbacked-up history is lost.
+        We snapshot the current DB to a sibling ``.bak`` file (using
+        the same ``export_backup`` code path the user invokes manually)
+        so a botched restore can still be rolled back from disk.
+        """
+        dialog = Adw.AlertDialog.new(
+            _("Restore from backup?"),
+            _(
+                "This replaces your entire clipboard history with the "
+                "contents of:\n\n{path}\n\nA safety copy of the current "
+                "database will be written next to it as a .bak file. "
+                "This action cannot be undone from inside Clipman."
+            ).format(path=source_path),
+        )
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("restore", _("Restore"))
+        dialog.set_response_appearance(
+            "restore", Adw.ResponseAppearance.DESTRUCTIVE
+        )
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_restore_confirmed, source_path)
+        dialog.present(self)
+
+    def _on_restore_confirmed(self, _dialog, response, source_path):
+        if response != "restore":
+            return
+        # Snapshot current DB to a sibling .bak before overwriting.
+        # If the snapshot itself fails (e.g. disk full) we abort the
+        # restore — the user is better off keeping their current
+        # history than losing it to a half-written copy.
+        backup_path = str(DB_PATH) + ".bak"
+        try:
+            self.db.export_backup(backup_path)
+        except Exception as exc:
+            self._emit_event("restore_failed", str(exc))
+            return
+        try:
+            self.db.import_backup(source_path)
+            self._emit_event("restore_succeeded", source_path)
+        except Exception as exc:
+            self._emit_event("restore_failed", str(exc))
 
     # ------------------------------------------------------------------
     # Pane 5: Updates
@@ -694,7 +797,20 @@ class ClipmanPreferences(Adw.PreferencesWindow):
 
 
 def open_url(url):
-    """Best-effort xdg-open helper. Returns ``False`` so it's GLib-idle safe."""
+    """Best-effort xdg-open helper. Returns ``False`` so it's GLib-idle safe.
+
+    Restricted to ``http://`` and ``https://`` URLs. ``xdg-open`` will
+    happily launch handlers for ``file://``, ``mailto:``, ``gopher:``,
+    and (on misconfigured systems) arbitrary scheme-based exec rules,
+    so an attacker-controlled string reaching this function would be
+    a privilege-escalation surface. Anything that isn't plain web
+    traffic is logged and dropped.
+    """
+    if not isinstance(url, str) or not (
+        url.startswith("http://") or url.startswith("https://")
+    ):
+        logger.debug("open_url refused non-http(s) URL: %r", url)
+        return False
     try:
         subprocess.Popen(
             ["xdg-open", url],
@@ -710,4 +826,10 @@ def open_url(url):
 
 # GLib re-export so future cleanup passes (e.g. paste-mode preview
 # animation) can reach the same import without re-grabbing gi.
-__all__ = ["ClipmanPreferences", "GLib", "PASTE_MODES", "open_url"]
+__all__ = [
+    "ClipmanPreferences",
+    "EVENT_KEYS",
+    "GLib",
+    "PASTE_MODES",
+    "open_url",
+]
