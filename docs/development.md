@@ -15,11 +15,13 @@ the canonical map. Two halves matter for development:
 
 ## Prerequisites
 
-System packages (Ubuntu/Debian):
+System packages (Ubuntu/Debian — Ubuntu 24.04+ recommended for
+libadwaita 1.4):
 
 ```bash
 sudo apt-get install -y \
-    python3 python3-gi python3-dbus gir1.2-gtk-3.0 \
+    python3 python3-gi python3-dbus \
+    gir1.2-gtk-4.0 gir1.2-adw-1 libadwaita-1-0 \
     wl-clipboard libcairo2-dev libgirepository-2.0-dev \
     gnome-shell-extensions
 ```
@@ -28,7 +30,7 @@ Fedora equivalents:
 
 ```bash
 sudo dnf install -y \
-    python3-gobject python3-dbus gtk3 \
+    python3-gobject python3-dbus gtk4 libadwaita \
     wl-clipboard cairo-devel gobject-introspection-devel \
     gnome-extensions-app
 ```

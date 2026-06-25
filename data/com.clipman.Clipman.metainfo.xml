@@ -30,7 +30,7 @@
       <li>Database backup and restore</li>
       <li>Reusable text snippets with template variables ({{date}}, {{clipboard}})</li>
       <li>wl-clipboard fallback for non-GNOME compositors (KDE, Sway, Hyprland)</li>
-      <li>15 carefully designed edge states (incognito, sensitive auto-clear, first-run, errors)</li>
+      <li>16 carefully designed edge states (incognito, sensitive auto-clear, first-run, errors)</li>
       <li>Terminal-aware paste (Ctrl+Shift+V)</li>
     </ul>
   </description>
