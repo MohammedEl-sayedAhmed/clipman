@@ -214,9 +214,15 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         )
         opacity_row.set_digits(2)
         opacity_row.set_value(self._get_float("opacity", 1.0))
+        # Adw.SpinRow inherits "changed" from Gtk.Editable, which only
+        # fires while the user is typing into the embedded entry — it
+        # does NOT fire when the stepper arrows or scroll wheel adjust
+        # the value. The "notify::value" notification on the underlying
+        # property is the single source of truth across keyboard,
+        # mouse, and accessibility input.
         opacity_row.connect(
-            "changed",
-            lambda r: self._save("opacity", r.get_value()),
+            "notify::value",
+            lambda r, _p: self._save("opacity", r.get_value()),
         )
         layout_group.add(opacity_row)
 
@@ -225,8 +231,8 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         font_row.set_subtitle(_("Affects clip content; UI chrome unchanged."))
         font_row.set_value(self._get_int("font_size", 12))
         font_row.connect(
-            "changed",
-            lambda r: self._save("font_size", int(r.get_value())),
+            "notify::value",
+            lambda r, _p: self._save("font_size", int(r.get_value())),
         )
         layout_group.add(font_row)
 
@@ -286,8 +292,8 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         timeout_row.set_subtitle(_("Seconds before sensitive entries are purged."))
         timeout_row.set_value(self._get_int("sensitive_timeout", 30))
         timeout_row.connect(
-            "changed",
-            lambda r: self._save("sensitive_timeout", int(r.get_value())),
+            "notify::value",
+            lambda r, _p: self._save("sensitive_timeout", int(r.get_value())),
         )
         sensitive_group.add(timeout_row)
 
@@ -428,8 +434,8 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         )
         max_row.set_value(self._get_int("max_entries", 500))
         max_row.connect(
-            "changed",
-            lambda r: self._save("max_entries", int(r.get_value())),
+            "notify::value",
+            lambda r, _p: self._save("max_entries", int(r.get_value())),
         )
         cap_group.add(max_row)
 
