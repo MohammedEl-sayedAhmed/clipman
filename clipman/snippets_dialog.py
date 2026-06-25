@@ -17,9 +17,18 @@ import gi
 # ``textdomain("clipman")`` by the time this submodule loads.
 from gettext import gettext as _
 
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk  # noqa: E402
+# Module-level GTK4 binding. Wrapped because some CI sandboxes ship a
+# placeholder ``gi`` shim that lacks ``require_version`` (or has the
+# typelibs unavailable). Re-raise as RuntimeError so importers can
+# guard with a single except clause.
+try:
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw, Gtk  # noqa: E402
+except (AttributeError, ValueError, ImportError) as e:
+    raise RuntimeError(
+        "GTK 4 + libadwaita not available: %s" % e
+    ) from e
 
 # Sidebar minimum width — the mockup uses 280px which fits 24 chars
 # of snippet name comfortably without truncating common templates.

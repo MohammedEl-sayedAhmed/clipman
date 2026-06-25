@@ -1,9 +1,12 @@
+import logging
 import sqlite3
 import hashlib
 import os
 import time
 from pathlib import Path
 
+
+logger = logging.getLogger(__name__)
 
 DATA_DIR = Path.home() / ".local" / "share" / "clipman"
 IMAGES_DIR = DATA_DIR / "images"
@@ -306,7 +309,13 @@ class ClipboardDB:
         try:
             os.chmod(path, 0o600)
         except OSError:
-            pass
+            # CodeQL py/empty-except: log at debug so the failure is
+            # observable under -v but doesn't spam INFO when the dest
+            # is on a chmod-less filesystem (vfat / some FUSE mounts).
+            logger.debug(
+                "chmod 0o600 failed on exported backup %s", path,
+                exc_info=True,
+            )
 
     def import_backup(self, path: str):
         import shutil
@@ -343,7 +352,13 @@ class ClipboardDB:
         try:
             os.chmod(str(DB_PATH), 0o600)
         except OSError:
-            pass
+            # CodeQL py/empty-except: log at debug so the failure is
+            # observable under -v but doesn't spam INFO when the
+            # destination is on a chmod-less filesystem.
+            logger.debug(
+                "chmod 0o600 failed on imported DB %s", DB_PATH,
+                exc_info=True,
+            )
         self.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")

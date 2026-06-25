@@ -26,10 +26,19 @@ from clipman._version import __version__
 
 logger = logging.getLogger(__name__)
 
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-gi.require_version("Gdk", "4.0")
-from gi.repository import Adw, Gdk, GLib, Gtk
+# Module-level GTK4 binding. Wrapped because some CI sandboxes ship a
+# placeholder ``gi`` shim that lacks ``require_version`` (or has the
+# typelibs unavailable). Re-raise as RuntimeError so importers can
+# guard with a single except clause instead of catching three classes.
+try:
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    gi.require_version("Gdk", "4.0")
+    from gi.repository import Adw, Gdk, GLib, Gtk
+except (AttributeError, ValueError, ImportError) as e:
+    raise RuntimeError(
+        "GTK 4 + libadwaita not available: %s" % e
+    ) from e
 
 DEFAULT_FONT_SIZE = 12
 DEFAULT_THEME = "dark"
@@ -722,11 +731,15 @@ class ClipmanWindow(Adw.ApplicationWindow):
                     timeout=2,
                     check=False,
                 )
-                any_binary_available = True
+                # First command that runs (even with a non-zero exit)
+                # is enough — the keystroke was synthesised.
                 return False
             except FileNotFoundError:
                 continue
             except subprocess.SubprocessError:
+                # The binary exists but failed to drive the
+                # keystroke — still counts as "available", just don't
+                # short-circuit so we try the next backend.
                 any_binary_available = True
                 continue
         if not any_binary_available:

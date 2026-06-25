@@ -6,9 +6,18 @@ import dbus.exceptions
 import gi
 import dbus.mainloop.glib
 
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-from gi.repository import Adw, GLib
+# Module-level GTK4 binding. Wrapped because some CI sandboxes ship a
+# placeholder ``gi`` shim that lacks ``require_version`` (or has the
+# typelibs unavailable). Re-raise as RuntimeError so importers can
+# guard with a single except clause.
+try:
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw, GLib
+except (AttributeError, ValueError, ImportError) as e:
+    raise RuntimeError(
+        "GTK 4 + libadwaita not available: %s" % e
+    ) from e
 
 import clipman.updates as updates
 from clipman.database import ClipboardDB

@@ -32,12 +32,15 @@ try:
     gi.require_version("Adw", "1")
     from gi.repository import Adw  # noqa: F401
     _HAS_GTK = True
-except (ImportError, ValueError, AttributeError):
+except (ImportError, ValueError, AttributeError, RuntimeError):
     # ImportError: pygobject / gi missing on the runner.
     # ValueError: gi present but the GTK4 / Adw1 typelibs aren't.
     # AttributeError: a stub ``gi`` shim (some CI sandboxes ship one)
     # lacks ``require_version`` — same outcome: no widgets available.
+    # RuntimeError: re-raised by clipman.window's own guard (kept here
+    # so the import chain raises a single, predictable class).
     _HAS_GTK = False
+    Adw = None  # type: ignore[assignment]
 
 _ADW_INIT_OK = False
 if _HAS_GTK:

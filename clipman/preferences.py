@@ -51,10 +51,19 @@ from clipman.database import DB_PATH
 
 logger = logging.getLogger(__name__)
 
-gi.require_version("Gtk", "4.0")
-gi.require_version("Adw", "1")
-gi.require_version("Gdk", "4.0")
-from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
+# Module-level GTK4 binding. Wrapped because some CI sandboxes ship a
+# placeholder ``gi`` shim that lacks ``require_version`` (or has the
+# typelibs unavailable). Re-raise as RuntimeError so importers can
+# guard with a single except clause.
+try:
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    gi.require_version("Gdk", "4.0")
+    from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
+except (AttributeError, ValueError, ImportError) as e:
+    raise RuntimeError(
+        "GTK 4 + libadwaita not available: %s" % e
+    ) from e
 
 # Paste modes the popup understands. Index 0 is the best-effort
 # default that works in every focused-window scenario; the others
@@ -159,7 +168,13 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         try:
             self._on_setting_changed(key, value)
         except Exception:
-            pass
+            # CodeQL py/empty-except: a misbehaving listener must
+            # never break the preferences window. Surface at debug so
+            # operators can diagnose with -v without polluting INFO.
+            logger.debug(
+                "on_setting_changed listener raised for event %s",
+                key, exc_info=True,
+            )
 
     def _get_float(self, key, default):
         try:

@@ -20,13 +20,30 @@ from unittest.mock import MagicMock, patch
 os.environ.setdefault("GDK_BACKEND", "x11")
 os.environ.setdefault("GTK_A11Y", "none")
 
+# Probe GTK4 + libadwaita availability without taking a strong
+# reference on ``Adw`` — the helper tests under this module never
+# touch Adw directly (they mock ``ClipmanApp``'s collaborators), so a
+# top-level ``from gi.repository import Adw`` would be an unused
+# import (py/unused-import). Importing the package itself is enough
+# to surface a missing typelib via ImportError/ValueError, and
+# clipman.app's own module-level guard catches the remaining edge
+# cases by re-raising as RuntimeError.
 try:
     import gi
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw  # noqa: F401
-    _HAS_GTK = True
-except (ImportError, ValueError, AttributeError):
+    # Drive the typelib lookup through clipman.app's own guard so
+    # this module skips cleanly when the import-chain raises
+    # RuntimeError (the module-level guard re-raises gi failures as
+    # RuntimeError so callers only need a single except clause).
+    from clipman.app import ClipmanApp as _ClipmanAppProbe
+    _HAS_GTK = _ClipmanAppProbe is not None
+except (ImportError, ValueError, AttributeError, RuntimeError):
+    # ImportError: pygobject / gi missing on the runner.
+    # ValueError: gi present but the GTK4 / Adw1 typelibs aren't.
+    # AttributeError: a stub ``gi`` shim lacks ``require_version``.
+    # RuntimeError: re-raised by ``clipman.app``'s own module-level
+    # guard when the chain above fails inside the package.
     _HAS_GTK = False
 
 
