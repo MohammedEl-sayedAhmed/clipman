@@ -35,7 +35,7 @@ The daemon exposes a session-bus D-Bus interface at `com.clipman.Daemon` (`/com/
 
 ## Privacy and security
 
-Sensitive entries (passwords detected via heuristics, content marked secret by the source application, anything captured during an explicit incognito toggle) are auto-cleared after a configurable TTL (default 45 seconds). The SQLite file is created mode `0600`, the daemon refuses to start if permissions are loose, and the threat model is documented at `docs/threat-model.md`. Image clips are stored as content-addressed blobs under `~/.local/share/clipman/blobs/` and pruned with the parent entry.
+Sensitive entries (passwords detected via heuristics, content marked secret by the source application, anything captured during an explicit incognito toggle) are auto-cleared after a configurable TTL (default 30 seconds). The SQLite file is created mode `0600`, the daemon refuses to start if permissions are loose, and the threat model is documented at `docs/threat-model.md`. Image clips are stored as content-addressed blobs under `~/.local/share/clipman/blobs/` and pruned with the parent entry.
 
 ## Features
 
