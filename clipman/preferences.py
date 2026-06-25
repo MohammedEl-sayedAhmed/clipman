@@ -10,6 +10,27 @@ The window is constructed with the Adw.PreferencesGroup / Adw.SpinRow
 / Adw.SwitchRow / Adw.ComboRow / Adw.ActionRow rows that libadwaita
 1.4+ ships — never raw Gtk.Box rows — so spacing, padding, and
 accessibility roles all match the rest of the desktop.
+
+on_setting_changed contract
+---------------------------
+
+The callback receives ``(key: str, value)`` for two distinct
+categories of message:
+
+1. Real settings writes — ``key`` is a row in the ``settings`` table
+   and ``value`` is the new value (already coerced to the row's
+   logical Python type, e.g. ``bool``, ``int``, ``float``, ``str``).
+   Today's keys: ``theme``, ``font_color``, ``opacity``, ``font_size``,
+   ``show_count_badges``, ``incognito_on_launch``, ``sensitive_timeout``,
+   ``paste_mode``, ``max_entries``. Listeners hot-reload CSS / theme /
+   paste behaviour off these.
+
+2. Synthetic UI events — ``key`` is one of the strings in
+   ``EVENT_KEYS`` and ``value`` carries an event-specific payload
+   (a backup file path, an exception message, or ``True``). These are
+   not persisted to the DB; they only exist so the parent window can
+   show a banner / toast. Receivers should ignore unknown synthetic
+   keys instead of writing them back.
 """
 
 import logging
@@ -65,6 +86,24 @@ THEMES = [
     ("light", _("Light")),
 ]
 
+# Synthetic events emitted through on_setting_changed alongside real
+# settings writes. Listed here so listeners (window.py) can branch on
+# the set without duplicating string literals, and so future events
+# get added in exactly one place.
+#
+#   sensitive_purged      value=True             user clicked Purge now
+#   backup_succeeded      value=<dest path str>  export_backup returned
+#   backup_failed         value=<error str>      export_backup raised
+#   restore_succeeded     value=<source path>    import_backup returned
+#   restore_failed        value=<error str>      import_backup raised
+EVENT_KEYS = frozenset({
+    "sensitive_purged",
+    "backup_succeeded",
+    "backup_failed",
+    "restore_succeeded",
+    "restore_failed",
+})
+
 
 class ClipmanPreferences(Adw.PreferencesWindow):
     """Six-pane preferences window.
@@ -105,6 +144,21 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         except Exception:
             # The callback is best-effort. A broken hot-reload must
             # never break the preferences window itself.
+            pass
+
+    def _emit_event(self, key, value):
+        """Fire a synthetic on_setting_changed event (no DB write).
+
+        ``key`` must be a member of ``EVENT_KEYS`` — anything else is
+        a programmer error (the caller probably meant ``_save``).
+        Like ``_save``, the listener's exceptions are swallowed.
+        """
+        assert key in EVENT_KEYS, (
+            f"unknown synthetic event {key!r}; add it to EVENT_KEYS"
+        )
+        try:
+            self._on_setting_changed(key, value)
+        except Exception:
             pass
 
     def _get_float(self, key, default):
@@ -327,7 +381,7 @@ class ClipmanPreferences(Adw.PreferencesWindow):
             logger.debug(
                 "purge-sensitive failed; treating as no-op", exc_info=True
             )
-        self._on_setting_changed("sensitive_purged", True)
+        self._emit_event("sensitive_purged", True)
 
     # ------------------------------------------------------------------
     # Pane 3: Shortcuts
@@ -518,9 +572,9 @@ class ClipmanPreferences(Adw.PreferencesWindow):
             if file is not None:
                 try:
                     self.db.export_backup(file.get_path())
-                    self._on_setting_changed("backup_succeeded", file.get_path())
+                    self._emit_event("backup_succeeded", file.get_path())
                 except Exception as exc:
-                    self._on_setting_changed("backup_failed", str(exc))
+                    self._emit_event("backup_failed", str(exc))
         chooser.destroy()
 
     def _on_restore_clicked(self, _btn):
@@ -580,13 +634,13 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         try:
             self.db.export_backup(backup_path)
         except Exception as exc:
-            self._on_setting_changed("restore_failed", str(exc))
+            self._emit_event("restore_failed", str(exc))
             return
         try:
             self.db.import_backup(source_path)
-            self._on_setting_changed("restore_succeeded", source_path)
+            self._emit_event("restore_succeeded", source_path)
         except Exception as exc:
-            self._on_setting_changed("restore_failed", str(exc))
+            self._emit_event("restore_failed", str(exc))
 
     # ------------------------------------------------------------------
     # Pane 5: Updates
@@ -759,4 +813,10 @@ def open_url(url):
 
 # GLib re-export so future cleanup passes (e.g. paste-mode preview
 # animation) can reach the same import without re-grabbing gi.
-__all__ = ["ClipmanPreferences", "GLib", "PASTE_MODES", "open_url"]
+__all__ = [
+    "ClipmanPreferences",
+    "EVENT_KEYS",
+    "GLib",
+    "PASTE_MODES",
+    "open_url",
+]
