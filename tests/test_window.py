@@ -142,6 +142,82 @@ class TestWindowConstruction(unittest.TestCase):
         dialog = SnippetsDialog(db)
         self.assertIsNotNone(dialog)
 
+    def test_refresh_with_seeded_entries(self):
+        """Three seeded entries -> three ActionRows with their titles."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        # Seed in reverse chronological order — get_entries returns most
+        # recent first, so we insert "old" then "mid" then "new" and
+        # expect the listbox to show them in (new, mid, old) order.
+        for text in ("old entry", "mid entry", "new entry"):
+            db.add_entry("text", content_text=text)
+
+        app = Adw.Application(application_id="com.clipman.Test")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        window.refresh()
+
+        # The listbox should now contain three Adw.ActionRow widgets.
+        rows = []
+        i = 0
+        while True:
+            row = window.listbox.get_row_at_index(i)
+            if row is None:
+                break
+            rows.append(row)
+            i += 1
+        self.assertEqual(len(rows), 3)
+
+        titles = [r.get_title() for r in rows]
+        # Order: get_entries returns most-recent first.
+        self.assertEqual(titles[0], "new entry")
+        self.assertEqual(titles[1], "mid entry")
+        self.assertEqual(titles[2], "old entry")
+
+    def test_on_setting_changed_fan_out(self):
+        """ClipmanPreferences._save fans out (key, value) to the callback."""
+        from clipman.preferences import ClipmanPreferences
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.Test")
+        parent = ClipmanWindow(application=app, db=db, monitor=None)
+
+        received: list[tuple[str, object]] = []
+
+        def recorder(key, value):
+            received.append((key, value))
+
+        prefs = ClipmanPreferences(db, parent, on_setting_changed=recorder)
+        # Simulate the SpinRow notify -> _save path the font-size row
+        # uses (preferences.py wires `lambda r: self._save("font_size",
+        # int(r.get_value()))`).
+        prefs._save("font_size", 14)
+
+        self.assertIn(("font_size", 14), received)
+        # And the value persisted to the DB as a stringified int.
+        self.assertEqual(db.get_setting("font_size"), "14")
+
+    def test_refresh_update_banner_revealed(self):
+        """should_show_banner -> (True, version) reveals the banner."""
+        from clipman import updates
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.Test")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+
+        # The banner is built revealed=False at construction time. Patch
+        # should_show_banner so the next refresh_update_banner call
+        # flips the revealed flag and writes a title containing the
+        # advertised version.
+        with patch.object(updates, "should_show_banner",
+                          return_value=(True, "1.0.7")):
+            window.refresh_update_banner()
+
+        self.assertTrue(window._update_banner.get_revealed())
+        self.assertIn("1.0.7", window._update_banner.get_title())
+
 
 class TestEdgeStateDeclaration(unittest.TestCase):
     """Module-level invariants of edge_states.py that don't need GTK.
