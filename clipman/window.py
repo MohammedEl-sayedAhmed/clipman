@@ -314,16 +314,15 @@ class ClipmanWindow(Adw.ApplicationWindow):
             rows = [self._make_entry_row(e) for e in entries]
 
         if not rows:
-            self._status_page.set_title(
-                _("No results found")
-                if self._search_query
-                else _("No clipboard entries yet")
+            state_id = (
+                "no-results" if self._search_query
+                else ("empty" if not is_snippets else "empty")
             )
-            self._status_page.set_description(
-                _("Try a different search.")
-                if self._search_query
-                else _("Copy something to get started.")
-            )
+            from clipman.edge_states import STATES
+            spec = STATES[state_id]
+            self._status_page.set_icon_name(spec.icon_name)
+            self._status_page.set_title(spec.title)
+            self._status_page.set_description(spec.body)
             self._status_page.set_visible(True)
             self._list_stack.set_visible_child_name("empty")
             return
