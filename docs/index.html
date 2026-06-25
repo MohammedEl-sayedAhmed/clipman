@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -10,8 +10,8 @@
 <link rel="canonical" href="https://mohammedel-sayedahmed.github.io/clipman/">
 <link rel="icon" href="logo.svg">
 <link rel="apple-touch-icon" href="logo.svg">
-<meta name="color-scheme" content="dark light">
-<meta name="theme-color" content="#181825">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f5f5f4">
 
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Clipman">
@@ -530,23 +530,24 @@ section h2 .accent { color: var(--accent); }
     overflow: hidden;
     background: transparent;
 }
+.demo-stage {
+    padding: 28px 24px;
+}
 .demo-stage iframe {
-    /* The iframe is itself rendered as a rounded "card" so its edges
-       match the design-workspace popup style (rounded corners + soft
-       shadow on a stone backdrop). The embedded popup inside states.html
-       carries its own inner card shadow, layered on top of this outer
-       frame. */
+    /* Iframe-as-card: rounded + soft shadow to match the hero screenshot
+       frame and the standalone design-workspace popup. */
     border: 1px solid var(--border);
     border-radius: var(--r-lg);
-    background: var(--bg);          /* matches body bg so the iframe edge blends */
+    background: var(--bg);
     box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.30),
                 0 4px  10px  -4px rgba(0, 0, 0, 0.12);
     display: block;
-    /* Responsive sizing — never overflow the demo-stage. */
     width: 100%;
-    max-width: 480px;
-    height: 720px;
-    aspect-ratio: 480 / 720;
+    max-width: 460px;
+    /* Tall enough to hold the 640px popup + 24px embed padding on both
+       sides without forcing a scrollbar. */
+    height: 700px;
+    aspect-ratio: 460 / 700;
     overflow: hidden;
 }
 html[data-theme="light"] .demo-stage iframe {
@@ -555,7 +556,7 @@ html[data-theme="light"] .demo-stage iframe {
 }
 @media (max-width: 540px) {
     .demo-stage { padding: 12px 0; }
-    .demo-stage iframe { height: auto; min-height: 620px; }
+    .demo-stage iframe { height: auto; min-height: 660px; }
 }
 .demo-foot {
     padding: 16px 20px;
@@ -886,7 +887,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
           </div>
         </div>
         <div class="demo-stage">
-          <iframe id="demo-frame" title="Clipman popup mockup" src="design/states.html?state=populated&amp;embed=1" referrerpolicy="no-referrer"></iframe>
+          <iframe id="demo-frame" title="Clipman popup mockup" src="design/states.html?state=populated&amp;embed=1" referrerpolicy="no-referrer" scrolling="no"></iframe>
         </div>
         <div class="demo-foot">
           <span>Live preview, running right in this page. Click through the states to see how the popup adapts.</span>

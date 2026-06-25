@@ -70,7 +70,15 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            overflow: hidden;   /* never scroll in the iframe context */
         }
+        /* Belt-and-suspenders: no scrollbars on any layer when iframed. */
+        body.embed,
+        body.embed .layout,
+        body.embed .window,
+        body.embed .content { scrollbar-width: none; }
+        body.embed::-webkit-scrollbar,
+        body.embed *::-webkit-scrollbar { display: none; }
         body.embed .layout {
             grid-template-columns: minmax(0, 420px);
             gap: 0;
@@ -81,9 +89,8 @@
         body.embed .picker        { display: none; }
         body.embed .theme-toggle  { display: none; }
         body.embed .window {
-            /* Keep the .window's standard shadow + border — that's the
-               "card" the reference design uses. Just constrain width so it
-               never overflows the iframe viewport on narrow widths. */
+            /* Keep the standard card shadow + border. Constrain width so it
+               never overflows the iframe on narrow widths. */
             width: 100%;
             max-width: 420px;
         }
@@ -507,7 +514,7 @@
     </style>
 <script src="theme.js" defer></script>
 </head>
-<body class="theme-dark">
+<body class="theme-light">
 
 <div class="theme-toggle">
     <span>theme</span>
@@ -921,10 +928,16 @@ function applyTheme(t) {
 applyTheme(themeParam);
 
 // Listen for live theme changes from the parent window when embedded.
+// Restrict to messages from the SAME origin (and the file:// case used
+// during local preview) to satisfy the js/missing-origin-check rule.
 window.addEventListener('message', (e) => {
-    if (e && e.data && e.data.type === 'clipman-theme') {
-        applyTheme(e.data.value);
-    }
+    if (!e || !e.data) return;
+    const sameOrigin = (e.origin === window.location.origin) || (e.origin === 'null');
+    if (!sameOrigin) return;
+    if (e.data.type !== 'clipman-theme') return;
+    const v = e.data.value;
+    if (v !== 'light' && v !== 'dark') return;
+    applyTheme(v);
 });
 
 // Initial state from ?state= URL or first item
