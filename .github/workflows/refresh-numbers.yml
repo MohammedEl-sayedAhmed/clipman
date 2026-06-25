@@ -28,7 +28,8 @@ on:
       - 'docs/_data/numbers.json'
 
 permissions:
-  contents: write   # commit the refreshed JSON back to main
+  contents: write       # push a refresh branch
+  pull-requests: write  # open the auto-merge PR
 
 concurrency:
   group: refresh-numbers
@@ -111,8 +112,9 @@ jobs:
           }))
           PY
 
-      - name: Commit and push if changed
+      - name: Open auto-merge PR if changed
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_COMMIT_AUTHOR: github-actions[bot]
           GH_COMMIT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         run: |
@@ -120,8 +122,21 @@ jobs:
             echo "Numbers unchanged; nothing to push."
             exit 0
           fi
+          # Branch protection on main requires status checks to pass
+          # before any push lands. Direct ``git push origin HEAD:main``
+          # would fail with GH006 "Protected branch update failed". So
+          # we push a transient branch, open a PR, and ask GitHub to
+          # auto-merge it once the required checks pass.
+          branch="chore/numbers-$(date -u +%Y%m%d-%H%M%S)"
           git config user.name  "$GH_COMMIT_AUTHOR"
           git config user.email "$GH_COMMIT_EMAIL"
+          git checkout -b "$branch"
           git add docs/_data/numbers.json
           git commit -m "chore(numbers): refresh marketing counters [skip ci]"
-          git push origin HEAD:main
+          git push origin "$branch"
+          gh pr create \
+            --base main \
+            --head "$branch" \
+            --title "chore(numbers): refresh marketing counters" \
+            --body "Automated daily refresh of \`docs/_data/numbers.json\` by the [refresh-numbers workflow](../actions/workflows/refresh-numbers.yml). Auto-merges once required checks pass."
+          gh pr merge "$branch" --auto --squash --delete-branch
