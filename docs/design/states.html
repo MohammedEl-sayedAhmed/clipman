@@ -527,10 +527,17 @@
                 padding: 16px;
                 overflow-x: hidden;
             }
+            /* Embedded (iframe) mode owns its own layout; don't let the
+               page-level mobile rule retake its padding. */
+            body.embed { padding: 12px; }
             .theme-toggle {
                 position: static;
                 margin: 0 auto 12px;
                 display: inline-flex;
+            }
+            .theme-toggle button {
+                min-height: 36px;
+                padding: 8px 14px;
             }
             .layout {
                 grid-template-columns: 1fr;
@@ -545,6 +552,14 @@
                 height: auto;
                 min-height: 580px;
             }
+            /* The status-page tone strip is centered text. On 320px viewport
+               the popup is ~288px wide and the status icon + title + desc
+               still fit, but the .status-actions row of two side-by-side
+               buttons can overflow when both labels are long. Wrap them. */
+            .status-actions { flex-wrap: wrap; justify-content: center; }
+        }
+        @media (max-width: 360px) {
+            .theme-toggle > span { display: none; }
         }
     </style>
 <script src="theme.js" defer></script>
