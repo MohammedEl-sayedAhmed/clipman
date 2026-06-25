@@ -12,4 +12,4 @@ expect it (tests, CLI ``--version``, pyproject metadata).
 ``scripts/bump-version.sh`` patches the literal in this file.
 """
 
-__version__ = "1.0.6"
+__version__ = "1.1.0"

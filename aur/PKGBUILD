@@ -1,6 +1,6 @@
 # Maintainer: Mohammed El-sayed Ahmed <MohammedEl-sayedAhmed@users.noreply.github.com>
 pkgname=clipman-clipboard
-pkgver=1.0.6
+pkgver=1.1.0
 pkgrel=1
 pkgdesc="A clipboard history manager for Wayland (GNOME, KDE, Sway, Hyprland, etc.)"
 arch=('any')
