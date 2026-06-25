@@ -240,19 +240,16 @@ class ClipmanWindow(Adw.ApplicationWindow):
         scrolled.set_child(self.listbox)
 
         # Empty / no-results state — Adw.StatusPage swaps in for the list.
-        self._status_page = Adw.StatusPage()
-        self._status_page.set_icon_name("edit-paste-symbolic")
-        self._status_page.set_title(_("No clipboard entries yet"))
-        self._status_page.set_description(
-            _("Copy something to get started.")
-        )
-        self._status_page.set_visible(False)
-        self._status_page.set_vexpand(True)
+        # The actual visual is produced by ``render_edge_state(state_id)``
+        # in ``refresh()``; this slot is just a placeholder until then.
+        self._empty_slot = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._empty_slot.set_vexpand(True)
+        self._current_edge_widget = None
 
         self._list_stack = Gtk.Stack()
         self._list_stack.set_vexpand(True)
         self._list_stack.add_named(scrolled, "list")
-        self._list_stack.add_named(self._status_page, "empty")
+        self._list_stack.add_named(self._empty_slot, "empty")
         root.append(self._list_stack)
 
         # -- Footer hints --------------------------------------------------
@@ -314,23 +311,49 @@ class ClipmanWindow(Adw.ApplicationWindow):
             rows = [self._make_entry_row(e) for e in entries]
 
         if not rows:
-            state_id = (
-                "no-results" if self._search_query
-                else ("empty" if not is_snippets else "empty")
-            )
-            from clipman.edge_states import STATES
-            spec = STATES[state_id]
-            self._status_page.set_icon_name(spec.icon_name)
-            self._status_page.set_title(spec.title)
-            self._status_page.set_description(spec.body)
-            self._status_page.set_visible(True)
-            self._list_stack.set_visible_child_name("empty")
+            if self._search_query:
+                state_id = "no-results"
+            elif is_snippets:
+                state_id = "no-snippets-yet"
+            else:
+                state_id = "empty"
+            self._show_edge_state(state_id)
             return
 
-        self._status_page.set_visible(False)
         self._list_stack.set_visible_child_name("list")
         for row in rows:
             self.listbox.append(row)
+
+    def _show_edge_state(self, state_id):
+        """Swap the rendered edge-state widget into the empty slot.
+
+        Dispatches through ``render_edge_state`` so future Banner /
+        AlertDialog states get the correct widget family — window.py
+        only knows about ``state_id`` and trusts the renderer.
+        """
+        from clipman.edge_states import render_edge_state
+
+        widget = render_edge_state(state_id, parent_window=self)
+        # Clear the previous widget from the slot.
+        if self._current_edge_widget is not None:
+            self._empty_slot.remove(self._current_edge_widget)
+            self._current_edge_widget = None
+        # Banner / AlertDialog don't compose into the empty slot the same
+        # way a StatusPage does. The current spec set only puts
+        # StatusPages in the empty slot, but if a future state is a
+        # Banner we drop it in directly; AlertDialog presents itself.
+        spec = getattr(widget, "state_spec", None)
+        kind = spec.kind if spec is not None else "statuspage"
+        if kind == "alertdialog":
+            widget.present(self)
+            # Fall back to the populated list view — the dialog is modal
+            # on top of whatever was previously shown.
+            self._list_stack.set_visible_child_name("list")
+            return
+        widget.set_vexpand(True)
+        self._empty_slot.append(widget)
+        self._current_edge_widget = widget
+        self._list_stack.set_visible_child_name("empty")
 
     def _make_entry_row(self, entry):
         ctype = entry.get("content_type") or "text"

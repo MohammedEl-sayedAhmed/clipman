@@ -73,6 +73,17 @@ STATES: dict[str, StateSpec] = {
         title=_("Nothing copied yet"),
         body=_("Copy text or an image and it will appear here."),
     ),
+    "no-snippets-yet": StateSpec(
+        id="no-snippets-yet",
+        kind="statuspage",
+        tone="info",
+        icon_name="text-x-generic-symbolic",
+        title=_("No snippets yet"),
+        body=_("Snippets are reusable text fragments you can paste with "
+               "one click. Add some from Preferences -> Storage, or use "
+               "the New button when this list is showing."),
+        primary_action=(_("Add a snippet"), "open-snippets-dialog"),
+    ),
     "no-results": StateSpec(
         id="no-results",
         kind="statuspage",

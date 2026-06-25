@@ -7,7 +7,7 @@ ARE importable, the tests assert that:
 - the new modules import without raising,
 - ``ClipmanWindow`` boots with an in-memory DB,
 - ``ClipmanPreferences`` and ``SnippetsDialog`` can be constructed,
-- ``render_edge_state`` returns a widget for every one of the 15
+- ``render_edge_state`` returns a widget for every one of the 16
   state ids declared in ``clipman.edge_states.STATES``.
 """
 
@@ -44,19 +44,20 @@ if _HAS_GTK:
 @unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
                      "GTK 4 + libadwaita not available")
 class TestEdgeStates(unittest.TestCase):
-    """The 15 mockup states must all map to a renderable widget."""
+    """The 16 mockup states must all map to a renderable widget."""
 
     EXPECTED_IDS = {
-        "populated", "empty", "no-results", "first-run", "incognito-on",
-        "sensitive-shown", "sensitive-cleared", "extension-missing",
-        "backup-failed", "restore-failed", "network-error", "db-locked",
-        "paused", "paste-target-missing", "history-too-large",
+        "populated", "empty", "no-snippets-yet", "no-results", "first-run",
+        "incognito-on", "sensitive-shown", "sensitive-cleared",
+        "extension-missing", "backup-failed", "restore-failed",
+        "network-error", "db-locked", "paused", "paste-target-missing",
+        "history-too-large",
     }
 
-    def test_all_fifteen_states_declared(self):
+    def test_all_states_declared(self):
         from clipman.edge_states import STATES
         self.assertEqual(set(STATES.keys()), self.EXPECTED_IDS)
-        self.assertEqual(len(STATES), 15)
+        self.assertEqual(len(STATES), 16)
 
     def test_render_each_state_returns_widget(self):
         from clipman.edge_states import STATES, render_edge_state
