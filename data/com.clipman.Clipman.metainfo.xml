@@ -71,9 +71,22 @@
   </supports>
 
   <releases>
+    <release version="1.1.0" date="2026-06-25">
+      <description>
+        <p>GTK 3 to GTK 4 + libadwaita port and Catppuccin palette overlay.</p>
+        <ul>
+          <li>Popup rebuilt as Adw.ApplicationWindow with Adw.HeaderBar and Adw.ActionRow rows</li>
+          <li>Settings extracted into a dedicated Adw.PreferencesWindow with six panes</li>
+          <li>Snippets editor is now an Adw.NavigationSplitView master-detail dialog</li>
+          <li>16 edge states (empty, no-results, incognito, sensitive-cleared, first-run, errors) render through Adw.StatusPage, Adw.Banner, and Adw.AlertDialog</li>
+          <li>Catppuccin Mocha and Latte palettes applied as overrides on libadwaita's named-color tokens</li>
+          <li>No D-Bus contract, schema, or settings-key changes; existing history and preferences carry over</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.0.6" date="2026-05-20">
       <description>
-        <p>Catppuccin theme polish, snap-store auto-publish workflow, GTK3 popup stability fixes.</p>
+        <p>Catppuccin theme polish, snap-store auto-publish workflow, popup stability fixes.</p>
       </description>
     </release>
     <release version="1.0.5" date="2026-05-20">
