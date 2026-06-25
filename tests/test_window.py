@@ -119,6 +119,67 @@ class TestEdgeStates(unittest.TestCase):
         # random spec into the empty slot.
         self.assertEqual(widget.state_spec.id, "empty")
 
+    def test_on_edge_action_covers_states_contract(self):
+        """Every action_id declared by STATES must have a dispatch handler.
+
+        Previously the renderer wired buttons to action_ids the host
+        window didn't know about (9 of 15 ids in STATES were unwired),
+        so every Retry / Open / Pick-another button in production fell
+        through to ``logger.warning`` and silently no-op'd. This test
+        is the contract that catches the next regression: introduce a
+        new state in edge_states.STATES without a handler in window.py
+        and CI fails here.
+        """
+        from clipman.edge_states import STATES
+        from clipman.window import ClipmanWindow
+
+        declared_ids: set[str] = set()
+        for spec in STATES.values():
+            for slot in (spec.primary_action, spec.secondary_action):
+                if slot is not None:
+                    declared_ids.add(slot[1])
+
+        # Class-level frozenset is the source of truth for the
+        # dispatcher; the property builds a dict with these keys.
+        missing = declared_ids - ClipmanWindow._EDGE_ACTION_IDS
+        self.assertFalse(
+            missing,
+            f"action_ids declared in STATES but not handled by "
+            f"ClipmanWindow._on_edge_action: {sorted(missing)}",
+        )
+
+    def test_on_edge_action_dispatch_table_matches_declared_ids(self):
+        """The runtime dispatch dict keys must equal the class-level set.
+
+        Guards against the property and the frozenset drifting apart:
+        if a maintainer adds a handler to the dict without updating the
+        set (or vice versa), CI fails before the no-op regression can
+        reach production.
+        """
+        from clipman import database
+        from clipman.window import ClipmanWindow
+
+        tmp = tempfile.mkdtemp(prefix="clipman-test-dispatch-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        data_dir = Path(tmp) / "clipman"
+        for target, value in (
+            ("clipman.database.DATA_DIR", data_dir),
+            ("clipman.database.IMAGES_DIR", data_dir / "images"),
+            ("clipman.database.DB_PATH", data_dir / "clipman.db"),
+        ):
+            p = patch(target, value)
+            p.start()
+            self.addCleanup(p.stop)
+
+        db = database.ClipboardDB()
+        self.addCleanup(db.close)
+        app = Adw.Application(application_id="com.clipman.TestDispatch")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        self.assertEqual(
+            set(window._edge_action_dispatch.keys()),
+            set(ClipmanWindow._EDGE_ACTION_IDS),
+        )
+
 
 @unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
                      "GTK 4 + libadwaita not available")
@@ -253,6 +314,68 @@ class TestWindowConstruction(unittest.TestCase):
 
         self.assertTrue(window._update_banner.get_revealed())
         self.assertIn("1.0.7", window._update_banner.get_title())
+
+    def test_on_edge_action_dispatches_every_states_action_id(self):
+        """Runtime contract: every action_id from STATES fires its handler.
+
+        Constructs a ClipmanWindow, monkey-patches the side-effect
+        callees (xdg-open, open-prefs, refresh_update_banner,
+        snippets dialog) into no-ops, then invokes _on_edge_action
+        once per action_id declared in edge_states.STATES. The
+        ``logger.warning`` branch is captured via assertLogs — the
+        test fails if any id falls through to ``unhandled
+        edge-state action_id``.
+        """
+        from clipman import window as window_module
+        from clipman.edge_states import STATES
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestDispatch")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+
+        # Side-effect callees we never want to fire during the test:
+        #   - _open_url shells out to xdg-open
+        #   - _on_prefs_clicked spawns Adw.PreferencesWindow
+        #   - _on_snippets_clicked spawns Adw.Dialog
+        #   - refresh_update_banner pokes the updates module
+        # Replace them with recorders so we can assert the dispatch
+        # actually called something rather than the warning fallback.
+        called: list[str] = []
+        window._open_url = lambda url: called.append(("url", url))
+        window._on_prefs_clicked = lambda _b: called.append(("prefs", None))
+        window._on_snippets_clicked = lambda _b: called.append(
+            ("snippets", None)
+        )
+        window.refresh_update_banner = lambda: called.append(
+            ("update-check", None)
+        )
+
+        # Collect every action_id declared in STATES.
+        declared_ids: list[str] = []
+        for spec in STATES.values():
+            for slot in (spec.primary_action, spec.secondary_action):
+                if slot is not None:
+                    declared_ids.append(slot[1])
+
+        # Drive every id through the dispatcher. assertNoLogs ensures
+        # NONE of them hits the ``logger.warning("unhandled ...")``
+        # branch. clear-search and close-dialog have inline behaviour
+        # (no recorder hit) — they're still tested by virtue of not
+        # emitting the warning.
+        with self.assertLogs(window_module.logger, level="WARNING") as cm:
+            # Append a deliberately-unknown id at the end so assertLogs
+            # has SOMETHING to capture (it raises if zero records).
+            for action_id in declared_ids:
+                window._on_edge_action(action_id)
+            window._on_edge_action("definitely-not-an-action")
+
+        # Only the synthetic unknown id should have produced a warning.
+        warning_messages = [r.getMessage() for r in cm.records]
+        self.assertEqual(len(warning_messages), 1, warning_messages)
+        self.assertIn(
+            "definitely-not-an-action", warning_messages[0]
+        )
 
 
 class TestEdgeStateDeclaration(unittest.TestCase):

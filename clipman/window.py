@@ -460,6 +460,30 @@ class ClipmanWindow(Adw.ApplicationWindow):
         "/blob/main/docs/snap-confinement.md"
     )
 
+    # Authoritative list of action_ids the dispatcher handles. The
+    # ``_edge_action_dispatch`` property builds a dict keyed on this
+    # set; ``test_window.test_on_edge_action_covers_states_contract``
+    # asserts that this set is a superset of every action_id declared
+    # in ``edge_states.STATES``. Adding a new edge state with a new
+    # action_id therefore fails CI until a handler is wired here.
+    _EDGE_ACTION_IDS = frozenset({
+        "clear-search",
+        "open-snippets-dialog",
+        "open-extensions",
+        "open-install-guide",
+        "open-snap-notes",
+        "resume-recording",
+        "open-prefs-privacy",
+        "retry-backup",
+        "rechoose-backup",
+        "rechoose-restore",
+        "open-restore",
+        "open-prefs-storage",
+        "reveal-db-folder",
+        "retry-update-check",
+        "close-dialog",
+    })
+
     def _on_edge_action(self, action_id):
         """Dispatch the ``action_id`` strings declared in ``edge_states.py``.
 
