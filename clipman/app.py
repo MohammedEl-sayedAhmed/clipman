@@ -54,7 +54,9 @@ class ClipmanApp(Adw.Application):
         # Schedule the first update check 30s after startup (so we
         # don't slow login) and a daily recurring tick after that.
         # ``updates.should_check_now`` enforces opt-out + 24h rate limit.
-        GLib.timeout_add_seconds(30, self._update_check_tick)
+        # The 30s tick is one-shot — only the 24h tick recurs, otherwise
+        # we'd burn an extra timer every login.
+        GLib.timeout_add_seconds(30, self._update_check_tick_once)
         GLib.timeout_add_seconds(updates.CHECK_INTERVAL_SECONDS,
                                  self._update_check_tick)
 
@@ -62,12 +64,23 @@ class ClipmanApp(Adw.Application):
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, self._shutdown)
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self._shutdown)
 
+    def _update_check_tick_once(self):
+        """One-shot initial tick — runs ``_update_check_tick`` then dies.
+
+        ``GLib.timeout_add_seconds`` keeps the timer alive while the
+        callback returns ``True``. The recurring 24h timer wants that
+        behaviour; the initial 30s timer doesn't (otherwise we'd have
+        two pollers stacked forever).
+        """
+        self._update_check_tick()
+        return False
+
     def _update_check_tick(self):
         """Fire an async update check if rate-limit + opt-in allow it.
 
-        Returning ``True`` keeps the recurring 24h timeout alive. The
-        initial 30s-after-startup tick will also return ``True`` here but
-        is harmless because ``should_check_now`` re-applies the rate limit.
+        Returning ``True`` keeps the recurring 24h timeout alive.
+        ``should_check_now`` re-applies the 24h rate limit so even if
+        the timer fires for any reason, no extra HTTP request goes out.
         """
         if self.db is None:
             return False
