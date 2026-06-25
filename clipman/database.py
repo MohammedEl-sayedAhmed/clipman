@@ -17,6 +17,26 @@ def _ensure_dirs():
     # Enforce permissions even if dirs already existed with wrong perms
     os.chmod(DATA_DIR, 0o700)
     os.chmod(IMAGES_DIR, 0o700)
+    # SQLite's WAL mode creates two sidecar files (-wal, -shm) next to
+    # the main DB. They contain unflushed clipboard contents — exactly
+    # the data the main DB itself protects — but SQLite creates them
+    # with the process umask, which is typically 0o022. Tighten any
+    # that already exist; new ones are clamped by ClipboardDB.__init__
+    # right after the WAL pragma fires.
+    for sidecar in (
+        DB_PATH.with_name(DB_PATH.name + "-wal"),
+        DB_PATH.with_name(DB_PATH.name + "-shm"),
+    ):
+        try:
+            os.chmod(sidecar, 0o600)
+        except FileNotFoundError:
+            # Sidecars only exist while a connection is open. Missing
+            # is fine — they'll be created with the right perms.
+            pass
+        except OSError:
+            # Filesystem may not support chmod (vfat, some FUSE mounts).
+            # Best-effort: log nothing, the main DB still protects.
+            pass
 
 
 def _safe_image_path(image_path: str) -> bool:
@@ -42,6 +62,10 @@ class ClipboardDB:
         self.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
+        # Re-run the sidecar chmod now that WAL is on — this is the
+        # first moment -wal/-shm are guaranteed to exist with our
+        # process as the creator.
+        _ensure_dirs()
         self._create_table()
 
     def _create_table(self):
@@ -274,6 +298,15 @@ class ClipboardDB:
         self.conn.commit()
         self.conn.execute("PRAGMA wal_checkpoint(FULL)")
         shutil.copy2(str(DB_PATH), path)
+        # The exported file inherits the user's umask (typically 0o022),
+        # which leaves clipboard history group/world-readable on
+        # disk. Clamp it to 0o600 — the same posture the live DB and
+        # its sidecars enforce. Best-effort: filesystems that don't
+        # support chmod (vfat, some FUSE mounts) are tolerated.
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
 
     def import_backup(self, path: str):
         import shutil
@@ -304,9 +337,17 @@ class ClipboardDB:
             )
         self.conn.close()
         shutil.copy2(path, str(DB_PATH))
+        # Clamp the newly-restored DB to 0o600 — the source file may
+        # have arrived from a wider-permissioned location (downloads,
+        # USB stick, /tmp).
+        try:
+            os.chmod(str(DB_PATH), 0o600)
+        except OSError:
+            pass
         self.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
+        _ensure_dirs()
         self._create_table()
         # Sanitize any image_path values that point outside IMAGES_DIR
         bad = self.conn.execute(
