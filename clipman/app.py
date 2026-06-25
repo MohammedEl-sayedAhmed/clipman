@@ -4,8 +4,9 @@ import dbus
 import gi
 import dbus.mainloop.glib
 
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Adw, GLib
 
 from clipman import updates
 from clipman.database import ClipboardDB
@@ -14,9 +15,10 @@ from clipman.window import ClipmanWindow
 from clipman.dbus_service import ClipmanDBusService
 
 
-class ClipmanApp(Gtk.Application):
+class ClipmanApp(Adw.Application):
     def __init__(self):
-        # Must be called before GTK main loop starts
+        # Must be called before the GTK main loop starts so that any
+        # subsequent dbus.SessionBus() use integrates with GLib.
         dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
         super().__init__(application_id="com.clipman.Clipman")
         self.db = None
@@ -31,10 +33,14 @@ class ClipmanApp(Gtk.Application):
 
         self.db = ClipboardDB()
         self.monitor = ClipboardMonitor(self.db, on_new_entry=self._on_new_entry)
-        self.window = ClipmanWindow(self.db, self.monitor)
-        self.add_window(self.window)
+        # Phase 1 of the GTK 4 + libadwaita port: keyword args only, the
+        # window constructor expects (application, db, monitor) now.
+        self.window = ClipmanWindow(
+            application=self, db=self.db, monitor=self.monitor
+        )
 
-        # Keep the app running even when the window is hidden
+        # Keep the app running even when the window is hidden — the daemon
+        # owns the lifetime of the clipboard monitor + D-Bus service.
         self.hold()
 
         self.dbus_service = ClipmanDBusService(self.window, self, self.monitor)
@@ -59,10 +65,9 @@ class ClipmanApp(Gtk.Application):
     def _update_check_tick(self):
         """Fire an async update check if rate-limit + opt-in allow it.
 
-        Returning ``True`` keeps the recurring 24h timeout alive.
-        The initial 30s-after-startup tick is a one-shot that returns
-        ``False``; both end up here, the GLib bookkeeping is handled
-        per-timeout below.
+        Returning ``True`` keeps the recurring 24h timeout alive. The
+        initial 30s-after-startup tick will also return ``True`` here but
+        is harmless because ``should_check_now`` re-applies the rate limit.
         """
         if self.db is None:
             return False
