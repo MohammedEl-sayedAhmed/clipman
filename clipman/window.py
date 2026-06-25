@@ -899,6 +899,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
                      "sensitive_purged"):
             if self.get_visible():
                 self.refresh()
+        elif key == "backup_failed":
+            self._show_edge_state("backup-failed")
+        elif key == "restore_failed":
+            self._show_edge_state("restore-failed")
 
     def _on_key_pressed(self, _controller, keyval, _keycode, _state):
         if keyval == Gdk.KEY_Escape:
