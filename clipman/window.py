@@ -675,15 +675,40 @@ class ClipmanWindow(Adw.ApplicationWindow):
             logger.debug("wl-copy image fallback failed", exc_info=True)
             return False
 
-    def _simulate_paste(self):
-        """Fire ctrl+v through wtype, falling back to ydotool. Both binaries
-        are common on Wayland sessions; if neither is installed the user
-        still has the entry on their clipboard and can paste manually.
-        """
-        for cmd in (
+    # Per-mode command tables. ``wtype`` and ``ydotool`` use different
+    # key spellings; we keep both so a user without one binary still gets
+    # paste via the other.
+    _PASTE_COMMANDS = {
+        "ctrl-v": [
             ["wtype", "-M", "ctrl", "v"],
             ["ydotool", "key", "ctrl+v"],
-        ):
+        ],
+        "ctrl-shift-v": [
+            ["wtype", "-M", "ctrl", "-M", "shift", "v"],
+            ["ydotool", "key", "ctrl+shift+v"],
+        ],
+        "shift-insert": [
+            ["wtype", "-M", "shift", "-k", "Insert"],
+            ["ydotool", "key", "shift+Insert"],
+        ],
+    }
+
+    def _simulate_paste(self):
+        """Synthesise the user's configured paste keystroke.
+
+        Dispatch order: read ``paste_mode`` from the DB; ``auto`` and
+        ``ctrl-v`` both fire Ctrl+V (auto is the historical default and
+        the most compatible). The other two modes use their respective
+        key sequence tables. If neither wtype nor ydotool is installed
+        we surface ``paste-target-missing`` via the edge state so the
+        user knows to copy manually.
+        """
+        mode = self.db.get_setting("paste_mode", "auto") or "auto"
+        commands = self._PASTE_COMMANDS.get(
+            mode, self._PASTE_COMMANDS["ctrl-v"]
+        )
+        any_binary_available = False
+        for cmd in commands:
             try:
                 subprocess.run(
                     cmd,
@@ -692,9 +717,19 @@ class ClipmanWindow(Adw.ApplicationWindow):
                     timeout=2,
                     check=False,
                 )
+                any_binary_available = True
                 return False
-            except (FileNotFoundError, subprocess.SubprocessError):
+            except FileNotFoundError:
                 continue
+            except subprocess.SubprocessError:
+                any_binary_available = True
+                continue
+        if not any_binary_available:
+            # Neither wtype nor ydotool is installed. Show the popup
+            # again with the dedicated edge state so the user has a
+            # clear next step.
+            self.set_visible(True)
+            self._show_edge_state("paste-target-missing")
         return False
 
     def _paste_entry(self, entry):
