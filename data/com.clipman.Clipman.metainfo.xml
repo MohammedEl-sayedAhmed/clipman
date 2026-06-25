@@ -2,7 +2,7 @@
 <component type="desktop-application">
   <id>com.clipman.Clipman</id>
   <name>Clipman</name>
-  <summary>Clipboard history manager for GNOME on Wayland</summary>
+  <summary>Clipboard history manager for Wayland (GNOME, KDE, Sway, Hyprland)</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
   <developer id="com.github.MohammedEl-sayedAhmed">
@@ -11,7 +11,7 @@
 
   <description>
     <p>
-      Clipman is a clipboard history manager for Ubuntu/GNOME on Wayland.
+      Clipman is a clipboard history manager for Wayland (GNOME, KDE, Sway, Hyprland).
       Press Super+V to view your clipboard history, search entries, pin
       favorites, and instantly paste previous copies — like Windows Win+V,
       but for Linux.
@@ -28,6 +28,9 @@
       <li>Reusable text snippets</li>
       <li>Dark and light themes (Catppuccin)</li>
       <li>Database backup and restore</li>
+      <li>Reusable text snippets with template variables ({{date}}, {{clipboard}})</li>
+      <li>wl-clipboard fallback for non-GNOME compositors (KDE, Sway, Hyprland)</li>
+      <li>15 carefully designed edge states (incognito, sensitive auto-clear, first-run, errors)</li>
       <li>Terminal-aware paste (Ctrl+Shift+V)</li>
     </ul>
   </description>
@@ -46,11 +49,11 @@
 
   <screenshots>
     <screenshot type="default">
-      <image>https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/v1.0.0/docs/dark-theme.png</image>
+      <image>https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/dark-theme.png</image>
       <caption>Clipman dark theme</caption>
     </screenshot>
     <screenshot>
-      <image>https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/v1.0.0/docs/light-theme.png</image>
+      <image>https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/light-theme.png</image>
       <caption>Clipman light theme</caption>
     </screenshot>
   </screenshots>
@@ -67,9 +70,19 @@
   </supports>
 
   <releases>
-    <release version="1.0.4" date="2026-02-28">
+    <release version="1.0.6" date="2026-05-20">
       <description>
-        <p>Fix D-Bus mainloop race that caused toggle to become unresponsive.</p>
+        <p>Catppuccin theme polish, snap-store auto-publish workflow, GTK3 popup stability fixes.</p>
+      </description>
+    </release>
+    <release version="1.0.5" date="2026-05-20">
+      <description>
+        <p>Sensitive-data detection improvements and refreshed Catppuccin palettes.</p>
+      </description>
+    </release>
+    <release version="1.0.4" date="2026-03-07">
+      <description>
+        <p>D-Bus interface tightening and small popup bug fixes.</p>
       </description>
     </release>
     <release version="1.0.3" date="2026-02-24">

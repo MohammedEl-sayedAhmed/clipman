@@ -1,6 +1,6 @@
 name: clipman
 version: '1.0.6'
-summary: Clipboard history manager for Wayland
+summary: Clipboard history for Wayland — like Win+V for Linux
 description: |
   A fast, native clipboard manager for Wayland (GNOME, KDE, Sway,
   Hyprland, and more). Press Super+V to view your clipboard history,
