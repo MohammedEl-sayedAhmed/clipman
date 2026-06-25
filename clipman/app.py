@@ -1,6 +1,8 @@
+import logging
 import os
 import signal
 import dbus
+import dbus.exceptions
 import gi
 import dbus.mainloop.glib
 
@@ -13,6 +15,8 @@ from clipman.database import ClipboardDB
 from clipman.clipboard_monitor import ClipboardMonitor
 from clipman.window import ClipmanWindow
 from clipman.dbus_service import ClipmanDBusService
+
+logger = logging.getLogger(__name__)
 
 
 class ClipmanApp(Adw.Application):
@@ -39,11 +43,28 @@ class ClipmanApp(Adw.Application):
             application=self, db=self.db, monitor=self.monitor
         )
 
+        # Register the D-Bus service BEFORE calling hold() — if another
+        # Clipman daemon is already on the bus, we want to log + quit
+        # cleanly rather than have a held-but-unreachable second daemon
+        # hang around. dbus-python raises NameExistsException when the
+        # well-known bus name is already owned.
+        try:
+            self.dbus_service = ClipmanDBusService(
+                self.window, self, self.monitor
+            )
+        except dbus.exceptions.NameExistsException:
+            logger.warning(
+                "Another Clipman daemon is already running on the "
+                "session bus; exiting."
+            )
+            self.quit()
+            return
+
         # Keep the app running even when the window is hidden — the daemon
         # owns the lifetime of the clipboard monitor + D-Bus service.
+        # Only held *after* dbus_service registration succeeds so a
+        # NameExistsException doesn't leave us in a held-forever state.
         self.hold()
-
-        self.dbus_service = ClipmanDBusService(self.window, self, self.monitor)
 
         # Start wl-paste --watch fallback if GNOME Shell extension absent.
         # Skip in snap: wl-paste cannot monitor the clipboard from within
