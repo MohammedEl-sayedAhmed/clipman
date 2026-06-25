@@ -23,9 +23,10 @@ fi
 # Step 1: Install system dependencies
 echo "[1/6] Installing dependencies..."
 if [ "$PKG_MANAGER" = "apt" ]; then
-    sudo apt install -y wl-clipboard python3-gi python3-dbus gir1.2-gtk-3.0
+    sudo apt install -y wl-clipboard wtype python3-gi python3-dbus \
+        gir1.2-gtk-4.0 gir1.2-adw-1 libadwaita-1-0
 elif [ "$PKG_MANAGER" = "dnf" ]; then
-    sudo dnf install -y wl-clipboard python3-gobject gtk3 python3-dbus
+    sudo dnf install -y wl-clipboard wtype python3-gobject gtk4 libadwaita python3-dbus
 fi
 
 # Step 2: Create data directories

@@ -12,7 +12,7 @@ try:
     import importlib
     importlib.import_module("gi")
 except ImportError:
-    _MISSING.append("python3-gi gir1.2-gtk-3.0")
+    _MISSING.append("python3-gi gir1.2-gtk-4.0 gir1.2-adw-1")
 
 try:
     import dbus
@@ -36,7 +36,41 @@ import dbus.mainloop.glib
 dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
 
 
+_MIN_ADW_MINOR = 4
+
+
+def _preflight_libadwaita():
+    """Refuse to boot when libadwaita is too old.
+
+    The GTK 4 port relies on widgets introduced in libadwaita 1.4
+    (Adw.AboutDialog, Adw.Banner action API, etc.). Fail with a
+    readable error before ClipmanApp tries to construct them — the
+    crash deep inside Gtk would otherwise just print a confusing
+    'no such symbol' from C.
+    """
+    import gi
+    gi.require_version("Adw", "1")
+    from gi.repository import Adw
+    minor = getattr(Adw, "MINOR_VERSION", 0)
+    if minor < _MIN_ADW_MINOR:
+        major = getattr(Adw, "MAJOR_VERSION", 1)
+        micro = getattr(Adw, "MICRO_VERSION", 0)
+        print(
+            f"Error: libadwaita {major}.{minor}.{micro} is too old. "
+            f"Clipman requires libadwaita >= 1.{_MIN_ADW_MINOR}.",
+            file=sys.stderr,
+        )
+        print(
+            "On Ubuntu 24.04+ / Debian trixie this ships as "
+            "libadwaita-1-0; on Fedora 40+ as 'libadwaita'.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
 def main():
+    _preflight_libadwaita()
+
     if len(sys.argv) > 1 and sys.argv[1] == "toggle":
         # Send toggle signal to running daemon via D-Bus
         import dbus

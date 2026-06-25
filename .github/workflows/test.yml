@@ -23,6 +23,13 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
+    env:
+      # Tests/test_window.py reads this: when set to "1" the GTK4 /
+      # libadwaita smoke tests FAIL (instead of skipping) if the
+      # typelibs aren't importable. That keeps a future apt-package
+      # rename from silently turning the GTK4 suite into a no-op on
+      # CI without anyone noticing.
+      CLIPMAN_REQUIRE_GTK4: "1"
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411 # v2.19.4
@@ -43,10 +50,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            gir1.2-gtk-3.0 \
+            wl-clipboard \
+            wtype \
             python3-gi \
             python3-dbus \
-            wl-clipboard \
+            gir1.2-gtk-4.0 \
+            gir1.2-adw-1 \
+            libadwaita-1-0 \
+            xvfb \
             libcairo2-dev \
             libgirepository-2.0-dev || \
           sudo apt-get install -y libgirepository1.0-dev
@@ -55,4 +66,4 @@ jobs:
         run: pip install PyGObject pydbus
 
       - name: Run tests
-        run: python -m unittest discover -s tests
+        run: xvfb-run -a python -m unittest discover -s tests
