@@ -254,12 +254,16 @@ Click the gear icon to open the `Adw.PreferencesWindow`. It carries six panes:
 | | Font size | Text size for entries (8–20px) |
 | | Font color | Default, Green, Peach, Mauve, Pink, or Teal |
 | | Opacity | Window transparency (30%–100%) |
-| **History** | Max history | Number of entries to keep (50–5,000) |
+| **Privacy** | Start in incognito mode | Launch with clipboard recording paused |
+| | Auto-clear delay | Seconds before detected sensitive entries are purged (default 30) |
+| | Purge sensitive entries now | One-tap removal of all stored sensitive entries |
 | **Shortcuts** | Toggle shortcut | Customize the popup-toggle keybinding (default Super+V) via an in-app capture dialog |
 | | Paste mode | How Clipman pastes after copy: **Auto-detect** (default — Ctrl+Shift+V in terminals, Ctrl+V elsewhere), **Ctrl+V**, **Ctrl+Shift+V**, or **Shift+Insert** |
+| **Storage** | Max entries | Number of entries to keep (50–5,000) |
+| | Database location | Path to the SQLite database |
+| | Backup / Restore | Export and import your clipboard database |
 | **Updates** | Check for updates | Toggle the daily anonymous check against GitHub Releases. Default: ON for source / PyPI / AUR, OFF for Snap and Flatpak (they auto-refresh). See [ADR 0007](docs/adr/0007-in-app-update-notifications.md) |
 | | Check now | Manual check button — bypasses the 24h cooldown |
-| **Data** | Backup / Restore | Export and import your clipboard database |
 | **About** | Version + links | Version string (sourced from `clipman/_version.py`), license, homepage, and acknowledgements |
 
 Settings are saved automatically and persist across sessions.
@@ -310,8 +314,8 @@ clipman/
 │   │                              #   no-results, incognito, sensitive-cleared,
 │   │                              #   first-run, errors, …
 │   ├── keybindings.py             # gsettings helpers for Super+V customization
-│   ├── preferences.py             # Adw.PreferencesWindow (Appearance, History,
-│   │                              #   Shortcuts, Updates, Data, About)
+│   ├── preferences.py             # Adw.PreferencesWindow (Appearance, Privacy,
+│   │                              #   Shortcuts, Storage, Updates, About)
 │   ├── snippets_dialog.py         # Adw.NavigationSplitView master-detail editor
 │   ├── updates.py                 # Anonymous update-check against GitHub Releases
 │   ├── window.py                  # Adw.ApplicationWindow + Adw.HeaderBar +

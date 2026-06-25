@@ -27,7 +27,7 @@ The UI tree is libadwaita-first: `clipman/window.py` builds an
 `Adw.ApplicationWindow` with an `Adw.HeaderBar` and an
 `Adw.ActionRow`-driven history list; `clipman/preferences.py` ships
 the settings surface as an `Adw.PreferencesWindow` with six panes
-(Appearance, History, Shortcuts, Updates, Data, About);
+(Appearance, Privacy, Shortcuts, Storage, Updates, About);
 `clipman/snippets_dialog.py` is an `Adw.NavigationSplitView`
 master-detail editor. The 16 declarative edge states from the
 mockups live as `StateSpec` entries in `clipman/edge_states.py` and

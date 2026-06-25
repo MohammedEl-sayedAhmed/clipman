@@ -47,7 +47,7 @@ preferences, and snippets.
     `Adw.HeaderBar` and an `Adw.ActionRow`-driven history list.
   - `clipman/preferences.py` extracts settings out of the popup into
     a dedicated `Adw.PreferencesWindow` with **six panes** —
-    Appearance, History, Shortcuts, Updates, Data, About — replacing
+    Appearance, Privacy, Shortcuts, Storage, Updates, About — replacing
     the cramped inline settings panel from 1.0.x.
   - `clipman/snippets_dialog.py` ships the snippets editor as an
     `Adw.NavigationSplitView` master-detail dialog, with a searchable
