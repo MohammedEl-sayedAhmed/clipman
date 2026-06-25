@@ -7,8 +7,11 @@
  * border overlays use alpha(@..., 0.06) so they read correctly against
  * both light and dark schemes without per-scheme branching.
  *
- * The ${font_size} marker below is substituted at load time via Python
- * string.Template — keep the literal ${...} syntax in this file.
+ * The ${font_size} and ${font_color} markers below are substituted at
+ * load time via Python string.Template — keep the literal ${...} syntax
+ * in this file. ``font_color`` resolves to either a hex string from
+ * ``preferences.FONT_COLOR_PRESETS`` or the libadwaita ``@card_fg_color``
+ * token when the user picked the ``default`` preset.
  */
 
 .clipman-window {
@@ -98,7 +101,7 @@
 
 .clip-row .title {
     font-weight: 500;
-    color: @card_fg_color;
+    color: ${font_color};
 }
 
 .clip-row .subtitle {

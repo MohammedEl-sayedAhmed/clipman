@@ -34,6 +34,11 @@ from gi.repository import Adw, Gdk, GLib, Gtk
 DEFAULT_FONT_SIZE = 12
 DEFAULT_THEME = "dark"
 DEFAULT_SENSITIVE_TIMEOUT = 30
+DEFAULT_FONT_COLOR = "default"
+
+# Fallback CSS token used when the user picked the "default" preset.
+# Keeps the .clip-row .title colour aligned with libadwaita's card fg.
+_DEFAULT_FONT_COLOR_TOKEN = "@card_fg_color"
 
 # Hard-coded per-type accent tints — matched to docs/design/tokens.css.
 # Used to colour the 3px prefix bar on each Adw.ActionRow so users can
@@ -61,9 +66,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._search_query = ""
         self._active_filter = "all"
         self._css_provider = None
+        self._current_edge_banner = None
 
         self.set_title("Clipman")
-        self.set_default_size(380, 540)
+        self.set_default_size(380, self._clamped_default_height())
         self.add_css_class("clipman-window")
 
         # Load persisted settings (only the subset Phase 1 actually uses;
@@ -76,7 +82,15 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._font_size = DEFAULT_FONT_SIZE
 
         saved_theme = self.db.get_setting("theme", DEFAULT_THEME)
-        self._theme = saved_theme if saved_theme in ("dark", "light") else DEFAULT_THEME
+        self._theme = (
+            saved_theme
+            if saved_theme in ("auto", "dark", "light")
+            else DEFAULT_THEME
+        )
+
+        self._font_color = self.db.get_setting(
+            "font_color", DEFAULT_FONT_COLOR
+        ) or DEFAULT_FONT_COLOR
 
         saved_sensitive = self.db.get_setting(
             "sensitive_timeout", str(DEFAULT_SENSITIVE_TIMEOUT)
@@ -98,6 +112,16 @@ class ClipmanWindow(Adw.ApplicationWindow):
         key_ctrl.connect("key-pressed", self._on_key_pressed)
         self.add_controller(key_ctrl)
 
+        # On Wayland the compositor delivers ``close-request`` when the
+        # user clicks outside the popup or hits the compositor close
+        # gesture. We want the popup to hide rather than destroy so the
+        # daemon can re-show it on the next D-Bus Toggle without
+        # reconstructing the entire widget tree.
+        self.connect(
+            "close-request",
+            lambda _w: (self.set_visible(False), True)[1],
+        )
+
         # Sensitive-entry purge loop — kept identical to the GTK 3 version.
         GLib.timeout_add_seconds(10, self._cleanup_sensitive)
 
@@ -106,25 +130,41 @@ class ClipmanWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _apply_theme(self):
-        scheme = (
-            Adw.ColorScheme.FORCE_DARK
-            if self._theme == "dark"
-            else Adw.ColorScheme.FORCE_LIGHT
-        )
+        scheme = {
+            "auto": Adw.ColorScheme.DEFAULT,
+            "dark": Adw.ColorScheme.FORCE_DARK,
+            "light": Adw.ColorScheme.FORCE_LIGHT,
+        }.get(self._theme, Adw.ColorScheme.FORCE_DARK)
         Adw.StyleManager.get_default().set_color_scheme(scheme)
 
+    def _resolve_font_color(self):
+        """Translate the ``font_color`` preset id to a CSS colour value.
+
+        ``FONT_COLOR_PRESETS`` lives in ``preferences.py``; we import it
+        lazily because ``preferences`` pulls in Adw at module scope and
+        we want ``window.py`` importable for headless tests.
+        """
+        from clipman.preferences import FONT_COLOR_PRESETS
+
+        for preset_id, hex_value, _tooltip in FONT_COLOR_PRESETS:
+            if preset_id == self._font_color and hex_value:
+                return hex_value
+        return _DEFAULT_FONT_COLOR_TOKEN
+
     def _apply_css(self):
-        """Inject ``style.css`` with a Python ``string.Template`` font-size
-        substitution. The template uses ``${font_size}`` so the same file
-        works for the current 12px default and for whatever the Phase 2
-        preferences window will let users pick.
+        """Inject ``style.css`` with Python ``string.Template`` substitutions.
+
+        The template exposes ``${font_size}`` and ``${font_color}`` so
+        font size and the .clip-row title colour both hot-reload from
+        the preferences window without touching the .css file on disk.
         """
         css_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "style.css"
         )
         with open(css_path, "r", encoding="utf-8") as f:
             css_string = Template(f.read()).safe_substitute(
-                font_size=str(self._font_size)
+                font_size=str(self._font_size),
+                font_color=self._resolve_font_color(),
             )
 
         display = Gdk.Display.get_default()
@@ -133,7 +173,17 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 display, self._css_provider
             )
         self._css_provider = Gtk.CssProvider()
-        self._css_provider.load_from_data(css_string, -1)
+        # ``load_from_data`` is binding-typed as ``bytes`` on older PyGObject
+        # — passing a Python ``str`` raises ``TypeError`` before the popup
+        # finishes building. Adw 4.12+ ships ``load_from_string`` which
+        # accepts ``str`` directly; fall back to the bytes form everywhere
+        # else.
+        if hasattr(self._css_provider, "load_from_string"):
+            self._css_provider.load_from_string(css_string)
+        else:
+            self._css_provider.load_from_data(
+                css_string.encode("utf-8"), -1
+            )
         Gtk.StyleContext.add_provider_for_display(
             display,
             self._css_provider,
@@ -151,6 +201,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # -- Header bar (incognito start, prefs end) -----------------------
         header = Adw.HeaderBar()
         header.set_title_widget(Gtk.Label(label="Clipman"))
+        # The popup is its own GtkApplicationWindow but doubles as a
+        # transient overlay — title-bar controls (close / minimise /
+        # maximise) clash with the close-on-Escape interaction model.
+        header.set_show_start_title_buttons(False)
+        header.set_show_end_title_buttons(False)
 
         self._incognito_btn = Gtk.ToggleButton()
         self._incognito_btn.set_icon_name("view-conceal-symbolic")
@@ -186,6 +241,16 @@ class ClipmanWindow(Adw.ApplicationWindow):
             "button-clicked", self._on_update_banner_clicked
         )
         root.append(self._update_banner)
+
+        # -- Edge-state banner slot ---------------------------------------
+        # Banner-kind edge states (incognito-on, paused, sensitive-shown,
+        # sensitive-cleared, network-error, history-too-large) mount
+        # here rather than into ``_empty_slot`` so the list stays
+        # visible underneath them.
+        self._edge_banner_slot = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=0
+        )
+        root.append(self._edge_banner_slot)
 
         # -- Search entry --------------------------------------------------
         search_box = Gtk.Box(
@@ -278,10 +343,13 @@ class ClipmanWindow(Adw.ApplicationWindow):
         root.append(footer)
 
     # ------------------------------------------------------------------
-    # Compatibility shim for dbus_service.Show() — GTK 4 widgets are
-    # visible by default, so ``show_all`` is just ``set_visible(True)``.
-    # Kept here so the existing dbus_service.py keeps resolving against
-    # the window object without modification.
+    # Compatibility shim for dbus_service.Show().
+    #
+    # In GTK 4 widgets are visible by default and ``Gtk.Widget.show_all``
+    # no longer exists. We keep a small forwarding method here so the
+    # existing dbus_service module — which still calls ``show_all()``
+    # — resolves against the window object without needing changes from
+    # this commit. Once dbus_service migrates, this can be deleted.
     # ------------------------------------------------------------------
 
     def show_all(self):
@@ -341,27 +409,108 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """
         from clipman.edge_states import render_edge_state
 
-        widget = render_edge_state(state_id, parent_window=self)
-        # Clear the previous widget from the slot.
+        widget = render_edge_state(
+            state_id, parent_window=self, on_action=self._on_edge_action
+        )
+        spec = getattr(widget, "state_spec", None)
+        kind = spec.kind if spec is not None else "statuspage"
+
+        # AlertDialog presents itself modally; nothing to mount.
+        if kind == "alertdialog":
+            widget.present(self)
+            self._list_stack.set_visible_child_name("list")
+            return
+
+        # Banner-kind states use the dedicated banner slot above the
+        # list, so they stack alongside (rather than replace) the clip
+        # list. StatusPage states still take over the empty slot.
+        if kind == "banner":
+            self._mount_edge_banner(widget)
+            return
+
+        # Clear any previous statuspage widget from the empty slot.
         if self._current_edge_widget is not None:
             self._empty_slot.remove(self._current_edge_widget)
             self._current_edge_widget = None
-        # Banner / AlertDialog don't compose into the empty slot the same
-        # way a StatusPage does. The current spec set only puts
-        # StatusPages in the empty slot, but if a future state is a
-        # Banner we drop it in directly; AlertDialog presents itself.
-        spec = getattr(widget, "state_spec", None)
-        kind = spec.kind if spec is not None else "statuspage"
-        if kind == "alertdialog":
-            widget.present(self)
-            # Fall back to the populated list view — the dialog is modal
-            # on top of whatever was previously shown.
-            self._list_stack.set_visible_child_name("list")
-            return
         widget.set_vexpand(True)
         self._empty_slot.append(widget)
         self._current_edge_widget = widget
         self._list_stack.set_visible_child_name("empty")
+
+    def _mount_edge_banner(self, banner):
+        """Drop a rendered ``Adw.Banner`` into the dedicated edge slot.
+
+        Replaces any banner already mounted there so two banners never
+        stack (e.g. ``paused`` then ``incognito-on``).
+        """
+        if self._current_edge_banner is not None:
+            self._edge_banner_slot.remove(self._current_edge_banner)
+            self._current_edge_banner = None
+        self._edge_banner_slot.append(banner)
+        self._current_edge_banner = banner
+
+    def _on_edge_action(self, action_id):
+        """Dispatch the ``action_id`` strings declared in ``edge_states.py``.
+
+        Anything unrecognised is logged at warning level so missing
+        wiring is visible during development but the popup keeps
+        running.
+        """
+        if action_id == "clear-search":
+            self.search_entry.set_text("")
+            self._search_query = ""
+            self.refresh()
+        elif action_id == "open-snippets-dialog":
+            self._on_snippets_clicked(None)
+        elif action_id in (
+            "open-prefs-appearance",
+            "open-prefs-privacy",
+            "open-prefs-storage",
+            "open-prefs-shortcuts",
+            "open-prefs-updates",
+        ):
+            self._on_prefs_clicked(None)
+        elif action_id == "open-extensions-page":
+            self._open_url(
+                "https://extensions.gnome.org/extension/9407/clipman/"
+            )
+        elif action_id == "retry-network":
+            self.refresh_update_banner()
+        elif action_id == "retry-restore":
+            # Re-issue the restore flow via preferences; the actual
+            # restore happens there, this just brings the user back.
+            self._on_prefs_clicked(None)
+        elif action_id == "resume-recording":
+            if self.monitor is not None:
+                self.monitor.set_incognito(False)
+            self._incognito_btn.set_active(False)
+            self._dismiss_edge_banner()
+        elif action_id == "pause-recording":
+            if self.monitor is not None:
+                self.monitor.set_incognito(True)
+            self._incognito_btn.set_active(True)
+        elif action_id == "dismiss-banner":
+            self._dismiss_edge_banner()
+        elif action_id == "close-dialog":
+            # AlertDialog handles its own close; no extra work needed.
+            pass
+        else:
+            logger.warning("unhandled edge-state action_id: %r", action_id)
+
+    def _dismiss_edge_banner(self):
+        if self._current_edge_banner is not None:
+            self._edge_banner_slot.remove(self._current_edge_banner)
+            self._current_edge_banner = None
+
+    def _open_url(self, url):
+        try:
+            subprocess.Popen(
+                ["xdg-open", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            logger.debug("xdg-open failed for %s", url, exc_info=True)
 
     def _make_entry_row(self, entry):
         ctype = entry.get("content_type") or "text"
@@ -389,6 +538,29 @@ class ClipmanWindow(Adw.ApplicationWindow):
         bar.set_size_request(3, -1)
         bar.set_valign(Gtk.Align.FILL)
         row.add_prefix(bar)
+
+        # Image entries get a 32x32 thumbnail so users can scan the list
+        # visually instead of relying on the literal ``[Image]`` title.
+        if ctype == "image":
+            image_path = entry.get("image_path")
+            from clipman.database import _safe_image_path
+
+            if image_path and _safe_image_path(image_path):
+                try:
+                    texture = Gdk.Texture.new_from_filename(image_path)
+                    thumb = Gtk.Picture.new_for_paintable(texture)
+                    thumb.set_can_shrink(True)
+                    thumb.set_content_fit(Gtk.ContentFit.COVER)
+                    thumb.set_size_request(32, 32)
+                    thumb.set_valign(Gtk.Align.CENTER)
+                    thumb.add_css_class("clip-thumb")
+                    row.add_prefix(thumb)
+                except Exception:
+                    # Corrupt file or unsupported format — fall back to
+                    # the bare ``[Image]`` label rather than crashing.
+                    logger.debug(
+                        "thumbnail failed for %r", image_path, exc_info=True
+                    )
 
         pin_btn = Gtk.Button.new_from_icon_name(
             "starred-symbolic" if entry["pinned"]
@@ -449,20 +621,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def _on_update_banner_clicked(self, _banner):
         latest = updates.latest_known(self.db) or __version__
-        url = (
+        self._open_url(
             f"https://github.com/MohammedEl-sayedAhmed/clipman/"
             f"releases/tag/v{latest}"
         )
-        try:
-            subprocess.Popen(
-                ["xdg-open", url],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except OSError:
-            # xdg-open isn't installed or the URL handler is broken;
-            # log for diagnostics but don't break the popup.
-            logger.debug("xdg-open failed for %s", url, exc_info=True)
 
     # ------------------------------------------------------------------
     # Paste path — GTK 4 clipboard API with wl-copy + wtype/ydotool fallback
@@ -492,15 +654,79 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 # requests but don't surface a popup error.
                 logger.debug("wl-copy fallback failed", exc_info=True)
 
-    def _simulate_paste(self):
-        """Fire ctrl+v through wtype, falling back to ydotool. Both binaries
-        are common on Wayland sessions; if neither is installed the user
-        still has the entry on their clipboard and can paste manually.
+    def _copy_image_to_clipboard(self, image_path):
+        """Push an image file at ``image_path`` onto the system clipboard.
+
+        ``image_path`` must have already passed ``database._safe_image_path``
+        — we re-check defensively here so a poisoned DB row can't reach
+        ``Gdk.Texture.new_from_filename`` with a path outside ``IMAGES_DIR``.
+        Returns ``True`` on success so callers know whether to simulate
+        a paste.
         """
-        for cmd in (
+        from clipman.database import _safe_image_path
+
+        if not image_path or not _safe_image_path(image_path):
+            logger.debug("refusing image with unsafe path: %r", image_path)
+            return False
+        if self.monitor:
+            self.monitor.set_self_copy(True)
+        try:
+            texture = Gdk.Texture.new_from_filename(image_path)
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.set_texture(texture)
+            return True
+        except Exception:
+            logger.debug(
+                "Gdk.Texture clipboard set failed; trying wl-copy fallback",
+                exc_info=True,
+            )
+        try:
+            with open(image_path, "rb") as fh:
+                proc = subprocess.Popen(
+                    ["wl-copy", "--type", "image/png"],
+                    stdin=fh,
+                    stderr=subprocess.DEVNULL,
+                )
+                proc.communicate()
+            return proc.returncode == 0
+        except OSError:
+            logger.debug("wl-copy image fallback failed", exc_info=True)
+            return False
+
+    # Per-mode command tables. ``wtype`` and ``ydotool`` use different
+    # key spellings; we keep both so a user without one binary still gets
+    # paste via the other.
+    _PASTE_COMMANDS = {
+        "ctrl-v": [
             ["wtype", "-M", "ctrl", "v"],
             ["ydotool", "key", "ctrl+v"],
-        ):
+        ],
+        "ctrl-shift-v": [
+            ["wtype", "-M", "ctrl", "-M", "shift", "v"],
+            ["ydotool", "key", "ctrl+shift+v"],
+        ],
+        "shift-insert": [
+            ["wtype", "-M", "shift", "-k", "Insert"],
+            ["ydotool", "key", "shift+Insert"],
+        ],
+    }
+
+    def _simulate_paste(self):
+        """Synthesise the user's configured paste keystroke.
+
+        Dispatch order: read ``paste_mode`` from the DB; ``auto`` and
+        ``ctrl-v`` both fire Ctrl+V (auto is the historical default and
+        the most compatible). The other two modes use their respective
+        key sequence tables. If neither wtype nor ydotool is installed
+        we surface ``paste-target-missing`` via the edge state so the
+        user knows to copy manually.
+        """
+        mode = self.db.get_setting("paste_mode", "auto") or "auto"
+        commands = self._PASTE_COMMANDS.get(
+            mode, self._PASTE_COMMANDS["ctrl-v"]
+        )
+        any_binary_available = False
+        for cmd in commands:
             try:
                 subprocess.run(
                     cmd,
@@ -509,16 +735,34 @@ class ClipmanWindow(Adw.ApplicationWindow):
                     timeout=2,
                     check=False,
                 )
+                any_binary_available = True
                 return False
-            except (FileNotFoundError, subprocess.SubprocessError):
+            except FileNotFoundError:
                 continue
+            except subprocess.SubprocessError:
+                any_binary_available = True
+                continue
+        if not any_binary_available:
+            # Neither wtype nor ydotool is installed. Show the popup
+            # again with the dedicated edge state so the user has a
+            # clear next step.
+            self.set_visible(True)
+            self._show_edge_state("paste-target-missing")
         return False
 
     def _paste_entry(self, entry):
-        text = entry.get("content_text") or ""
-        if not text:
-            return
-        self._copy_to_clipboard(text)
+        ctype = entry.get("content_type") or "text"
+        if ctype == "image":
+            image_path = entry.get("image_path")
+            if not self._copy_image_to_clipboard(image_path):
+                # Couldn't load the image — leave the popup open so the
+                # user notices the failure rather than silently swallowing.
+                return
+        else:
+            text = entry.get("content_text") or ""
+            if not text:
+                return
+            self._copy_to_clipboard(text)
         if entry.get("id"):
             self.db.update_accessed(entry["id"])
         self.set_visible(False)
@@ -528,9 +772,31 @@ class ClipmanWindow(Adw.ApplicationWindow):
         text = snippet.get("content_text") or ""
         if not text:
             return
+        text = self._expand_snippet_tokens(text)
         self._copy_to_clipboard(text)
         self.set_visible(False)
         GLib.timeout_add(80, self._simulate_paste)
+
+    def _expand_snippet_tokens(self, text):
+        """Substitute ``${date}``, ``${time}``, ``${clipboard}`` tokens.
+
+        ``${clipboard}`` resolves to the most-recent text entry from the
+        clipboard history — useful for snippets that wrap whatever the
+        user just copied (e.g. ``> ${clipboard}`` for quoting).
+        """
+        recent = ""
+        try:
+            entries = self.db.get_entries(limit=1)
+            if entries:
+                recent = entries[0].get("content_text") or ""
+        except Exception:
+            logger.debug("get_entries failed for ${clipboard} expansion",
+                         exc_info=True)
+        return Template(text).safe_substitute(
+            date=time.strftime("%Y-%m-%d"),
+            time=time.strftime("%H:%M"),
+            clipboard=recent,
+        )
 
     # ------------------------------------------------------------------
     # Signal handlers
@@ -602,13 +868,18 @@ class ClipmanWindow(Adw.ApplicationWindow):
         next launch (e.g. ``incognito_on_launch``).
         """
         if key == "theme":
-            self._theme = value if value in ("dark", "light") else "dark"
+            self._theme = (
+                value if value in ("auto", "dark", "light") else DEFAULT_THEME
+            )
             self._apply_theme()
         elif key == "font_size":
             try:
                 self._font_size = max(8, min(20, int(value)))
             except (TypeError, ValueError):
                 self._font_size = DEFAULT_FONT_SIZE
+            self._apply_css()
+        elif key == "font_color":
+            self._font_color = value or DEFAULT_FONT_COLOR
             self._apply_css()
         elif key == "opacity":
             try:
@@ -628,6 +899,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
                      "sensitive_purged"):
             if self.get_visible():
                 self.refresh()
+        elif key == "backup_failed":
+            self._show_edge_state("backup-failed")
+        elif key == "restore_failed":
+            self._show_edge_state("restore-failed")
 
     def _on_key_pressed(self, _controller, keyval, _keycode, _state):
         if keyval == Gdk.KEY_Escape:
@@ -651,6 +926,31 @@ class ClipmanWindow(Adw.ApplicationWindow):
             return _("{n}h ago").format(n=hours)
         days = int(diff / 86400)
         return _("{n}d ago").format(n=days)
+
+    def _clamped_default_height(self):
+        """Pick a sensible default popup height for the current monitor.
+
+        Uses the primary monitor's geometry and caps at 60% of its
+        height, with 540 as the upper bound. Falls back to 540 if the
+        monitor metadata isn't queryable (offscreen / headless CI).
+        """
+        default = 540
+        try:
+            display = Gdk.Display.get_default()
+            if display is None:
+                return default
+            monitors = display.get_monitors()
+            monitor = monitors.get_item(0) if monitors is not None else None
+            if monitor is None:
+                return default
+            geom = monitor.get_geometry()
+            return min(default, int(0.6 * geom.height))
+        except Exception:
+            logger.debug(
+                "monitor geometry unavailable; using default popup height",
+                exc_info=True,
+            )
+            return default
 
     def _cleanup_sensitive(self):
         deleted = self.db.delete_expired_sensitive(self._sensitive_timeout)
