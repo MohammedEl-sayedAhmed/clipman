@@ -19,9 +19,11 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MohammedEl-sayedAhmed/clipman"
+Homepage = "https://mohammedel-sayedahmed.github.io/clipman/"
+Documentation = "https://mohammedel-sayedahmed.github.io/clipman/"
 Repository = "https://github.com/MohammedEl-sayedAhmed/clipman"
 Issues = "https://github.com/MohammedEl-sayedAhmed/clipman/issues"
+Sponsor = "https://github.com/sponsors/MohammedEl-sayedAhmed"
 
 [project.scripts]
 clipman = "clipman.clipman:main"
