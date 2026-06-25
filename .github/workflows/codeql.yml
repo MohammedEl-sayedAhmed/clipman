@@ -286,6 +286,13 @@ jobs:
         env:
           GH_COMMIT_AUTHOR: github-actions[bot]
           GH_COMMIT_EMAIL: github-actions[bot]@users.noreply.github.com
+          # Pass head-commit message through env, NEVER interpolate it
+          # directly into the shell script. The squash-merge body can
+          # contain arbitrary text (CSS snippets, backticks, `$(...)`,
+          # quotes); direct ${{ }} expansion would tokenise it as shell
+          # commands — broken job AND a classic Actions script-injection
+          # vector. Read it as $HEAD_COMMIT_SUBJECT below instead.
+          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           if git diff --quiet .github/security-baseline.json; then
             echo "Baseline unchanged; nothing to push."
@@ -294,9 +301,10 @@ jobs:
           git config user.name "$GH_COMMIT_AUTHOR"
           git config user.email "$GH_COMMIT_EMAIL"
           git add .github/security-baseline.json
-          git commit -m "chore(baseline): refresh from main @ ${GITHUB_SHA::7}
-
-          Auto-updated by codeql.yml update-baseline job after the
-          merge of ${{ github.event.head_commit.message }}.
-          "
+          # Take only the subject (first line) of the triggering commit
+          # so the trailer stays one line and never re-introduces multi-
+          # paragraph bodies into this commit message.
+          head_subject="${HEAD_COMMIT_MESSAGE%%$'\n'*}"
+          git commit -m "chore(baseline): refresh from main @ ${GITHUB_SHA::7}" \
+                     -m "Auto-updated by codeql.yml update-baseline job after the merge of: ${head_subject}"
           git push origin HEAD:security-baseline
