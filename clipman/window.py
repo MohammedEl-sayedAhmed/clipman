@@ -754,9 +754,31 @@ class ClipmanWindow(Adw.ApplicationWindow):
         text = snippet.get("content_text") or ""
         if not text:
             return
+        text = self._expand_snippet_tokens(text)
         self._copy_to_clipboard(text)
         self.set_visible(False)
         GLib.timeout_add(80, self._simulate_paste)
+
+    def _expand_snippet_tokens(self, text):
+        """Substitute ``${date}``, ``${time}``, ``${clipboard}`` tokens.
+
+        ``${clipboard}`` resolves to the most-recent text entry from the
+        clipboard history — useful for snippets that wrap whatever the
+        user just copied (e.g. ``> ${clipboard}`` for quoting).
+        """
+        recent = ""
+        try:
+            entries = self.db.get_entries(limit=1)
+            if entries:
+                recent = entries[0].get("content_text") or ""
+        except Exception:
+            logger.debug("get_entries failed for ${clipboard} expansion",
+                         exc_info=True)
+        return Template(text).safe_substitute(
+            date=time.strftime("%Y-%m-%d"),
+            time=time.strftime("%H:%M"),
+            clipboard=recent,
+        )
 
     # ------------------------------------------------------------------
     # Signal handlers
