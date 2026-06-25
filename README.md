@@ -12,7 +12,7 @@ Like Windows `Win+V` — but for Linux.
 [![Tests](https://img.shields.io/github/actions/workflow/status/MohammedEl-sayedAhmed/clipman/test.yml?branch=main&label=tests)](https://github.com/MohammedEl-sayedAhmed/clipman/actions)
 [![GitHub Stars](https://img.shields.io/github/stars/MohammedEl-sayedAhmed/clipman?style=flat&logo=github&label=Stars)](https://github.com/MohammedEl-sayedAhmed/clipman/stargazers)
 [![GitHub Downloads](https://img.shields.io/github/downloads/MohammedEl-sayedAhmed/clipman/total?logo=github&label=Downloads)](https://github.com/MohammedEl-sayedAhmed/clipman/releases)
-[![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04+-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com)
+[![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04+-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com)
 [![GNOME](https://img.shields.io/badge/GNOME-46--48-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
 [![Wayland](https://img.shields.io/badge/Wayland-native-yellow)](https://wayland.freedesktop.org)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
