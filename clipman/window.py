@@ -77,7 +77,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._font_size = DEFAULT_FONT_SIZE
 
         saved_theme = self.db.get_setting("theme", DEFAULT_THEME)
-        self._theme = saved_theme if saved_theme in ("dark", "light") else DEFAULT_THEME
+        self._theme = (
+            saved_theme
+            if saved_theme in ("auto", "dark", "light")
+            else DEFAULT_THEME
+        )
 
         saved_sensitive = self.db.get_setting(
             "sensitive_timeout", str(DEFAULT_SENSITIVE_TIMEOUT)
@@ -107,11 +111,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _apply_theme(self):
-        scheme = (
-            Adw.ColorScheme.FORCE_DARK
-            if self._theme == "dark"
-            else Adw.ColorScheme.FORCE_LIGHT
-        )
+        scheme = {
+            "auto": Adw.ColorScheme.DEFAULT,
+            "dark": Adw.ColorScheme.FORCE_DARK,
+            "light": Adw.ColorScheme.FORCE_LIGHT,
+        }.get(self._theme, Adw.ColorScheme.FORCE_DARK)
         Adw.StyleManager.get_default().set_color_scheme(scheme)
 
     def _apply_css(self):
@@ -764,7 +768,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
         next launch (e.g. ``incognito_on_launch``).
         """
         if key == "theme":
-            self._theme = value if value in ("dark", "light") else "dark"
+            self._theme = (
+                value if value in ("auto", "dark", "light") else DEFAULT_THEME
+            )
             self._apply_theme()
         elif key == "font_size":
             try:
