@@ -479,6 +479,10 @@
                 position: static;
                 margin: 0 auto 12px;
             }
+            .theme-toggle button {
+                min-height: 36px;
+                padding: 8px 14px;
+            }
             .prefs-window {
                 width: 100%;
                 max-width: 100%;
@@ -509,6 +513,39 @@
             .prefs-content {
                 padding: 16px;
             }
+            /* Rows: stack label-and-control vertically so neither side gets
+               squeezed below readability (sliders need ~200px, segmented
+               control with 3 buttons needs ~210px, both wider than the
+               1fr column that's left after the auto track on a 320px
+               viewport). */
+            .row {
+                grid-template-columns: 1fr;
+                gap: 10px;
+                align-items: flex-start;
+                padding: 12px;
+            }
+            /* Push the control flush left under the label and let it grow. */
+            .row .switch,
+            .row .combo,
+            .row .segmented,
+            .row .slider-wrap,
+            .row .swatches,
+            .row .kbd-group,
+            .row .btn {
+                justify-self: stretch;
+            }
+            .slider-wrap { min-width: 0; width: 100%; }
+            .segmented { flex-wrap: wrap; }
+            .swatches { flex-wrap: wrap; }
+            /* About-pane stats: 4 stats on one line is too tight; grid-2. */
+            .stats {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: var(--space-3);
+            }
+        }
+        @media (max-width: 360px) {
+            .theme-toggle > span { display: none; }
         }
     </style>
 <script src="theme.js" defer></script>
