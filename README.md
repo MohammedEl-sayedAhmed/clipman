@@ -223,17 +223,6 @@ Or with paru: `paru -S clipman-clipboard`
 
 </details>
 
-<details>
-<summary><strong>Flatpak / Flathub</strong> (not currently published)</summary>
-
-Clipman is **not** currently published on Flathub and there is no
-submission in flight. A reference manifest is kept at
-`flathub/io.github.MohammedEl_sayedAhmed.Clipman.json` so that a future
-submission has somewhere to start, but it should not be treated as a
-released channel.
-
-</details>
-
 ## Usage
 
 | Action | How |
@@ -337,8 +326,6 @@ clipman/
 │   └── light-theme.png            # Screenshot (light theme)
 ├── snap/
 │   └── snapcraft.yaml             # Snap packaging
-├── flathub/
-│   └── io.github.MohammedEl_sayedAhmed.Clipman.json  # Flathub manifest
 ├── aur/
 │   └── PKGBUILD                   # AUR packaging
 ├── scripts/

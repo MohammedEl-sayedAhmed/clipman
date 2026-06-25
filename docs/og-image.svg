@@ -1,0 +1,213 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="og-title og-desc" font-family="Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <title id="og-title">Clipman — Clip once. Paste forever.</title>
+  <desc id="og-desc">Open Graph preview for Clipman, a Wayland-native clipboard history manager. Wordmark and tagline on the left; a mock of the Clipman popup window on the right. Catppuccin Mocha palette.</desc>
+
+  <defs>
+    <!-- Subtle dot grid for canvas texture -->
+    <pattern id="dotGrid" x="0" y="0" width="24" height="24" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1" fill="#cdd6f4" fill-opacity="0.045"/>
+    </pattern>
+  </defs>
+
+  <!-- Canvas background -->
+  <rect width="1200" height="630" fill="#181825"/>
+  <rect width="1200" height="630" fill="url(#dotGrid)"/>
+
+  <!-- ============================================================ -->
+  <!-- LEFT COLUMN: wordmark + tagline + badges                     -->
+  <!-- ============================================================ -->
+  <g transform="translate(48, 0)">
+    <!-- Small mono caps label -->
+    <text x="0" y="148"
+          font-family="ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+          font-size="18" font-weight="600" letter-spacing="3.5"
+          fill="#a6adc8">WAYLAND-NATIVE CLIPBOARD HISTORY</text>
+
+    <!-- Wordmark -->
+    <text x="-6" y="296"
+          font-size="160" font-weight="800" letter-spacing="-5"
+          fill="#cdd6f4">Clipman</text>
+
+    <!-- Tagline (two parts: white + mauve accent) -->
+    <text x="0" y="386"
+          font-size="56" font-weight="600" letter-spacing="-1"
+          fill="#cdd6f4">Clip once.  <tspan fill="#cba6f7">Paste forever.</tspan></text>
+
+    <!-- Badge row -->
+    <g transform="translate(0, 470)">
+      <!-- Badge 1: Super+V -->
+      <g>
+        <rect x="0" y="0" width="138" height="44" rx="22"
+              fill="#1e1e2e" stroke="#313244" stroke-width="1.5"/>
+        <circle cx="22" cy="22" r="5" fill="#89b4fa"/>
+        <text x="40" y="29"
+              font-family="ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+              font-size="17" font-weight="600" fill="#cdd6f4">Super+V</text>
+      </g>
+
+      <!-- Badge 2: Wayland-native -->
+      <g transform="translate(154, 0)">
+        <rect x="0" y="0" width="196" height="44" rx="22"
+              fill="#1e1e2e" stroke="#313244" stroke-width="1.5"/>
+        <circle cx="22" cy="22" r="5" fill="#cba6f7"/>
+        <text x="40" y="29"
+              font-size="17" font-weight="600" fill="#cdd6f4">Wayland-native</text>
+      </g>
+
+      <!-- Badge 3: Apache-2.0 -->
+      <g transform="translate(366, 0)">
+        <rect x="0" y="0" width="152" height="44" rx="22"
+              fill="#1e1e2e" stroke="#313244" stroke-width="1.5"/>
+        <circle cx="22" cy="22" r="5" fill="#a6e3a1"/>
+        <text x="40" y="29"
+              font-family="ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+              font-size="17" font-weight="600" fill="#cdd6f4">Apache-2.0</text>
+      </g>
+    </g>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- RIGHT COLUMN: popup window mock                              -->
+  <!-- 420 wide x 500 tall, centered vertically in right half       -->
+  <!-- Right column starts at x=640, padded 48 from right edge      -->
+  <!-- frame x = 1200 - 48 - 420 = 732                              -->
+  <!-- frame y = (630 - 500) / 2 = 65                               -->
+  <!-- ============================================================ -->
+  <g transform="translate(732, 65)">
+    <!-- Subtle outer shadow plate -->
+    <rect x="6" y="10" width="420" height="500" rx="20"
+          fill="#000000" fill-opacity="0.35"/>
+
+    <!-- Window frame -->
+    <rect x="0" y="0" width="420" height="500" rx="20"
+          fill="#1e1e2e" stroke="#313244" stroke-width="1.5"/>
+
+    <!-- ============= HeaderBar ============= -->
+    <g>
+      <!-- Header background -->
+      <path d="M 0 20 Q 0 0 20 0 L 400 0 Q 420 0 420 20 L 420 64 L 0 64 Z"
+            fill="#11111b"/>
+      <line x1="0" y1="64" x2="420" y2="64" stroke="#313244" stroke-width="1"/>
+
+      <!-- Brand: dot + name -->
+      <g transform="translate(20, 32)">
+        <!-- Mauve brand dot with lavender inner -->
+        <circle cx="0" cy="0" r="9" fill="#cba6f7"/>
+        <circle cx="0" cy="0" r="4" fill="#b4befe"/>
+        <text x="20" y="6"
+              font-size="17" font-weight="700" letter-spacing="-0.3"
+              fill="#cdd6f4">Clipman</text>
+      </g>
+
+      <!-- Window controls (right side) -->
+      <g transform="translate(380, 32)">
+        <circle cx="0" cy="0" r="6" fill="#45475a"/>
+        <circle cx="-22" cy="0" r="6" fill="#45475a"/>
+      </g>
+    </g>
+
+    <!-- ============= Search bar ============= -->
+    <g transform="translate(20, 84)">
+      <rect x="0" y="0" width="380" height="40" rx="10"
+            fill="#181825" stroke="#313244" stroke-width="1"/>
+      <!-- Magnifier icon -->
+      <g transform="translate(14, 20)" stroke="#a6adc8" stroke-width="1.8" fill="none" stroke-linecap="round">
+        <circle cx="0" cy="0" r="5"/>
+        <line x1="4" y1="4" x2="8" y2="8"/>
+      </g>
+      <text x="36" y="26"
+            font-size="14" fill="#6c7086">Search clipboard…</text>
+    </g>
+
+    <!-- ============= Filter pills ============= -->
+    <g transform="translate(20, 140)">
+      <!-- All (active) -->
+      <g>
+        <rect x="0" y="0" width="62" height="30" rx="15"
+              fill="#cba6f7" fill-opacity="0.18"
+              stroke="#cba6f7" stroke-width="1.2"/>
+        <text x="31" y="20" text-anchor="middle"
+              font-size="13" font-weight="600" fill="#cba6f7">All</text>
+      </g>
+      <!-- Snippets -->
+      <g transform="translate(72, 0)">
+        <rect x="0" y="0" width="94" height="30" rx="15"
+              fill="#181825" stroke="#313244" stroke-width="1"/>
+        <text x="47" y="20" text-anchor="middle"
+              font-size="13" font-weight="600" fill="#a6adc8">Snippets</text>
+      </g>
+    </g>
+
+    <!-- ============= Clip rows ============= -->
+    <!-- Row 1: Selected (mauve accent border) -->
+    <g transform="translate(20, 188)">
+      <rect x="0" y="0" width="380" height="86" rx="12"
+            fill="#cba6f7" fill-opacity="0.10"
+            stroke="#cba6f7" stroke-width="1.5"/>
+      <!-- Type indicator -->
+      <rect x="14" y="14" width="4" height="58" rx="2" fill="#cba6f7"/>
+      <!-- Primary text -->
+      <text x="28" y="32"
+            font-size="14" font-weight="600" fill="#cdd6f4">https://github.com/MohammedEl-sayedAhmed/clipman</text>
+      <!-- Secondary text -->
+      <text x="28" y="52"
+            font-family="ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+            font-size="12" fill="#a6adc8">URL · 42 chars</text>
+      <!-- Meta footer -->
+      <text x="28" y="74"
+            font-size="11" fill="#6c7086">2 minutes ago</text>
+      <!-- Pin indicator (right) -->
+      <g transform="translate(354, 22)">
+        <circle cx="0" cy="0" r="9" fill="#cba6f7" fill-opacity="0.25"/>
+        <path d="M 0 -4 L 0 4 M -3 -1 L 3 -1" stroke="#cba6f7" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+      </g>
+    </g>
+
+    <!-- Row 2 -->
+    <g transform="translate(20, 286)">
+      <rect x="0" y="0" width="380" height="64" rx="12"
+            fill="#181825" stroke="#313244" stroke-width="1"/>
+      <rect x="14" y="14" width="4" height="36" rx="2" fill="#89b4fa"/>
+      <text x="28" y="30"
+            font-size="14" font-weight="500" fill="#cdd6f4">Lorem ipsum dolor sit amet, consectetur…</text>
+      <text x="28" y="50"
+            font-size="11" fill="#6c7086">Text · 14 minutes ago</text>
+    </g>
+
+    <!-- Row 3 -->
+    <g transform="translate(20, 362)">
+      <rect x="0" y="0" width="380" height="64" rx="12"
+            fill="#181825" stroke="#313244" stroke-width="1"/>
+      <rect x="14" y="14" width="4" height="36" rx="2" fill="#a6e3a1"/>
+      <text x="28" y="30"
+            font-family="ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+            font-size="13" font-weight="500" fill="#cdd6f4">git rebase --onto main feature/popup</text>
+      <text x="28" y="50"
+            font-size="11" fill="#6c7086">Snippet · yesterday</text>
+    </g>
+
+    <!-- ============= Footer hint ============= -->
+    <g transform="translate(20, 446)">
+      <line x1="0" y1="0" x2="380" y2="0" stroke="#313244" stroke-width="1"/>
+      <text x="0" y="24"
+            font-family="ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+            font-size="11" fill="#6c7086">↵ Paste</text>
+      <text x="74" y="24"
+            font-family="ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+            font-size="11" fill="#6c7086">⌫ Delete</text>
+      <text x="158" y="24"
+            font-family="ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+            font-size="11" fill="#6c7086">P Pin</text>
+      <text x="380" y="24" text-anchor="end"
+            font-family="ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+            font-size="11" fill="#6c7086">esc</text>
+    </g>
+  </g>
+
+  <!-- ============================================================ -->
+  <!-- URL in bottom-right                                          -->
+  <!-- ============================================================ -->
+  <text x="1152" y="598" text-anchor="end"
+        font-family="ui-monospace, 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace"
+        font-size="14" font-weight="500" fill="#6c7086">mohammedel-sayedahmed.github.io/clipman</text>
+</svg>

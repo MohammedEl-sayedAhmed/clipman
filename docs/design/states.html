@@ -59,12 +59,36 @@
         }
 
         /* Embedded mode: iframed from the marketing page — hide picker + theme
-           toggle so the host page owns those controls and only the popup shows. */
-        body.embed { padding: 0; background: transparent; }
-        body.embed .layout { grid-template-columns: 420px; gap: 0; max-width: 420px; }
+           toggle so the host page owns those controls and only the popup
+           shows. The host iframe provides the frame (border + shadow), so the
+           .window's own shadow and outer border are suppressed to avoid a
+           heavy black double-frame on the light theme. */
+        body.embed {
+            padding: 0;
+            background: transparent;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        body.embed .layout {
+            grid-template-columns: 1fr;
+            gap: 0;
+            max-width: 100%;
+            width: 100%;
+        }
         body.embed .picker { display: none; }
         body.embed .theme-toggle { display: none; }
-        body.embed { display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        body.embed .window {
+            box-shadow: none;
+            border: none;
+            /* Responsive in embed mode — never wider than the iframe viewport. */
+            width: 100%;
+            max-width: 420px;
+            height: 100%;
+            max-height: 100vh;
+        }
 
         /* Window shell (same dimensions as main-window.html) */
         .window {
@@ -483,6 +507,7 @@
         .picker-item .dot.t-err  { background: var(--error); }
         .picker-item .dot.t-neu  { background: var(--fg-muted); }
     </style>
+<script src="theme.js" defer></script>
 </head>
 <body class="theme-dark">
 
