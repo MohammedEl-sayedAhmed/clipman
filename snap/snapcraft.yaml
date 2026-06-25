@@ -15,12 +15,14 @@ source-code: https://github.com/MohammedEl-sayedAhmed/clipman
 issues: https://github.com/MohammedEl-sayedAhmed/clipman/issues
 contact: https://github.com/MohammedEl-sayedAhmed/clipman/issues
 
-base: core22
+base: core24
 grade: stable
 confinement: strict
 
-architectures:
-  - build-on: amd64
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
 
 slots:
   clipman-dbus:
@@ -73,6 +75,7 @@ parts:
       - gir1.2-gtk-4.0
       - gir1.2-adw-1
       - libadwaita-1-0
+      - wtype
       - adwaita-icon-theme
       - hicolor-icon-theme
       - librsvg2-common

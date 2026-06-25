@@ -20,12 +20,21 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 import urllib.error
 import urllib.request
 
-from clipman import __version__
+from clipman._version import __version__
+
+# GitHub Releases tag names are user-controlled — a maintainer could
+# in theory publish a tag like "v1.0.0\nDROP TABLE settings" and we'd
+# round-trip it through the settings table into the GTK banner. None
+# of Clipman's real tags use anything outside this character set, so
+# reject anything that isn't a short alnum/dot/plus/hyphen string
+# BEFORE it touches the DB.
+_TAG_RE = re.compile(r"[A-Za-z0-9.+-]{1,40}")
 
 RELEASES_URL = (
     "https://api.github.com/repos/MohammedEl-sayedAhmed/clipman/releases/latest"
@@ -113,6 +122,26 @@ def _http_get(url: str = RELEASES_URL) -> dict | None:
         return None
 
 
+def _safe_tag(raw: str | None) -> str | None:
+    """Return ``raw`` (stripped of a leading 'v') iff it matches the
+    allow-list regex, else ``None``.
+
+    The settings table happily stores any string, and the banner UI
+    just renders it — so a malformed tag would either silently break
+    version compare or, worse, smuggle markup into the banner. This
+    gate is the single chokepoint for both persistence paths
+    (``check_async`` and ``dismiss``).
+    """
+    if not raw:
+        return None
+    candidate = raw.strip().lstrip("v")
+    if not candidate:
+        return None
+    if _TAG_RE.fullmatch(candidate):
+        return candidate
+    return None
+
+
 def check_for_update(current_version: str = __version__) -> tuple[bool, str | None, str | None]:
     """Synchronous check. ``(is_newer, latest_version, release_url)``.
 
@@ -122,7 +151,7 @@ def check_for_update(current_version: str = __version__) -> tuple[bool, str | No
     payload = _http_get()
     if not payload:
         return (False, None, None)
-    tag = (payload.get("tag_name") or "").lstrip("v") or None
+    tag = _safe_tag(payload.get("tag_name"))
     url = payload.get("html_url") or None
     if not tag:
         return (False, None, url)
@@ -193,7 +222,13 @@ def dismissed_version(db) -> str | None:
 
 
 def dismiss(db, version: str) -> None:
-    db.set_setting(SETTING_DISMISSED_VERSION, version)
+    safe = _safe_tag(version)
+    if safe is None:
+        # Refuse to persist a tag that wouldn't survive a round-trip
+        # through _safe_tag — the banner would never re-match it
+        # anyway, so storing it just wastes a settings row.
+        return
+    db.set_setting(SETTING_DISMISSED_VERSION, safe)
 
 
 def should_show_banner(db, current_version: str = __version__) -> tuple[bool, str | None]:

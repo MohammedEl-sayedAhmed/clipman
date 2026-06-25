@@ -1,424 +1,314 @@
-import datetime
-import sqlite3
+"""GTK 4 + libadwaita popup window — Phase 1 of the GTK 3 -> 4 port.
+
+Phase 1 scope: boots, shows the popup, lists clips, searches, pastes. The
+preferences window, snippets editor, full edge states, and refreshed tests
+land in follow-up PRs. The three public methods used by dbus_service +
+the integration callers (``toggle``, ``refresh``, ``refresh_update_banner``)
+are preserved so the rest of the daemon keeps resolving against this
+module without changes.
+"""
+
+import logging
+import os
 import subprocess
 import time
+from html import escape
+from string import Template
+
 import gi
 
-from clipman import _, __version__, keybindings, updates
-from clipman.database import _safe_image_path
+# Direct submodule imports — avoid ``from clipman import …`` which
+# CodeQL flags as a cyclic import (window <-> clipman package).
+from gettext import gettext as _
 
-gi.require_version("Gtk", "3.0")
-gi.require_version("Gdk", "3.0")
-gi.require_version("GdkPixbuf", "2.0")
-from gi.repository import Gtk, Gdk, GdkPixbuf, GLib, Pango
+import clipman.updates as updates
+from clipman._version import __version__
 
+logger = logging.getLogger(__name__)
 
-DEFAULT_OPACITY = 1.0
+# Module-level GTK4 binding. Wrapped because some CI sandboxes ship a
+# placeholder ``gi`` shim that lacks ``require_version`` (or has the
+# typelibs unavailable). Re-raise as RuntimeError so importers can
+# guard with a single except clause instead of catching three classes.
+try:
+    gi.require_version("Gtk", "4.0")
+    gi.require_version("Adw", "1")
+    gi.require_version("Gdk", "4.0")
+    from gi.repository import Adw, Gdk, GLib, Gtk
+except (AttributeError, ValueError, ImportError) as e:
+    raise RuntimeError(
+        "GTK 4 + libadwaita not available: %s" % e
+    ) from e
+
 DEFAULT_FONT_SIZE = 12
-DEFAULT_MAX_HISTORY = 500
 DEFAULT_THEME = "dark"
-DEFAULT_FONT_COLOR = ""
 DEFAULT_SENSITIVE_TIMEOUT = 30
-DEFAULT_PASTE_MODE = "auto"
+DEFAULT_FONT_COLOR = "default"
 
-PASTE_MODES = [
-    ("auto", "Auto-detect"),
-    ("ctrl-v", "Ctrl+V"),
-    ("ctrl-shift-v", "Ctrl+Shift+V"),
-    ("shift-insert", "Shift+Insert"),
-]
+# Fallback CSS token used when the user picked the "default" preset.
+# Keeps the .clip-row .title colour aligned with libadwaita's card fg.
+_DEFAULT_FONT_COLOR_TOKEN = "@card_fg_color"
 
-THEME_DARK = {
-    "bg_crust": "#181825", "bg_base": "#1e1e2e", "bg_surface": "#252536",
-    "bg_overlay": "#313244", "border": "#45475a",
-    "text_primary": "#cdd6f4", "text_secondary": "#a6adc8",
-    "text_muted": "#585b70", "text_faint": "#45475a",
-    "headerbar_btn": "#6c7086",
-    "accent": "#89b4fa", "accent_hover": "#b4d0fb", "accent_on": "#1e1e2e",
-    "pin_color": "#f9e2af", "danger": "#f38ba8",
-    "danger_bg": "rgba(243, 139, 168, 0.1)",
-    "selected_bg": "#1e3a5f",
-    "hover_overlay": "rgba(255, 255, 255, 0.06)",
+# Hard-coded per-type accent tints — matched to docs/design/tokens.css.
+# Used to colour the 3px prefix bar on each Adw.ActionRow so users can
+# scan the list by type without reading the subtitle.
+TYPE_CLASSES = {
+    "text": "clip-type-text",
+    "image": "clip-type-image",
+    "link": "clip-type-link",
+    "code": "clip-type-code",
+    "snip": "clip-type-snip",
 }
 
-THEME_LIGHT = {
-    "bg_crust": "#dce0e8", "bg_base": "#eff1f5", "bg_surface": "#e6e9ef",
-    "bg_overlay": "#ccd0da", "border": "#bcc0cc",
-    "text_primary": "#11111b", "text_secondary": "#1e1e2e",
-    "text_muted": "#4c4f69", "text_faint": "#5c5f77",
-    "headerbar_btn": "#4c4f69",
-    "accent": "#1e66f5", "accent_hover": "#2a6ff7", "accent_on": "#eff1f5",
-    "pin_color": "#df8e1d", "danger": "#d20f39",
-    "danger_bg": "rgba(210, 15, 57, 0.08)",
-    "selected_bg": "#bdd6f2",
-    "hover_overlay": "rgba(0, 0, 0, 0.05)",
-}
 
-THEMES = {"dark": THEME_DARK, "light": THEME_LIGHT}
+class ClipmanWindow(Adw.ApplicationWindow):
+    """Phase 1 libadwaita popup.
 
-FONT_COLOR_PRESETS = [
-    ("Default", None),
-    ("Green", "#40a02b"),
-    ("Peach", "#fe640b"),
-    ("Mauve", "#8839ef"),
-    ("Pink", "#ea76cb"),
-    ("Teal", "#179299"),
-]
+    Constructor takes keyword args only — ``application``, ``db``,
+    ``monitor`` — to mirror the kwargs-only call site in ``app.py``.
+    """
 
-
-class ClipmanWindow(Gtk.Window):
-    def __init__(self, db, monitor):
-        super().__init__(type=Gtk.WindowType.TOPLEVEL)
+    def __init__(self, application, db, monitor):
+        super().__init__(application=application)
         self.db = db
         self.monitor = monitor
         self._search_query = ""
         self._active_filter = "all"
-        self._ignore_focus_out = False
         self._css_provider = None
+        self._current_edge_banner = None
 
         self.set_title("Clipman")
-        self.set_default_size(380, 500)
-        self.set_position(Gtk.WindowPosition.NONE)
-        self.set_decorated(True)
-        self.set_resizable(True)
-        self.set_keep_above(True)
-        self.set_type_hint(Gdk.WindowTypeHint.DIALOG)
-        self.set_skip_taskbar_hint(True)
+        self.set_default_size(380, self._clamped_default_height())
+        self.add_css_class("clipman-window")
 
-        # Load persisted settings
-        saved_opacity = self.db.get_setting("opacity", str(DEFAULT_OPACITY))
-        self._opacity = max(0.3, min(1.0, float(saved_opacity)))
-        self.set_opacity(self._opacity)
-
+        # Load persisted settings (only the subset Phase 1 actually uses;
+        # opacity / font color / paste mode are handled by Phase 2's
+        # preferences window).
         saved_font = self.db.get_setting("font_size", str(DEFAULT_FONT_SIZE))
-        self._font_size = max(8, min(20, int(float(saved_font))))
-
-        saved_max = self.db.get_setting("max_entries", str(DEFAULT_MAX_HISTORY))
-        self._max_history = max(50, min(5000, int(float(saved_max))))
+        try:
+            self._font_size = max(8, min(20, int(float(saved_font))))
+        except (TypeError, ValueError):
+            self._font_size = DEFAULT_FONT_SIZE
 
         saved_theme = self.db.get_setting("theme", DEFAULT_THEME)
-        self._theme = saved_theme if saved_theme in THEMES else DEFAULT_THEME
-
-        self._font_color = self.db.get_setting("font_color", DEFAULT_FONT_COLOR)
-
-        saved_sensitive = self.db.get_setting("sensitive_timeout",
-                                              str(DEFAULT_SENSITIVE_TIMEOUT))
-        self._sensitive_timeout = max(10, min(300, int(float(saved_sensitive))))
-
-        self._toggle_shortcut = self.db.get_setting(
-            "toggle_shortcut", keybindings.DEFAULT_TOGGLE_BINDING
+        self._theme = (
+            saved_theme
+            if saved_theme in ("auto", "dark", "light")
+            else DEFAULT_THEME
         )
-        saved_paste = self.db.get_setting("paste_mode", DEFAULT_PASTE_MODE)
-        valid_modes = {m[0] for m in PASTE_MODES}
-        self._paste_mode = saved_paste if saved_paste in valid_modes else DEFAULT_PASTE_MODE
 
+        self._font_color = self.db.get_setting(
+            "font_color", DEFAULT_FONT_COLOR
+        ) or DEFAULT_FONT_COLOR
+
+        saved_sensitive = self.db.get_setting(
+            "sensitive_timeout", str(DEFAULT_SENSITIVE_TIMEOUT)
+        )
+        try:
+            self._sensitive_timeout = max(10, min(300, int(float(saved_sensitive))))
+        except (TypeError, ValueError):
+            self._sensitive_timeout = DEFAULT_SENSITIVE_TIMEOUT
+
+        self._apply_theme()
         self._apply_css()
         self._build_ui()
 
-        # If a previous run cached a newer version that's still not
-        # dismissed, surface the banner immediately on startup.
+        # Re-evaluate update banner on startup so cached info isn't lost.
         self.refresh_update_banner()
 
-        self.connect("key-press-event", self._on_key_press)
-        self.connect("delete-event", self._on_delete)
-        self.connect("focus-out-event", self._on_focus_out)
+        # Escape closes the popup.
+        key_ctrl = Gtk.EventControllerKey()
+        key_ctrl.connect("key-pressed", self._on_key_pressed)
+        self.add_controller(key_ctrl)
+
+        # On Wayland the compositor delivers ``close-request`` when the
+        # user clicks outside the popup or hits the compositor close
+        # gesture. We want the popup to hide rather than destroy so the
+        # daemon can re-show it on the next D-Bus Toggle without
+        # reconstructing the entire widget tree.
+        self.connect(
+            "close-request",
+            lambda _w: (self.set_visible(False), True)[1],
+        )
+
+        # Sensitive-entry purge loop — kept identical to the GTK 3 version.
         GLib.timeout_add_seconds(10, self._cleanup_sensitive)
 
-    def _apply_css(self):
-        t = dict(THEMES[self._theme])
-        if self._font_color:
-            t["text_primary"] = self._font_color
-        t["font_size"] = str(self._font_size)
+    # ------------------------------------------------------------------
+    # Theme + CSS
+    # ------------------------------------------------------------------
 
-        import os
-        from string import Template
+    def _apply_theme(self):
+        scheme = {
+            "auto": Adw.ColorScheme.DEFAULT,
+            "dark": Adw.ColorScheme.FORCE_DARK,
+            "light": Adw.ColorScheme.FORCE_LIGHT,
+        }.get(self._theme, Adw.ColorScheme.FORCE_DARK)
+        Adw.StyleManager.get_default().set_color_scheme(scheme)
+
+    def _resolve_font_color(self):
+        """Translate the ``font_color`` preset id to a CSS colour value.
+
+        ``FONT_COLOR_PRESETS`` lives in ``preferences.py``; we import it
+        lazily because ``preferences`` pulls in Adw at module scope and
+        we want ``window.py`` importable for headless tests.
+        """
+        from clipman.preferences import FONT_COLOR_PRESETS
+
+        for preset_id, hex_value, _tooltip in FONT_COLOR_PRESETS:
+            if preset_id == self._font_color and hex_value:
+                return hex_value
+        return _DEFAULT_FONT_COLOR_TOKEN
+
+    def _apply_css(self):
+        """Inject ``style.css`` with Python ``string.Template`` substitutions.
+
+        The template exposes ``${font_size}`` and ``${font_color}`` so
+        font size and the .clip-row title colour both hot-reload from
+        the preferences window without touching the .css file on disk.
+        """
         css_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "style.css"
         )
-        with open(css_path) as f:
-            css = Template(f.read()).safe_substitute(t)
+        with open(css_path, "r", encoding="utf-8") as f:
+            css_string = Template(f.read()).safe_substitute(
+                font_size=str(self._font_size),
+                font_color=self._resolve_font_color(),
+            )
 
-        screen = Gdk.Screen.get_default()
-        if self._css_provider:
-            Gtk.StyleContext.remove_provider_for_screen(screen, self._css_provider)
+        display = Gdk.Display.get_default()
+        if self._css_provider is not None:
+            Gtk.StyleContext.remove_provider_for_display(
+                display, self._css_provider
+            )
         self._css_provider = Gtk.CssProvider()
-        self._css_provider.load_from_data(css.encode("utf-8"))
-        Gtk.StyleContext.add_provider_for_screen(
-            screen, self._css_provider,
-            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
+        # ``load_from_data`` is binding-typed as ``bytes`` on older PyGObject
+        # — passing a Python ``str`` raises ``TypeError`` before the popup
+        # finishes building. Adw 4.12+ ships ``load_from_string`` which
+        # accepts ``str`` directly; fall back to the bytes form everywhere
+        # else.
+        if hasattr(self._css_provider, "load_from_string"):
+            self._css_provider.load_from_string(css_string)
+        else:
+            self._css_provider.load_from_data(
+                css_string.encode("utf-8"), -1
+            )
+        Gtk.StyleContext.add_provider_for_display(
+            display,
+            self._css_provider,
+            Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
         )
 
-    # -- Build UI ----------------------------------------------------------
+    # ------------------------------------------------------------------
+    # UI construction
+    # ------------------------------------------------------------------
 
     def _build_ui(self):
-        self.get_style_context().add_class("clipman-window")
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.set_content(root)
 
-        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.add(main_box)
+        # -- Header bar (incognito start, prefs end) -----------------------
+        header = Adw.HeaderBar()
+        header.set_title_widget(Gtk.Label(label="Clipman"))
+        # The popup is its own GtkApplicationWindow but doubles as a
+        # transient overlay — title-bar controls (close / minimise /
+        # maximise) clash with the close-on-Escape interaction model.
+        header.set_show_start_title_buttons(False)
+        header.set_show_end_title_buttons(False)
 
-        # -- Update banner (hidden unless a newer release is detected) -----
-        self._update_banner = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=6
+        self._incognito_btn = Gtk.ToggleButton()
+        self._incognito_btn.set_icon_name("view-conceal-symbolic")
+        self._incognito_btn.set_tooltip_text(_("Incognito mode"))
+        self._incognito_btn.add_css_class("flat")
+        self._incognito_btn.connect("toggled", self._on_incognito_toggled)
+        header.pack_start(self._incognito_btn)
+
+        prefs_btn = Gtk.Button.new_from_icon_name("emblem-system-symbolic")
+        prefs_btn.set_tooltip_text(_("Preferences"))
+        prefs_btn.add_css_class("flat")
+        prefs_btn.connect("clicked", self._on_prefs_clicked)
+        header.pack_end(prefs_btn)
+
+        # "New snippet" appears only while the Snippets filter is active;
+        # hidden in the All / Pinned views so the headerbar stays light.
+        self._new_snippet_btn = Gtk.Button.new_from_icon_name(
+            "list-add-symbolic"
         )
-        self._update_banner.get_style_context().add_class("update-banner")
-        self._update_banner.set_no_show_all(True)
-        self._update_banner_label = Gtk.Label(label="")
-        self._update_banner_label.set_halign(Gtk.Align.START)
-        self._update_banner_label.set_hexpand(True)
-        self._update_banner.pack_start(self._update_banner_label, True, True, 0)
-        update_link_btn = Gtk.Button(label=_("Release notes"))
-        update_link_btn.get_style_context().add_class("backup-btn")
-        update_link_btn.connect("clicked", self._on_update_link_clicked)
-        self._update_banner.pack_start(update_link_btn, False, False, 0)
-        dismiss_btn = Gtk.Button(label="×")
-        dismiss_btn.set_tooltip_text(_("Dismiss"))
-        dismiss_btn.get_accessible().set_name(_("Dismiss update banner"))
-        dismiss_btn.get_style_context().add_class("gear-button")
-        dismiss_btn.connect("clicked", self._on_update_banner_dismiss)
-        self._update_banner.pack_start(dismiss_btn, False, False, 0)
-        main_box.pack_start(self._update_banner, False, False, 0)
+        self._new_snippet_btn.set_tooltip_text(_("Manage snippets"))
+        self._new_snippet_btn.add_css_class("flat")
+        self._new_snippet_btn.set_visible(False)
+        self._new_snippet_btn.connect("clicked", self._on_snippets_clicked)
+        header.pack_end(self._new_snippet_btn)
 
-        # -- Header: search + gear -----------------------------------------
-        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        header.get_style_context().add_class("clipman-header")
+        root.append(header)
 
+        # -- Update banner (libadwaita native) -----------------------------
+        self._update_banner = Adw.Banner()
+        self._update_banner.set_button_label(_("Release notes"))
+        self._update_banner.set_revealed(False)
+        self._update_banner.connect(
+            "button-clicked", self._on_update_banner_clicked
+        )
+        root.append(self._update_banner)
+
+        # -- Edge-state banner slot ---------------------------------------
+        # Banner-kind edge states (incognito-on, paused, sensitive-shown,
+        # sensitive-cleared, network-error, history-too-large) mount
+        # here rather than into ``_empty_slot`` so the list stays
+        # visible underneath them.
+        self._edge_banner_slot = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=0
+        )
+        root.append(self._edge_banner_slot)
+
+        # -- Search entry --------------------------------------------------
+        search_box = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=0
+        )
+        search_box.set_margin_top(8)
+        search_box.set_margin_bottom(4)
+        search_box.set_margin_start(8)
+        search_box.set_margin_end(8)
         self.search_entry = Gtk.SearchEntry()
         self.search_entry.set_placeholder_text(_("Search..."))
-        self.search_entry.get_style_context().add_class("clipman-search")
         self.search_entry.set_hexpand(True)
+        self.search_entry.add_css_class("clipman-search")
         self.search_entry.connect("search-changed", self._on_search_changed)
-        header.pack_start(self.search_entry, True, True, 0)
+        search_box.append(self.search_entry)
+        root.append(search_box)
 
-        gear_btn = Gtk.Button(label="\u2699")
-        gear_btn.get_style_context().add_class("gear-button")
-        gear_btn.set_tooltip_text(_("Settings"))
-        gear_btn.get_accessible().set_name(_("Settings"))
-        gear_btn.connect("clicked", self._on_gear_clicked)
-        header.pack_end(gear_btn, False, False, 0)
+        # -- Filter pill row ----------------------------------------------
+        self._filter_box = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=6
+        )
+        self._filter_box.set_margin_top(2)
+        self._filter_box.set_margin_bottom(6)
+        self._filter_box.set_margin_start(8)
+        self._filter_box.set_margin_end(8)
+        self._filter_box.set_halign(Gtk.Align.CENTER)
 
-        main_box.pack_start(header, False, False, 0)
-
-        # -- Filter tabs ----------------------------------------------------
-        filter_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
-        filter_box.get_style_context().add_class("filter-bar")
         self._filter_buttons = {}
-        for fid, label in [("all", _("All")), ("text", _("Text")),
-                           ("image", _("Images")), ("snippets", _("Snippets"))]:
-            btn = Gtk.Button(label=label)
-            btn.get_style_context().add_class(
-                "filter-tab-active" if fid == "all" else "filter-tab"
-            )
-            btn.connect("clicked", self._on_filter_clicked, fid)
-            filter_box.pack_start(btn, False, False, 0)
+        first = None
+        for fid, label in [
+            ("all", _("All")),
+            ("pinned", _("Pinned")),
+            ("snippets", _("Snippets")),
+        ]:
+            btn = Gtk.ToggleButton(label=label)
+            btn.add_css_class("filter-tab")
+            if fid == "all":
+                btn.set_active(True)
+                btn.add_css_class("filter-tab-active")
+            if first is None:
+                first = btn
+            else:
+                btn.set_group(first)
+            btn.connect("toggled", self._on_filter_toggled, fid)
+            self._filter_box.append(btn)
             self._filter_buttons[fid] = btn
-        main_box.pack_start(filter_box, False, False, 0)
+        root.append(self._filter_box)
 
-        # -- Settings panel (hidden by default) -----------------------------
-        # Restructured into named sections (Appearance / History / Shortcuts /
-        # Updates / Data) instead of a single flat list of rows. Each section
-        # gets a small accent-coloured header label; the Updates section in
-        # particular splits its label+switch from its status+button so the
-        # row no longer feels crammed.
-        self.settings_panel = Gtk.Box(
-            orientation=Gtk.Orientation.VERTICAL, spacing=4
-        )
-        self.settings_panel.get_style_context().add_class("settings-panel")
-        self.settings_panel.set_no_show_all(True)
-
-        # Top-level title
-        title_label = Gtk.Label(label=_("SETTINGS"))
-        title_label.get_style_context().add_class("settings-title")
-        title_label.set_halign(Gtk.Align.START)
-        self.settings_panel.pack_start(title_label, False, False, 0)
-
-        # -------------------------------------------------------------------
-        # APPEARANCE
-        # -------------------------------------------------------------------
-        self._build_section_header(self.settings_panel, _("APPEARANCE"))
-
-        self._opacity_value_label = Gtk.Label(
-            label=f"{int(self._opacity * 100)}%"
-        )
-        self._build_setting_row(
-            self.settings_panel, _("Opacity"),
-            0.3, 1.0, 0.05, self._opacity,
-            self._on_opacity_changed, self._opacity_value_label
-        )
-
-        self._font_value_label = Gtk.Label(label=f"{self._font_size}px")
-        self._build_setting_row(
-            self.settings_panel, _("Font size"),
-            8, 20, 1, self._font_size,
-            self._on_font_size_changed, self._font_value_label
-        )
-
-        # Theme toggle row (dark / light)
-        theme_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        theme_label = Gtk.Label(label=_("Theme"))
-        theme_label.get_style_context().add_class("settings-label")
-        theme_label.set_halign(Gtk.Align.START)
-        theme_row.pack_start(theme_label, False, False, 0)
-        theme_spacer = Gtk.Box()
-        theme_spacer.set_hexpand(True)
-        theme_row.pack_start(theme_spacer, True, True, 0)
-        self._theme_buttons = {}
-        for tid, tlabel in [("dark", _("Dark")), ("light", _("Light"))]:
-            btn = Gtk.Button(label=tlabel)
-            cls = "theme-btn-active" if tid == self._theme else "theme-btn"
-            btn.get_style_context().add_class(cls)
-            btn.connect("clicked", self._on_theme_changed, tid)
-            theme_row.pack_start(btn, False, False, 0)
-            self._theme_buttons[tid] = btn
-        self.settings_panel.pack_start(theme_row, False, False, 0)
-
-        # Font color swatch row
-        color_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        color_label = Gtk.Label(label=_("Font color"))
-        color_label.get_style_context().add_class("settings-label")
-        color_label.set_halign(Gtk.Align.START)
-        color_row.pack_start(color_label, False, False, 0)
-        color_spacer = Gtk.Box()
-        color_spacer.set_hexpand(True)
-        color_row.pack_start(color_spacer, True, True, 0)
-        self._color_buttons = []
-        for name, hex_val in FONT_COLOR_PRESETS:
-            btn = Gtk.Button(label="A" if hex_val is None else "")
-            btn.set_tooltip_text(name)
-            btn.get_accessible().set_name(f"Font color: {name}")
-            btn.get_style_context().add_class("color-swatch")
-            btn.get_style_context().add_class(f"swatch-{name.lower()}")
-            current = self._font_color or None
-            if hex_val == current:
-                btn.get_style_context().add_class("swatch-active")
-            elif hex_val is None and not self._font_color:
-                btn.get_style_context().add_class("swatch-active")
-            btn.connect("clicked", self._on_font_color_changed, hex_val)
-            color_row.pack_start(btn, False, False, 0)
-            self._color_buttons.append((btn, hex_val))
-        self.settings_panel.pack_start(color_row, False, False, 0)
-
-        # -------------------------------------------------------------------
-        # HISTORY
-        # -------------------------------------------------------------------
-        self._build_section_header(self.settings_panel, _("HISTORY"))
-
-        self._max_value_label = Gtk.Label(label=str(self._max_history))
-        self._build_setting_row(
-            self.settings_panel, _("Max entries"),
-            50, 5000, 50, self._max_history,
-            self._on_max_history_changed, self._max_value_label
-        )
-
-        self._sensitive_value_label = Gtk.Label(label=f"{self._sensitive_timeout}s")
-        self._build_setting_row(
-            self.settings_panel, _("Sensitive auto-clear"),
-            10, 300, 10, self._sensitive_timeout,
-            self._on_sensitive_timeout_changed, self._sensitive_value_label
-        )
-
-        # -------------------------------------------------------------------
-        # SHORTCUTS
-        # -------------------------------------------------------------------
-        self._build_section_header(self.settings_panel, _("SHORTCUTS"))
-
-        shortcut_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        shortcut_label = Gtk.Label(label=_("Toggle"))
-        shortcut_label.get_style_context().add_class("settings-label")
-        shortcut_label.set_halign(Gtk.Align.START)
-        shortcut_row.pack_start(shortcut_label, False, False, 0)
-        shortcut_spacer = Gtk.Box()
-        shortcut_spacer.set_hexpand(True)
-        shortcut_row.pack_start(shortcut_spacer, True, True, 0)
-        self._shortcut_button = Gtk.Button(
-            label=keybindings.format_binding_for_display(self._toggle_shortcut)
-        )
-        self._shortcut_button.set_tooltip_text(_("Click to set a new shortcut"))
-        self._shortcut_button.get_style_context().add_class("backup-btn")
-        self._shortcut_button.connect("clicked", self._on_shortcut_change)
-        shortcut_row.pack_start(self._shortcut_button, False, False, 0)
-        self.settings_panel.pack_start(shortcut_row, False, False, 0)
-
-        paste_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        paste_label = Gtk.Label(label=_("Paste"))
-        paste_label.get_style_context().add_class("settings-label")
-        paste_label.set_halign(Gtk.Align.START)
-        paste_row.pack_start(paste_label, False, False, 0)
-        paste_spacer = Gtk.Box()
-        paste_spacer.set_hexpand(True)
-        paste_row.pack_start(paste_spacer, True, True, 0)
-        self._paste_combo = Gtk.ComboBoxText()
-        for mode_id, mode_label in PASTE_MODES:
-            self._paste_combo.append(mode_id, _(mode_label))
-        self._paste_combo.set_active_id(self._paste_mode)
-        self._paste_combo.connect("changed", self._on_paste_mode_changed)
-        paste_row.pack_start(self._paste_combo, False, False, 0)
-        self.settings_panel.pack_start(paste_row, False, False, 0)
-
-        # -------------------------------------------------------------------
-        # UPDATES — header row (label + switch) then status row (status text + Check now)
-        # -------------------------------------------------------------------
-        self._build_section_header(self.settings_panel, _("UPDATES"))
-
-        update_header_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        update_label = Gtk.Label(label=_("Check for updates"))
-        update_label.get_style_context().add_class("settings-label")
-        update_label.set_halign(Gtk.Align.START)
-        update_header_row.pack_start(update_label, False, False, 0)
-        update_header_spacer = Gtk.Box()
-        update_header_spacer.set_hexpand(True)
-        update_header_row.pack_start(update_header_spacer, True, True, 0)
-        self._updates_toggle = Gtk.Switch()
-        self._updates_toggle.set_tooltip_text(_("Check for new releases on GitHub"))
-        self._updates_toggle.set_active(updates._enabled(self.db))
-        self._updates_toggle.set_valign(Gtk.Align.CENTER)
-        self._updates_toggle.connect("notify::active", self._on_updates_toggle)
-        update_header_row.pack_start(self._updates_toggle, False, False, 0)
-        self.settings_panel.pack_start(update_header_row, False, False, 0)
-
-        update_status_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        update_status_row.set_margin_start(8)
-        self._update_status = Gtk.Label(label="")
-        self._update_status.get_style_context().add_class("settings-value")
-        self._update_status.set_halign(Gtk.Align.START)
-        update_status_row.pack_start(self._update_status, False, False, 0)
-        update_status_spacer = Gtk.Box()
-        update_status_spacer.set_hexpand(True)
-        update_status_row.pack_start(update_status_spacer, True, True, 0)
-        self._check_now_btn = Gtk.Button(label=_("Check now"))
-        self._check_now_btn.get_style_context().add_class("backup-btn")
-        self._check_now_btn.connect("clicked", self._on_check_now_clicked)
-        update_status_row.pack_start(self._check_now_btn, False, False, 0)
-        self.settings_panel.pack_start(update_status_row, False, False, 0)
-        self._refresh_update_status_text()
-
-        # -------------------------------------------------------------------
-        # DATA
-        # -------------------------------------------------------------------
-        self._build_section_header(self.settings_panel, _("DATA"))
-
-        backup_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-        backup_label = Gtk.Label(label=_("Backup / Restore"))
-        backup_label.get_style_context().add_class("settings-label")
-        backup_label.set_halign(Gtk.Align.START)
-        backup_row.pack_start(backup_label, False, False, 0)
-        backup_spacer = Gtk.Box()
-        backup_spacer.set_hexpand(True)
-        backup_row.pack_start(backup_spacer, True, True, 0)
-        backup_btn = Gtk.Button(label=_("Backup"))
-        backup_btn.get_style_context().add_class("backup-btn")
-        backup_btn.set_tooltip_text(_("Export clipboard database"))
-        backup_btn.connect("clicked", self._on_backup_clicked)
-        backup_row.pack_start(backup_btn, False, False, 0)
-        restore_btn = Gtk.Button(label=_("Restore"))
-        restore_btn.get_style_context().add_class("backup-btn")
-        restore_btn.set_tooltip_text(_("Import clipboard database"))
-        restore_btn.connect("clicked", self._on_restore_clicked)
-        backup_row.pack_start(restore_btn, False, False, 0)
-        self.settings_panel.pack_start(backup_row, False, False, 0)
-
-        main_box.pack_start(self.settings_panel, False, False, 0)
-
-        # -- Scrollable list ------------------------------------------------
+        # -- Scrollable list + empty status page --------------------------
         scrolled = Gtk.ScrolledWindow()
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled.set_vexpand(True)
@@ -426,740 +316,759 @@ class ClipmanWindow(Gtk.Window):
         self.listbox = Gtk.ListBox()
         self.listbox.set_selection_mode(Gtk.SelectionMode.BROWSE)
         self.listbox.set_activate_on_single_click(True)
+        self.listbox.add_css_class("clipman-list")
+        self.listbox.add_css_class("boxed-list")
         self.listbox.connect("row-activated", self._on_row_activated)
-        scrolled.add(self.listbox)
+        scrolled.set_child(self.listbox)
 
-        main_box.pack_start(scrolled, True, True, 0)
+        # Empty / no-results state — Adw.StatusPage swaps in for the list.
+        # The actual visual is produced by ``render_edge_state(state_id)``
+        # in ``refresh()``; this slot is just a placeholder until then.
+        self._empty_slot = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self._empty_slot.set_vexpand(True)
+        self._current_edge_widget = None
 
-        # -- Empty state label ----------------------------------------------
-        self.empty_label = Gtk.Label(
-            label=_("No clipboard entries yet.\nCopy something to get started!")
-        )
-        self.empty_label.get_style_context().add_class("empty-label")
-        self.empty_label.set_justify(Gtk.Justification.CENTER)
-        self.empty_label.set_valign(Gtk.Align.CENTER)
-        self.empty_label.set_vexpand(True)
-        main_box.pack_start(self.empty_label, True, True, 0)
+        self._list_stack = Gtk.Stack()
+        self._list_stack.set_vexpand(True)
+        self._list_stack.add_named(scrolled, "list")
+        self._list_stack.add_named(self._empty_slot, "empty")
+        root.append(self._list_stack)
 
-        # -- Bottom status bar ----------------------------------------------
-        self.status_bar = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=6
-        )
-        self.status_bar.get_style_context().add_class("status-bar")
+        # -- Footer hints --------------------------------------------------
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        footer.add_css_class("clipman-footer")
+        footer.set_halign(Gtk.Align.CENTER)
+        footer.set_margin_top(4)
+        footer.set_margin_bottom(6)
+        for text in [
+            "↵ " + _("Paste"),
+            "⌫ " + _("Delete"),
+            "P " + _("Pin"),
+            "Esc " + _("Close"),
+        ]:
+            lbl = Gtk.Label(label=text)
+            lbl.add_css_class("clipman-footer-hint")
+            footer.append(lbl)
+        root.append(footer)
 
-        self.incognito_btn = Gtk.Button(label="\U0001f441")
-        self.incognito_btn.get_style_context().add_class("incognito-btn")
-        self.incognito_btn.set_tooltip_text(_("Incognito mode: OFF"))
-        self.incognito_btn.get_accessible().set_name(_("Toggle incognito mode"))
-        self.incognito_btn.connect("clicked", self._on_incognito_toggle)
-        self.status_bar.pack_start(self.incognito_btn, False, False, 0)
-
-        self.count_label = Gtk.Label(label="")
-        self.count_label.get_style_context().add_class("status-count")
-        self.count_label.set_halign(Gtk.Align.START)
-        self.status_bar.pack_start(self.count_label, True, True, 0)
-
-        self.clear_btn = Gtk.Button(label=_("Clear All"))
-        self.clear_btn.get_style_context().add_class("action-button-danger")
-        self.clear_btn.set_tooltip_text(_("Clear all unpinned entries"))
-        self.clear_btn.connect("clicked", self._on_clear_all)
-        self.status_bar.pack_end(self.clear_btn, False, False, 0)
-
-        self.add_snippet_btn = Gtk.Button(label=_("+ Add"))
-        self.add_snippet_btn.get_style_context().add_class("action-button")
-        self.add_snippet_btn.set_tooltip_text(_("Add a new snippet"))
-        self.add_snippet_btn.connect("clicked", self._on_add_snippet_clicked)
-        self.add_snippet_btn.set_no_show_all(True)
-        self.status_bar.pack_end(self.add_snippet_btn, False, False, 0)
-
-        main_box.pack_end(self.status_bar, False, False, 0)
-
-    def _build_section_header(self, parent, text):
-        """Add a small accent-coloured section header into the settings panel.
-
-        Used to break the panel into APPEARANCE / HISTORY / SHORTCUTS /
-        UPDATES / DATA groups so the panel reads as structured sections
-        rather than a flat list of mixed controls.
-        """
-        label = Gtk.Label(label=text)
-        label.get_style_context().add_class("settings-section-header")
-        label.set_halign(Gtk.Align.START)
-        parent.pack_start(label, False, False, 0)
-
-    def _build_setting_row(self, parent, label_text, min_val, max_val, step,
-                           current, callback, value_label):
-        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
-
-        label = Gtk.Label(label=label_text)
-        label.get_style_context().add_class("settings-label")
-        label.set_halign(Gtk.Align.START)
-        row.pack_start(label, False, False, 0)
-
-        scale = Gtk.Scale.new_with_range(
-            Gtk.Orientation.HORIZONTAL, min_val, max_val, step
-        )
-        scale.set_value(current)
-        scale.set_draw_value(False)
-        scale.set_hexpand(True)
-        scale.connect("value-changed", callback)
-        row.pack_start(scale, True, True, 0)
-
-        value_label.get_style_context().add_class("settings-value")
-        value_label.set_halign(Gtk.Align.END)
-        row.pack_end(value_label, False, False, 0)
-
-        parent.pack_start(row, False, False, 0)
-
-    # -- Refresh -----------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Refresh
+    # ------------------------------------------------------------------
 
     def refresh(self):
-        for child in self.listbox.get_children():
-            self.listbox.remove(child)
+        # GTK 4 ListBox row clearing.
+        while True:
+            row = self.listbox.get_row_at_index(0)
+            if row is None:
+                break
+            self.listbox.remove(row)
 
         is_snippets = self._active_filter == "snippets"
-        self.clear_btn.set_visible(not is_snippets)
-        self.add_snippet_btn.set_visible(is_snippets)
+        is_pinned_only = self._active_filter == "pinned"
 
         if is_snippets:
-            self._refresh_snippets()
+            entries = (
+                self.db.search_snippets(self._search_query)
+                if self._search_query
+                else self.db.get_snippets()
+            )
+            rows = [self._make_snippet_row(e) for e in entries]
         else:
-            self._refresh_entries()
-
-        self.listbox.show_all()
-
-    def _refresh_entries(self):
-        content_type = (
-            None if self._active_filter == "all" else self._active_filter
-        )
-
-        if self._search_query:
-            if content_type == "image":
-                entries = []
-            else:
+            if self._search_query:
                 entries = self.db.search(self._search_query)
-        else:
-            entries = self.db.get_entries(limit=50, content_type=content_type)
+            else:
+                entries = self.db.get_entries(limit=200)
+            if is_pinned_only:
+                entries = [e for e in entries if e["pinned"]]
+            rows = [self._make_entry_row(e) for e in entries]
 
-        if self._search_query:
-            self.count_label.set_text(_("{count} results").format(count=len(entries)))
-        else:
-            total = self.db.count_entries(content_type)
-            self.count_label.set_text(_("{count} items").format(count=total))
-
-        if not entries:
-            self.empty_label.set_text(
-                _("No results found.") if self._search_query
-                else _("No clipboard entries yet.\nCopy something to get started!")
-            )
-            self.empty_label.show()
-            self.listbox.get_parent().hide()
+        if not rows:
+            if self._search_query:
+                state_id = "no-results"
+            elif is_snippets:
+                state_id = "no-snippets-yet"
+            else:
+                state_id = "empty"
+            self._show_edge_state(state_id)
             return
 
-        self.empty_label.hide()
-        self.listbox.get_parent().show()
+        self._list_stack.set_visible_child_name("list")
+        for row in rows:
+            self.listbox.append(row)
 
-        pinned = [e for e in entries if e["pinned"]]
-        unpinned = [e for e in entries if not e["pinned"]]
+    def _show_edge_state(self, state_id):
+        """Swap the rendered edge-state widget into the empty slot.
 
-        if pinned:
-            self.listbox.add(self._create_section_header(_("PINNED")))
-            for entry in pinned:
-                self.listbox.add(self._create_row(entry))
+        Dispatches through ``render_edge_state`` so future Banner /
+        AlertDialog states get the correct widget family — window.py
+        only knows about ``state_id`` and trusts the renderer.
+        """
+        from clipman.edge_states import render_edge_state
 
-        if unpinned:
-            today = datetime.date.today()
-            today_start = datetime.datetime.combine(
-                today, datetime.time.min
-            ).timestamp()
-            yesterday_start = today_start - 86400
+        widget = render_edge_state(
+            state_id, parent_window=self, on_action=self._on_edge_action
+        )
+        spec = getattr(widget, "state_spec", None)
+        kind = spec.kind if spec is not None else "statuspage"
 
-            current_group = None
-            for entry in unpinned:
-                ts = entry["accessed_at"]
-                if ts >= today_start:
-                    group = _("TODAY")
-                elif ts >= yesterday_start:
-                    group = _("YESTERDAY")
-                else:
-                    group = _("OLDER")
-
-                if group != current_group:
-                    current_group = group
-                    self.listbox.add(self._create_section_header(group))
-
-                self.listbox.add(self._create_row(entry))
-
-    def _refresh_snippets(self):
-        if self._search_query:
-            snippets = self.db.search_snippets(self._search_query)
-        else:
-            snippets = self.db.get_snippets()
-
-        self.count_label.set_text(_("{count} snippets").format(count=len(snippets)))
-
-        if not snippets:
-            self.empty_label.set_text(
-                _("No snippets yet.\nClick '+ Add' to create one.")
-            )
-            self.empty_label.show()
-            self.listbox.get_parent().hide()
+        # AlertDialog presents itself modally; nothing to mount.
+        if kind == "alertdialog":
+            widget.present(self)
+            self._list_stack.set_visible_child_name("list")
             return
 
-        self.empty_label.hide()
-        self.listbox.get_parent().show()
+        # Banner-kind states use the dedicated banner slot above the
+        # list, so they stack alongside (rather than replace) the clip
+        # list. StatusPage states still take over the empty slot.
+        if kind == "banner":
+            self._mount_edge_banner(widget)
+            return
 
-        for snippet in snippets:
-            self.listbox.add(self._create_snippet_row(snippet))
+        # Clear any previous statuspage widget from the empty slot.
+        if self._current_edge_widget is not None:
+            self._empty_slot.remove(self._current_edge_widget)
+            self._current_edge_widget = None
+        widget.set_vexpand(True)
+        self._empty_slot.append(widget)
+        self._current_edge_widget = widget
+        self._list_stack.set_visible_child_name("empty")
 
-    # -- Row builders ------------------------------------------------------
+    def _mount_edge_banner(self, banner):
+        """Drop a rendered ``Adw.Banner`` into the dedicated edge slot.
 
-    def _create_section_header(self, text):
-        row = Gtk.ListBoxRow()
-        row.set_selectable(False)
-        row.set_activatable(False)
-        label = Gtk.Label(label=text)
-        label.get_style_context().add_class("section-header")
-        label.set_halign(Gtk.Align.START)
-        label.set_xalign(0)
-        row.add(label)
-        return row
+        Replaces any banner already mounted there so two banners never
+        stack (e.g. ``paused`` then ``incognito-on``).
+        """
+        if self._current_edge_banner is not None:
+            self._edge_banner_slot.remove(self._current_edge_banner)
+            self._current_edge_banner = None
+        self._edge_banner_slot.append(banner)
+        self._current_edge_banner = banner
 
-    def _create_row(self, entry):
-        row = Gtk.ListBoxRow()
-        row.entry_data = entry
-        row.get_style_context().add_class("clip-row")
-        if entry.get("sensitive"):
-            row.get_style_context().add_class("sensitive-row")
+    # Stable URLs surfaced by edge-state action buttons. Kept as class
+    # constants so the dispatcher table can reference them by name and
+    # the test suite can introspect them without instantiating GTK.
+    _EXTENSIONS_URL = (
+        "https://extensions.gnome.org/extension/9407/clipman/"
+    )
+    _INSTALL_GUIDE_URL = (
+        "https://github.com/MohammedEl-sayedAhmed/clipman"
+        "#readme"
+    )
+    _SNAP_NOTES_URL = (
+        "https://github.com/MohammedEl-sayedAhmed/clipman"
+        "/blob/main/docs/snap-confinement.md"
+    )
 
-        outer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    # Authoritative list of action_ids the dispatcher handles. The
+    # ``_edge_action_dispatch`` property builds a dict keyed on this
+    # set; ``test_window.test_on_edge_action_covers_states_contract``
+    # asserts that this set is a superset of every action_id declared
+    # in ``edge_states.STATES``. Adding a new edge state with a new
+    # action_id therefore fails CI until a handler is wired here.
+    _EDGE_ACTION_IDS = frozenset({
+        "clear-search",
+        "open-snippets-dialog",
+        "open-extensions",
+        "open-install-guide",
+        "open-snap-notes",
+        "resume-recording",
+        "open-prefs-privacy",
+        "retry-backup",
+        "rechoose-backup",
+        "rechoose-restore",
+        "open-restore",
+        "open-prefs-storage",
+        "reveal-db-folder",
+        "retry-update-check",
+        "close-dialog",
+    })
 
-        content_event = Gtk.EventBox()
-        content_event.set_hexpand(True)
-        content_event.connect("button-press-event", self._on_entry_click, entry)
-        content_event.set_tooltip_text(_("Click to paste"))
+    def _on_edge_action(self, action_id):
+        """Dispatch the ``action_id`` strings declared in ``edge_states.py``.
 
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        Every id present in ``edge_states.STATES`` (via either
+        ``primary_action`` or ``secondary_action``) MUST map to an entry
+        in ``self._edge_action_dispatch``. The
+        ``test_on_edge_action_covers_states_contract`` test enforces
+        that invariant so a new edge state with an un-wired action_id
+        fails CI instead of silently no-op-ing in production.
 
-        meta_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
-        type_label = Gtk.Label(label=entry["content_type"].upper())
-        type_label.get_style_context().add_class("clip-type-badge")
-        type_label.set_halign(Gtk.Align.START)
-        meta_box.pack_start(type_label, False, False, 0)
+        Unknown ids still log a warning — they shouldn't ever happen in
+        normal flow but the popup keeps running rather than crashing
+        the daemon.
+        """
+        handler = self._edge_action_dispatch.get(action_id)
+        if handler is None:
+            logger.warning("unhandled edge-state action_id: %r", action_id)
+            return
+        handler()
 
-        time_label = Gtk.Label(label=self._format_time(entry["accessed_at"]))
-        time_label.get_style_context().add_class("clip-time")
-        time_label.set_halign(Gtk.Align.START)
-        meta_box.pack_start(time_label, False, False, 0)
+    @property
+    def _edge_action_dispatch(self):
+        """Map ``action_id`` -> bound method for the edge-state dispatcher.
 
-        if entry["content_type"] == "text" and entry["content_text"]:
-            chars = len(entry["content_text"])
-            chars_label = Gtk.Label(
-                label=f"{chars:,} chars" if chars >= 1000 else f"{chars} chars"
-            )
-            chars_label.get_style_context().add_class("clip-chars")
-            chars_label.set_halign(Gtk.Align.START)
-            meta_box.pack_start(chars_label, False, False, 0)
+        Exposed as a property (rather than a constant) so subclasses /
+        tests can introspect it without paying the cost of binding the
+        methods at construction time. ``test_window.py`` reads this
+        directly to assert dispatcher coverage of every action_id
+        declared in ``edge_states.STATES``.
+        """
+        return {
+            # No-history / search-empty states.
+            "clear-search": self._action_clear_search,
+            "open-snippets-dialog": self._action_open_snippets_dialog,
+            # Extension / install-guide states.
+            "open-extensions": self._action_open_extensions,
+            "open-install-guide": self._action_open_install_guide,
+            "open-snap-notes": self._action_open_snap_notes,
+            # Privacy / incognito states.
+            "resume-recording": self._action_resume_recording,
+            "open-prefs-privacy": self._action_open_prefs_privacy,
+            # Backup / restore error states.
+            "retry-backup": self._action_retry_backup,
+            "rechoose-backup": self._action_rechoose_backup,
+            "rechoose-restore": self._action_rechoose_restore,
+            "open-restore": self._action_open_restore,
+            # Storage / DB / network states.
+            "open-prefs-storage": self._action_open_prefs_storage,
+            "reveal-db-folder": self._action_reveal_db_folder,
+            "retry-update-check": self._action_retry_update_check,
+            # AlertDialog close (response id when user dismisses).
+            "close-dialog": self._action_close_dialog,
+        }
 
-        if entry.get("sensitive"):
-            sens_label = Gtk.Label(label="\U0001f6e1")
-            sens_label.get_style_context().add_class("sensitive-badge")
-            sens_label.set_halign(Gtk.Align.START)
-            meta_box.pack_start(sens_label, False, False, 0)
+    # -- Individual action handlers ------------------------------------
+    # Each handler is intentionally tiny so the dispatcher table reads
+    # like a manifest. The handlers fall into four families:
+    #   1. inline state changes (clear-search, resume-recording)
+    #   2. open-url shells (Extensions site, install guide, snap notes)
+    #   3. open-prefs delegations (privacy / storage panes)
+    #   4. retry hooks for background operations (update check, backup)
 
-        content_box.pack_start(meta_box, False, False, 0)
+    def _action_clear_search(self):
+        self.search_entry.set_text("")
+        self._search_query = ""
+        self.refresh()
 
-        if entry["content_type"] == "text":
-            text = entry["content_text"] or ""
-            preview = text[:150].replace("\n", " ")
-            if len(text) > 150:
-                preview += "..."
-            label = Gtk.Label(label=preview)
-            label.get_style_context().add_class("clip-text")
-            label.set_halign(Gtk.Align.START)
-            label.set_xalign(0)
-            label.set_line_wrap(True)
-            label.set_max_width_chars(45)
-            label.set_ellipsize(Pango.EllipsizeMode.END)
-            label.set_lines(2)
-            row.full_text = text
-            row.preview_text = preview
-            row.content_label = label
-            content_box.pack_start(label, False, False, 0)
-        elif (entry["content_type"] == "image" and entry["image_path"]
-              and _safe_image_path(entry["image_path"])):
-            try:
-                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                    entry["image_path"], 48, 48, True
-                )
-                image = Gtk.Image.new_from_pixbuf(pixbuf)
-                image.set_halign(Gtk.Align.START)
-                image.set_has_tooltip(True)
-                image.connect(
-                    "query-tooltip", self._on_image_tooltip, entry["image_path"]
-                )
-                content_box.pack_start(image, False, False, 0)
-            except (GLib.Error, OSError):
-                label = Gtk.Label(label="[Image]")
-                label.get_style_context().add_class("clip-text")
-                content_box.pack_start(label, False, False, 0)
+    def _action_open_snippets_dialog(self):
+        self._on_snippets_clicked(None)
 
-        content_event.add(content_box)
-        outer_box.pack_start(content_event, True, True, 0)
+    def _action_open_extensions(self):
+        self._open_url(self._EXTENSIONS_URL)
 
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        btn_box.set_valign(Gtk.Align.CENTER)
+    def _action_open_install_guide(self):
+        self._open_url(self._INSTALL_GUIDE_URL)
 
-        pin_btn = Gtk.Button(label="\u2605" if entry["pinned"] else "\u2606")
-        pin_btn.get_style_context().add_class("pin-button")
-        pin_btn.get_style_context().add_class(
-            "pinned" if entry["pinned"] else "unpinned"
-        )
-        pin_btn.set_tooltip_text(_("Unpin") if entry["pinned"] else _("Pin"))
-        pin_btn.get_accessible().set_name(_("Unpin entry") if entry["pinned"] else _("Pin entry"))
-        pin_btn.connect("clicked", self._on_pin_click, entry["id"])
-        btn_box.pack_start(pin_btn, False, False, 0)
+    def _action_open_snap_notes(self):
+        self._open_url(self._SNAP_NOTES_URL)
 
-        del_btn = Gtk.Button(label="\u2715")
-        del_btn.get_style_context().add_class("delete-button")
-        del_btn.set_tooltip_text(_("Delete"))
-        del_btn.get_accessible().set_name(_("Delete entry"))
-        del_btn.connect("clicked", self._on_delete_click, entry["id"])
-        btn_box.pack_start(del_btn, False, False, 0)
+    def _action_resume_recording(self):
+        if self.monitor is not None:
+            self.monitor.set_incognito(False)
+        self._incognito_btn.set_active(False)
+        self._dismiss_edge_banner()
 
-        if entry["content_type"] == "text" and entry["content_text"]:
-            edit_btn = Gtk.Button(label="\u270E")
-            edit_btn.get_style_context().add_class("edit-button")
-            edit_btn.get_style_context().add_class("unpinned")
-            edit_btn.set_tooltip_text(_("Edit"))
-            edit_btn.get_accessible().set_name(_("Edit entry"))
-            edit_btn.connect("clicked", self._on_edit_entry_click, entry)
-            btn_box.pack_start(edit_btn, False, False, 0)
+    def _action_open_prefs_privacy(self):
+        # Adw.PreferencesWindow auto-selects the first matching page;
+        # we expose the privacy pane via search to be deep-link friendly.
+        self._on_prefs_clicked(None)
 
-            if len(entry["content_text"]) > 150:
-                expand_btn = Gtk.Button(label="\u25BC")
-                expand_btn.get_style_context().add_class("expand-button")
-                expand_btn.set_tooltip_text(_("Expand"))
-                expand_btn.get_accessible().set_name(_("Expand entry text"))
-                expand_btn.connect("clicked", self._on_expand_click, row)
-                btn_box.pack_start(expand_btn, False, False, 0)
+    def _action_open_prefs_storage(self):
+        self._on_prefs_clicked(None)
 
-            url = self._detect_url(entry["content_text"])
-            if url:
-                url_btn = Gtk.Button(label="\u2197")
-                url_btn.get_style_context().add_class("url-button")
-                url_btn.set_tooltip_text(_("Open URL"))
-                url_btn.get_accessible().set_name(_("Open URL in browser"))
-                url_btn.connect("clicked", self._on_open_url_click, url)
-                btn_box.pack_start(url_btn, False, False, 0)
+    def _action_retry_backup(self):
+        # The retry flow is owned by the preferences window — bring
+        # the user back to Storage where the Export action lives so a
+        # second click re-issues the backup.
+        self._on_prefs_clicked(None)
 
-        outer_box.pack_end(btn_box, False, False, 0)
+    def _action_rechoose_backup(self):
+        # Same shape as retry-backup: hand off to preferences where the
+        # FileChooser is wired. Splitting them keeps the dispatcher
+        # table self-documenting even though the destination matches.
+        self._on_prefs_clicked(None)
 
-        row.add(outer_box)
-        return row
+    def _action_rechoose_restore(self):
+        self._on_prefs_clicked(None)
 
-    def _create_snippet_row(self, snippet):
-        row = Gtk.ListBoxRow()
-        row.snippet_data = snippet
-        row.get_style_context().add_class("clip-row")
+    def _action_open_restore(self):
+        # db-locked state CTA: take the user to the Restore action so
+        # they can recover from the most recent backup.
+        self._on_prefs_clicked(None)
 
-        outer_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+    def _action_reveal_db_folder(self):
+        # xdg-open a directory hands off to the user's file manager.
+        from clipman.database import DATA_DIR
 
-        content_event = Gtk.EventBox()
-        content_event.set_hexpand(True)
-        content_event.connect(
-            "button-press-event", self._on_snippet_click, snippet
-        )
-        content_event.set_tooltip_text(_("Click to paste"))
+        self._open_url(str(DATA_DIR))
 
-        content_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+    def _action_retry_update_check(self):
+        self.refresh_update_banner()
 
-        name_label = Gtk.Label(label=snippet["name"])
-        name_label.get_style_context().add_class("snippet-name")
-        name_label.set_halign(Gtk.Align.START)
-        name_label.set_xalign(0)
-        name_label.set_ellipsize(Pango.EllipsizeMode.END)
-        content_box.pack_start(name_label, False, False, 0)
+    def _action_close_dialog(self):
+        # AlertDialog handles its own dismissal — no extra work needed.
+        # The handler exists so the dispatcher table stays exhaustive.
+        pass
 
-        preview = snippet["content_text"][:120].replace("\n", " ")
-        if len(snippet["content_text"]) > 120:
-            preview += "..."
-        preview_label = Gtk.Label(label=preview)
-        preview_label.get_style_context().add_class("clip-text")
-        preview_label.set_halign(Gtk.Align.START)
-        preview_label.set_xalign(0)
-        preview_label.set_line_wrap(True)
-        preview_label.set_max_width_chars(45)
-        preview_label.set_ellipsize(Pango.EllipsizeMode.END)
-        preview_label.set_lines(2)
-        content_box.pack_start(preview_label, False, False, 0)
+    def _dismiss_edge_banner(self):
+        if self._current_edge_banner is not None:
+            self._edge_banner_slot.remove(self._current_edge_banner)
+            self._current_edge_banner = None
 
-        content_event.add(content_box)
-        outer_box.pack_start(content_event, True, True, 0)
-
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
-        btn_box.set_valign(Gtk.Align.CENTER)
-
-        edit_btn = Gtk.Button(label="\u270E")
-        edit_btn.get_style_context().add_class("edit-button")
-        edit_btn.get_style_context().add_class("unpinned")
-        edit_btn.set_tooltip_text(_("Edit"))
-        edit_btn.get_accessible().set_name(_("Edit snippet"))
-        edit_btn.connect("clicked", self._on_snippet_edit_click, snippet)
-        btn_box.pack_start(edit_btn, False, False, 0)
-
-        del_btn = Gtk.Button(label="\u2715")
-        del_btn.get_style_context().add_class("delete-button")
-        del_btn.set_tooltip_text(_("Delete"))
-        del_btn.get_accessible().set_name(_("Delete snippet"))
-        del_btn.connect("clicked", self._on_snippet_delete_click, snippet["id"])
-        btn_box.pack_start(del_btn, False, False, 0)
-
-        outer_box.pack_end(btn_box, False, False, 0)
-
-        row.add(outer_box)
-        return row
-
-    # -- Image tooltip -----------------------------------------------------
-
-    def _on_image_tooltip(self, widget, x, y, keyboard_mode, tooltip,
-                          image_path):
-        if not _safe_image_path(image_path):
-            return False
+    def _open_url(self, url):
         try:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                image_path, 200, 200, True
+            subprocess.Popen(
+                ["xdg-open", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
-            tooltip.set_icon(pixbuf)
+        except OSError:
+            logger.debug("xdg-open failed for %s", url, exc_info=True)
+
+    def _make_entry_row(self, entry):
+        ctype = entry.get("content_type") or "text"
+        text = entry.get("content_text") or ""
+        first_line = text.split("\n", 1)[0].strip() if text else ""
+        if ctype == "image":
+            title = "[Image]"
+        else:
+            title = first_line[:120] or _("(empty)")
+
+        row = Adw.ActionRow()
+        row.set_title(escape(title))
+        row.set_subtitle(
+            f"{ctype.upper()} · {self._format_time(entry['accessed_at'])}"
+        )
+        row.set_activatable(True)
+        row.add_css_class("clip-row")
+        row.entry_data = entry
+        row.row_kind = "entry"
+
+        # 3px coloured prefix bar (per-type tint).
+        bar = Gtk.Box()
+        bar.add_css_class("clip-type-bar")
+        bar.add_css_class(TYPE_CLASSES.get(ctype, "clip-type-text"))
+        bar.set_size_request(3, -1)
+        bar.set_valign(Gtk.Align.FILL)
+        row.add_prefix(bar)
+
+        # Image entries get a 32x32 thumbnail so users can scan the list
+        # visually instead of relying on the literal ``[Image]`` title.
+        if ctype == "image":
+            image_path = entry.get("image_path")
+            from clipman.database import _safe_image_path
+
+            if image_path and _safe_image_path(image_path):
+                try:
+                    texture = Gdk.Texture.new_from_filename(image_path)
+                    thumb = Gtk.Picture.new_for_paintable(texture)
+                    thumb.set_can_shrink(True)
+                    thumb.set_content_fit(Gtk.ContentFit.COVER)
+                    thumb.set_size_request(32, 32)
+                    thumb.set_valign(Gtk.Align.CENTER)
+                    thumb.add_css_class("clip-thumb")
+                    row.add_prefix(thumb)
+                except Exception:
+                    # Corrupt file or unsupported format — fall back to
+                    # the bare ``[Image]`` label rather than crashing.
+                    logger.debug(
+                        "thumbnail failed for %r", image_path, exc_info=True
+                    )
+
+        pin_btn = Gtk.Button.new_from_icon_name(
+            "starred-symbolic" if entry["pinned"]
+            else "non-starred-symbolic"
+        )
+        pin_btn.add_css_class("flat")
+        pin_btn.set_valign(Gtk.Align.CENTER)
+        pin_btn.set_tooltip_text(
+            _("Unpin") if entry["pinned"] else _("Pin")
+        )
+        pin_btn.connect("clicked", self._on_pin_clicked, entry["id"])
+        row.add_suffix(pin_btn)
+
+        del_btn = Gtk.Button.new_from_icon_name("user-trash-symbolic")
+        del_btn.add_css_class("flat")
+        del_btn.set_valign(Gtk.Align.CENTER)
+        del_btn.set_tooltip_text(_("Delete"))
+        del_btn.connect("clicked", self._on_delete_clicked, entry["id"])
+        row.add_suffix(del_btn)
+
+        return row
+
+    def _make_snippet_row(self, snippet):
+        row = Adw.ActionRow()
+        row.set_title(escape(snippet["name"]))
+        preview = (snippet.get("content_text") or "").split("\n", 1)[0]
+        row.set_subtitle(escape(preview[:120]))
+        row.set_activatable(True)
+        row.add_css_class("clip-row")
+        row.snippet_data = snippet
+        row.row_kind = "snippet"
+
+        bar = Gtk.Box()
+        bar.add_css_class("clip-type-bar")
+        bar.add_css_class(TYPE_CLASSES["snip"])
+        bar.set_size_request(3, -1)
+        bar.set_valign(Gtk.Align.FILL)
+        row.add_prefix(bar)
+
+        return row
+
+    # ------------------------------------------------------------------
+    # Update banner
+    # ------------------------------------------------------------------
+
+    def refresh_update_banner(self):
+        """Public — ``app.py`` re-evaluates after a background check."""
+        show, latest = updates.should_show_banner(self.db)
+        if show:
+            self._update_banner.set_title(
+                _("Update available: v{new} (you have v{cur})").format(
+                    new=latest, cur=__version__
+                )
+            )
+            self._update_banner.set_revealed(True)
+        else:
+            self._update_banner.set_revealed(False)
+
+    def _on_update_banner_clicked(self, _banner):
+        latest = updates.latest_known(self.db) or __version__
+        self._open_url(
+            f"https://github.com/MohammedEl-sayedAhmed/clipman/"
+            f"releases/tag/v{latest}"
+        )
+
+    # ------------------------------------------------------------------
+    # Paste path — GTK 4 clipboard API with wl-copy + wtype/ydotool fallback
+    # ------------------------------------------------------------------
+
+    def _copy_to_clipboard(self, text):
+        if self.monitor:
+            self.monitor.set_self_copy(True)
+        try:
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.set(text)
+        except Exception:
+            # GTK clipboard API can fail under Xwayland or before the
+            # display is ready; fall through to the wl-copy CLI which
+            # is more reliable on Wayland sessions.
+            logger.debug("GTK clipboard.set failed", exc_info=True)
+            try:
+                proc = subprocess.Popen(
+                    ["wl-copy"],
+                    stdin=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                )
+                proc.communicate(input=text.encode("utf-8"))
+            except OSError:
+                # wl-copy isn't installed either — the user will have
+                # to copy manually. Log so we can diagnose support
+                # requests but don't surface a popup error.
+                logger.debug("wl-copy fallback failed", exc_info=True)
+
+    def _copy_image_to_clipboard(self, image_path):
+        """Push an image file at ``image_path`` onto the system clipboard.
+
+        ``image_path`` must have already passed ``database._safe_image_path``
+        — we re-check defensively here so a poisoned DB row can't reach
+        ``Gdk.Texture.new_from_filename`` with a path outside ``IMAGES_DIR``.
+        Returns ``True`` on success so callers know whether to simulate
+        a paste.
+        """
+        from clipman.database import _safe_image_path
+
+        if not image_path or not _safe_image_path(image_path):
+            logger.debug("refusing image with unsafe path: %r", image_path)
+            return False
+        if self.monitor:
+            self.monitor.set_self_copy(True)
+        try:
+            texture = Gdk.Texture.new_from_filename(image_path)
+            clipboard = Gdk.Display.get_default().get_clipboard()
+            clipboard.set_texture(texture)
             return True
-        except (GLib.Error, OSError):
+        except Exception:
+            logger.debug(
+                "Gdk.Texture clipboard set failed; trying wl-copy fallback",
+                exc_info=True,
+            )
+        try:
+            with open(image_path, "rb") as fh:
+                proc = subprocess.Popen(
+                    ["wl-copy", "--type", "image/png"],
+                    stdin=fh,
+                    stderr=subprocess.DEVNULL,
+                )
+                proc.communicate()
+            return proc.returncode == 0
+        except OSError:
+            logger.debug("wl-copy image fallback failed", exc_info=True)
             return False
 
-    # -- Helpers -----------------------------------------------------------
-
-    def _format_time(self, timestamp):
-        diff = time.time() - timestamp
-        if diff < 60:
-            return _("just now")
-        elif diff < 3600:
-            mins = int(diff / 60)
-            return _("{n}m ago").format(n=mins)
-        elif diff < 86400:
-            hours = int(diff / 3600)
-            return _("{n}h ago").format(n=hours)
-        else:
-            days = int(diff / 86400)
-            return _("{n}d ago").format(n=days)
-
-    # -- Paste / Copy ------------------------------------------------------
-
-    def _paste_entry(self, entry):
-        if self.monitor:
-            self.monitor.set_self_copy(True)
-
-        if entry["content_type"] == "text" and entry["content_text"]:
-            proc = subprocess.Popen(
-                ["wl-copy"], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL
-            )
-            proc.communicate(input=entry["content_text"].encode("utf-8"))
-        elif (entry["content_type"] == "image" and entry["image_path"]
-              and _safe_image_path(entry["image_path"])):
-            with open(entry["image_path"], "rb") as img_file:
-                proc = subprocess.Popen(
-                    ["wl-copy", "--type", "image/png"],
-                    stdin=img_file,
-                    stderr=subprocess.DEVNULL
-                )
-                proc.wait(timeout=5)
-
-        self.db.update_accessed(entry["id"])
-        self.hide()
-        GLib.timeout_add(150, self._simulate_paste)
-
-    def _paste_snippet(self, snippet):
-        if self.monitor:
-            self.monitor.set_self_copy(True)
-
-        proc = subprocess.Popen(
-            ["wl-copy"], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL
-        )
-        proc.communicate(input=snippet["content_text"].encode("utf-8"))
-
-        self.hide()
-        GLib.timeout_add(150, self._simulate_paste)
-
-    def _copy_only(self, data):
-        if self.monitor:
-            self.monitor.set_self_copy(True)
-
-        text = data.get("content_text")
-        image_path = data.get("image_path")
-
-        if text:
-            proc = subprocess.Popen(
-                ["wl-copy"], stdin=subprocess.PIPE, stderr=subprocess.DEVNULL
-            )
-            proc.communicate(input=text.encode("utf-8"))
-        elif image_path and _safe_image_path(image_path):
-            with open(image_path, "rb") as img_file:
-                proc = subprocess.Popen(
-                    ["wl-copy", "--type", "image/png"],
-                    stdin=img_file,
-                    stderr=subprocess.DEVNULL
-                )
-                proc.wait(timeout=5)
-
-        if data.get("id") and not data.get("name"):
-            self.db.update_accessed(data["id"])
-        self.hide()
+    # Per-mode command tables. ``wtype`` and ``ydotool`` use different
+    # key spellings; we keep both so a user without one binary still gets
+    # paste via the other.
+    _PASTE_COMMANDS = {
+        "ctrl-v": [
+            ["wtype", "-M", "ctrl", "v"],
+            ["ydotool", "key", "ctrl+v"],
+        ],
+        "ctrl-shift-v": [
+            ["wtype", "-M", "ctrl", "-M", "shift", "v"],
+            ["ydotool", "key", "ctrl+shift+v"],
+        ],
+        "shift-insert": [
+            ["wtype", "-M", "shift", "-k", "Insert"],
+            ["ydotool", "key", "shift+Insert"],
+        ],
+    }
 
     def _simulate_paste(self):
-        try:
-            import dbus
-            bus = dbus.SessionBus()
-            proxy = bus.get_object(
-                "org.gnome.Shell.Extensions.clipman", "/org/gnome/Shell/Extensions/clipman"
-            )
-            iface = dbus.Interface(proxy, "org.gnome.Shell.Extensions.clipman")
-            mode = self._paste_mode or DEFAULT_PASTE_MODE
+        """Synthesise the user's configured paste keystroke.
+
+        Dispatch order: read ``paste_mode`` from the DB; ``auto`` and
+        ``ctrl-v`` both fire Ctrl+V (auto is the historical default and
+        the most compatible). The other two modes use their respective
+        key sequence tables. If neither wtype nor ydotool is installed
+        we surface ``paste-target-missing`` via the edge state so the
+        user knows to copy manually.
+        """
+        mode = self.db.get_setting("paste_mode", "auto") or "auto"
+        commands = self._PASTE_COMMANDS.get(
+            mode, self._PASTE_COMMANDS["ctrl-v"]
+        )
+        any_binary_available = False
+        for cmd in commands:
             try:
-                iface.SimulatePaste(mode)
-            except dbus.DBusException:
-                # Older extension without the mode argument
-                iface.SimulatePaste()
-        except dbus.DBusException:
-            pass
+                subprocess.run(
+                    cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    timeout=2,
+                    check=False,
+                )
+                # First command that runs (even with a non-zero exit)
+                # is enough — the keystroke was synthesised.
+                return False
+            except FileNotFoundError:
+                continue
+            except subprocess.SubprocessError:
+                # The binary exists but failed to drive the
+                # keystroke — still counts as "available", just don't
+                # short-circuit so we try the next backend.
+                any_binary_available = True
+                continue
+        if not any_binary_available:
+            # Neither wtype nor ydotool is installed. Show the popup
+            # again with the dedicated edge state so the user has a
+            # clear next step.
+            self.set_visible(True)
+            self._show_edge_state("paste-target-missing")
         return False
 
-    # -- Event handlers ----------------------------------------------------
+    def _paste_entry(self, entry):
+        ctype = entry.get("content_type") or "text"
+        if ctype == "image":
+            image_path = entry.get("image_path")
+            if not self._copy_image_to_clipboard(image_path):
+                # Couldn't load the image — leave the popup open so the
+                # user notices the failure rather than silently swallowing.
+                return
+        else:
+            text = entry.get("content_text") or ""
+            if not text:
+                return
+            self._copy_to_clipboard(text)
+        if entry.get("id"):
+            self.db.update_accessed(entry["id"])
+        self.set_visible(False)
+        GLib.timeout_add(80, self._simulate_paste)
 
-    def _on_entry_click(self, widget, event, entry):
-        self._paste_entry(entry)
+    def _paste_snippet(self, snippet):
+        text = snippet.get("content_text") or ""
+        if not text:
+            return
+        text = self._expand_snippet_tokens(text)
+        self._copy_to_clipboard(text)
+        self.set_visible(False)
+        GLib.timeout_add(80, self._simulate_paste)
 
-    def _on_snippet_click(self, widget, event, snippet):
-        self._paste_snippet(snippet)
+    def _expand_snippet_tokens(self, text):
+        """Substitute ``${date}``, ``${time}``, ``${clipboard}`` tokens.
 
-    def _on_row_activated(self, listbox, row):
-        if row and hasattr(row, "entry_data"):
-            self._paste_entry(row.entry_data)
-        elif row and hasattr(row, "snippet_data"):
-            self._paste_snippet(row.snippet_data)
-
-    def _on_focus_out(self, widget, event):
-        if self._ignore_focus_out:
-            return False
-        # On some Wayland compositors, clicking certain interactive
-        # widgets inside the popup (notably Gtk.Switch and combo-box
-        # popovers) briefly transfers keyboard focus to a transient
-        # surface, which sends a focus-out to the parent window. If
-        # we treat that as "the popup lost focus to another window"
-        # and hide ourselves, the original click event never reaches
-        # the widget — the user perceives the entire settings panel
-        # as unresponsive. Guard: only hide when the new focus owner
-        # is genuinely outside the popup tree.
+        ``${clipboard}`` resolves to the most-recent text entry from the
+        clipboard history — useful for snippets that wrap whatever the
+        user just copied (e.g. ``> ${clipboard}`` for quoting).
+        """
+        recent = ""
         try:
-            new_focus = self.get_focus()
+            entries = self.db.get_entries(limit=1)
+            if entries:
+                recent = entries[0].get("content_text") or ""
         except Exception:
-            new_focus = None
-        if new_focus is not None and new_focus.is_ancestor(self):
-            return False
-        self.hide()
-        return False
+            logger.debug("get_entries failed for ${clipboard} expansion",
+                         exc_info=True)
+        return Template(text).safe_substitute(
+            date=time.strftime("%Y-%m-%d"),
+            time=time.strftime("%H:%M"),
+            clipboard=recent,
+        )
 
-    def _on_pin_click(self, button, entry_id):
-        self.db.toggle_pin(entry_id)
-        self.refresh()
-
-    def _on_delete_click(self, button, entry_id):
-        self.db.delete_entry(entry_id)
-        self.refresh()
-
-    def _on_clear_all(self, button):
-        self.db.clear_unpinned()
-        self.refresh()
+    # ------------------------------------------------------------------
+    # Signal handlers
+    # ------------------------------------------------------------------
 
     def _on_search_changed(self, entry):
         self._search_query = entry.get_text().strip()
         self.refresh()
 
-    def _on_filter_clicked(self, button, filter_id):
+    def _on_filter_toggled(self, button, filter_id):
+        if not button.get_active():
+            return
         if filter_id == self._active_filter:
             return
         for fid, btn in self._filter_buttons.items():
-            ctx = btn.get_style_context()
-            ctx.remove_class("filter-tab-active")
-            ctx.remove_class("filter-tab")
-            ctx.add_class(
-                "filter-tab-active" if fid == filter_id else "filter-tab"
-            )
+            btn.remove_css_class("filter-tab-active")
+            if fid == filter_id:
+                btn.add_css_class("filter-tab-active")
         self._active_filter = filter_id
+        self._new_snippet_btn.set_visible(filter_id == "snippets")
         self.refresh()
 
-    # -- Settings ----------------------------------------------------------
+    def _on_snippets_clicked(self, _button):
+        from clipman.snippets_dialog import SnippetsDialog
 
-    def _on_gear_clicked(self, button):
-        if self.settings_panel.get_visible():
-            self.settings_panel.hide()
-        else:
-            self.settings_panel.show()
-            self._show_all_children(self.settings_panel)
+        dialog = SnippetsDialog(self.db)
+        dialog.connect("closed", lambda _d: self.refresh())
+        dialog.present(self)
 
-    def _show_all_children(self, widget):
-        """Recursively show all children (bypasses set_no_show_all)."""
-        if hasattr(widget, "get_children"):
-            for child in widget.get_children():
-                child.show()
-                self._show_all_children(child)
+    def _on_row_activated(self, _listbox, row):
+        if row is None:
+            return
+        if getattr(row, "row_kind", None) == "snippet":
+            self._paste_snippet(row.snippet_data)
+        elif getattr(row, "row_kind", None) == "entry":
+            self._paste_entry(row.entry_data)
 
-    def _on_opacity_changed(self, scale):
-        self._opacity = round(scale.get_value(), 2)
-        self.set_opacity(self._opacity)
-        self._opacity_value_label.set_text(f"{int(self._opacity * 100)}%")
-        self.db.set_setting("opacity", str(self._opacity))
-
-    def _on_font_size_changed(self, scale):
-        self._font_size = int(scale.get_value())
-        self._font_value_label.set_text(f"{self._font_size}px")
-        self.db.set_setting("font_size", str(self._font_size))
-        self._apply_css()
+    def _on_pin_clicked(self, _button, entry_id):
+        self.db.toggle_pin(entry_id)
         self.refresh()
 
-    def _on_max_history_changed(self, scale):
-        self._max_history = int(scale.get_value())
-        self._max_value_label.set_text(str(self._max_history))
-        self.db.set_setting("max_entries", str(self._max_history))
-
-    def _on_theme_changed(self, button, theme_id):
-        if theme_id == self._theme:
-            return
-        self._theme = theme_id
-        self.db.set_setting("theme", theme_id)
-        for tid, btn in self._theme_buttons.items():
-            ctx = btn.get_style_context()
-            ctx.remove_class("theme-btn-active")
-            ctx.remove_class("theme-btn")
-            ctx.add_class("theme-btn-active" if tid == theme_id else "theme-btn")
-        self._apply_css()
+    def _on_delete_clicked(self, _button, entry_id):
+        self.db.delete_entry(entry_id)
         self.refresh()
 
-    def _on_font_color_changed(self, button, hex_val):
-        self._font_color = hex_val or ""
-        self.db.set_setting("font_color", self._font_color)
-        for btn, val in self._color_buttons:
-            ctx = btn.get_style_context()
-            ctx.remove_class("swatch-active")
-            if val == hex_val:
-                ctx.add_class("swatch-active")
-        self._apply_css()
-        self.refresh()
-
-    def _on_sensitive_timeout_changed(self, scale):
-        self._sensitive_timeout = int(scale.get_value())
-        self._sensitive_value_label.set_text(f"{self._sensitive_timeout}s")
-        self.db.set_setting("sensitive_timeout", str(self._sensitive_timeout))
-
-    def _on_paste_mode_changed(self, combo):
-        mode_id = combo.get_active_id()
-        if not mode_id:
+    def _on_incognito_toggled(self, button):
+        if self.monitor is None:
             return
-        self._paste_mode = mode_id
-        self.db.set_setting("paste_mode", mode_id)
-
-    def _on_shortcut_change(self, button):
-        dialog = _ShortcutCaptureDialog(self)
-        response = dialog.run()
-        new_binding = dialog.captured_binding
-        dialog.destroy()
-        if response != Gtk.ResponseType.OK or not new_binding:
-            return
-        if new_binding == self._toggle_shortcut:
-            return
-        if keybindings.is_clipman_binding_registered():
-            ok = keybindings.set_toggle_binding(new_binding)
-        else:
-            ok = False
-        if not ok:
-            # gsettings unavailable or no clipman keybinding registered yet
-            self._show_shortcut_error()
-            return
-        self._toggle_shortcut = new_binding
-        self.db.set_setting("toggle_shortcut", new_binding)
-        button.set_label(keybindings.format_binding_for_display(new_binding))
-
-    def _show_shortcut_error(self):
-        msg = Gtk.MessageDialog(
-            transient_for=self,
-            modal=True,
-            message_type=Gtk.MessageType.WARNING,
-            buttons=Gtk.ButtonsType.OK,
-            text=_("Couldn't update the GNOME shortcut."),
+        self.monitor.set_incognito(button.get_active())
+        button.set_tooltip_text(
+            _("Incognito mode: ON — clipboard not recorded")
+            if button.get_active()
+            else _("Incognito mode: OFF")
         )
-        msg.format_secondary_text(_(
-            "The Clipman keybinding isn't registered with GNOME yet. "
-            "Run install.sh once to register it, then try again."
-        ))
-        msg.run()
-        msg.destroy()
 
-    # -- Update notifications ----------------------------------------------
+    def _on_prefs_clicked(self, _button):
+        from clipman.preferences import ClipmanPreferences
 
-    def _on_updates_toggle(self, switch, _gparam):
-        updates.set_enabled(self.db, switch.get_active())
-        self._check_now_btn.set_sensitive(switch.get_active())
-        self._refresh_update_status_text()
-        self.refresh_update_banner()
+        prefs = ClipmanPreferences(
+            self.db, self, on_setting_changed=self._on_setting_changed
+        )
+        prefs.present()
 
-    def _on_check_now_clicked(self, _button):
-        self._update_status.set_text(_("Checking..."))
-        # Bypass the 24h rate limit for a manual click.
-        self.db.set_setting(updates.SETTING_LAST_CHECK, "0")
-        updates.check_async(self.db, callback=self._on_update_result)
+    def _on_setting_changed(self, key, value):
+        """Hot-reload settings the popup cares about.
 
-    def _on_update_result(self, is_newer, latest, _url):
-        self._refresh_update_status_text()
-        self.refresh_update_banner()
-        return False  # GLib.idle_add: run once
-
-    def _refresh_update_status_text(self):
-        if not updates._enabled(self.db):
-            self._update_status.set_text(_("(disabled)"))
-            self._check_now_btn.set_sensitive(False)
-            return
-        self._check_now_btn.set_sensitive(True)
-        latest = updates.latest_known(self.db)
-        if not latest:
-            self._update_status.set_text(_("not checked yet"))
-        elif updates._is_newer(latest, __version__):
-            self._update_status.set_text(_("v{v} available").format(v=latest))
-        else:
-            self._update_status.set_text(_("up to date"))
-
-    def refresh_update_banner(self):
-        """Public so app.py can re-evaluate after a background check."""
-        show, latest = updates.should_show_banner(self.db)
-        if show:
-            self._update_banner_label.set_text(
-                _("Update available: v{new} (you have v{cur})").format(
-                    new=latest, cur=__version__
-                )
+        The preferences window calls this from each row's notify
+        handler. Anything not listed here is persisted but applied on
+        next launch (e.g. ``incognito_on_launch``).
+        """
+        if key == "theme":
+            self._theme = (
+                value if value in ("auto", "dark", "light") else DEFAULT_THEME
             )
-            self._update_banner.set_no_show_all(False)
-            self._update_banner.show_all()
-        else:
-            self._update_banner.hide()
-            self._update_banner.set_no_show_all(True)
+            self._apply_theme()
+        elif key == "font_size":
+            try:
+                self._font_size = max(8, min(20, int(value)))
+            except (TypeError, ValueError):
+                self._font_size = DEFAULT_FONT_SIZE
+            self._apply_css()
+        elif key == "font_color":
+            self._font_color = value or DEFAULT_FONT_COLOR
+            self._apply_css()
+        elif key == "opacity":
+            try:
+                self.set_opacity(max(0.3, min(1.0, float(value))))
+            except (TypeError, ValueError):
+                # Non-numeric value persisted by an older daemon — log
+                # and keep the current opacity rather than crashing.
+                logger.debug(
+                    "opacity setting not coercible: %r", value, exc_info=True
+                )
+        elif key == "sensitive_timeout":
+            try:
+                self._sensitive_timeout = max(10, min(300, int(value)))
+            except (TypeError, ValueError):
+                self._sensitive_timeout = DEFAULT_SENSITIVE_TIMEOUT
+        elif key in ("backup_succeeded", "restore_succeeded",
+                     "sensitive_purged"):
+            if self.get_visible():
+                self.refresh()
+        elif key == "backup_failed":
+            self._show_edge_state("backup-failed")
+        elif key == "restore_failed":
+            self._show_edge_state("restore-failed")
 
-    def _on_update_link_clicked(self, _button):
-        import webbrowser
-        latest = updates.latest_known(self.db) or __version__
-        webbrowser.open(
-            f"https://github.com/MohammedEl-sayedAhmed/clipman/releases/tag/v{latest}"
-        )
+    def _on_key_pressed(self, _controller, keyval, _keycode, _state):
+        if keyval == Gdk.KEY_Escape:
+            self.set_visible(False)
+            return True
+        return False
 
-    def _on_update_banner_dismiss(self, _button):
-        latest = updates.latest_known(self.db)
-        if latest:
-            updates.dismiss(self.db, latest)
-        self.refresh_update_banner()
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _format_time(self, timestamp):
+        diff = time.time() - timestamp
+        if diff < 60:
+            return _("just now")
+        if diff < 3600:
+            mins = int(diff / 60)
+            return _("{n}m ago").format(n=mins)
+        if diff < 86400:
+            hours = int(diff / 3600)
+            return _("{n}h ago").format(n=hours)
+        days = int(diff / 86400)
+        return _("{n}d ago").format(n=days)
+
+    def _clamped_default_height(self):
+        """Pick a sensible default popup height for the current monitor.
+
+        Uses the primary monitor's geometry and caps at 60% of its
+        height, with 540 as the upper bound. Falls back to 540 if the
+        monitor metadata isn't queryable (offscreen / headless CI).
+        """
+        default = 540
+        try:
+            display = Gdk.Display.get_default()
+            if display is None:
+                return default
+            monitors = display.get_monitors()
+            monitor = monitors.get_item(0) if monitors is not None else None
+            if monitor is None:
+                return default
+            geom = monitor.get_geometry()
+            return min(default, int(0.6 * geom.height))
+        except Exception:
+            logger.debug(
+                "monitor geometry unavailable; using default popup height",
+                exc_info=True,
+            )
+            return default
 
     def _cleanup_sensitive(self):
         deleted = self.db.delete_expired_sensitive(self._sensitive_timeout)
@@ -1167,409 +1076,46 @@ class ClipmanWindow(Gtk.Window):
             self.refresh()
         return True
 
-    def _on_incognito_toggle(self, button):
-        ctx = button.get_style_context()
-        if self.monitor and self.monitor._incognito:
-            self.monitor.set_incognito(False)
-            ctx.remove_class("incognito-active")
-            ctx.add_class("incognito-btn")
-            button.set_tooltip_text(_("Incognito mode: OFF"))
-        else:
-            if self.monitor:
-                self.monitor.set_incognito(True)
-            ctx.remove_class("incognito-btn")
-            ctx.add_class("incognito-active")
-            button.set_tooltip_text(_("Incognito mode: ON — clipboard not recorded"))
-
-    # -- Expand / Edit / URL handlers --------------------------------------
-
-    def _on_expand_click(self, button, row):
-        if getattr(row, '_is_expanded', False):
-            row.content_label.set_text(row.preview_text)
-            row.content_label.set_lines(2)
-            row.content_label.set_ellipsize(Pango.EllipsizeMode.END)
-            button.set_label("\u25BC")
-            button.set_tooltip_text(_("Expand"))
-            button.get_accessible().set_name(_("Expand entry text"))
-            row._is_expanded = False
-        else:
-            show = row.full_text[:2000]
-            if len(row.full_text) > 2000:
-                show += f"\n\u2026 ({len(row.full_text):,} total chars)"
-            row.content_label.set_text(show)
-            row.content_label.set_lines(20)
-            row.content_label.set_ellipsize(Pango.EllipsizeMode.NONE)
-            button.set_label("\u25B2")
-            button.set_tooltip_text(_("Collapse"))
-            button.get_accessible().set_name(_("Collapse entry text"))
-            row._is_expanded = True
-
-    def _on_edit_entry_click(self, button, entry):
-        self._show_edit_dialog(entry)
-
-    def _show_edit_dialog(self, entry):
-        self._ignore_focus_out = True
-        self.hide()
-
-        dialog = Gtk.Dialog(
-            title=_("Edit Entry"),
-            flags=Gtk.DialogFlags.MODAL,
-        )
-        dialog.get_style_context().add_class("snippet-dialog")
-        dialog.set_keep_above(True)
-        dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
-        dialog.add_button(_("Save"), Gtk.ResponseType.OK)
-        dialog.set_default_size(360, 280)
-
-        area = dialog.get_content_area()
-        area.get_style_context().add_class("snippet-dialog-content")
-        area.set_spacing(8)
-        area.set_margin_start(12)
-        area.set_margin_end(12)
-        area.set_margin_top(12)
-
-        label = Gtk.Label(label=_("Content"))
-        label.get_style_context().add_class("snippet-dialog-label")
-        label.set_halign(Gtk.Align.START)
-        area.pack_start(label, False, False, 0)
-
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_size_request(-1, 200)
-        text_view = Gtk.TextView()
-        text_view.get_style_context().add_class("snippet-dialog-textview")
-        text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        text_view.set_left_margin(6)
-        text_view.set_right_margin(6)
-        text_view.set_top_margin(4)
-        text_view.set_bottom_margin(4)
-        text_view.get_buffer().set_text(entry["content_text"] or "")
-        scrolled.add(text_view)
-        area.pack_start(scrolled, True, True, 0)
-
-        dialog.show_all()
-        response = dialog.run()
-
-        if response == Gtk.ResponseType.OK:
-            buf = text_view.get_buffer()
-            new_text = buf.get_text(
-                buf.get_start_iter(), buf.get_end_iter(), False
-            )
-            if new_text and new_text != entry["content_text"]:
-                self.db.update_entry_text(entry["id"], new_text)
-
-        dialog.destroy()
-        self._ignore_focus_out = False
-        self.show_all()
-        self.refresh()
-        self.present()
-
-    @staticmethod
-    def _detect_url(text):
-        t = text.strip().split("\n")[0].strip()
-        if t.startswith(("http://", "https://")) and " " not in t:
-            return t
-        if t.startswith("www.") and " " not in t:
-            return "https://" + t
-        return None
-
-    def _on_open_url_click(self, button, url):
-        try:
-            subprocess.Popen(
-                ["xdg-open", url],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
-        except OSError:
-            pass
-
-    # -- Backup / Restore --------------------------------------------------
-
-    def _on_backup_clicked(self, button):
-        self._ignore_focus_out = True
-        dialog = Gtk.FileChooserDialog(
-            title=_("Backup Clipboard Database"),
-            action=Gtk.FileChooserAction.SAVE,
-        )
-        dialog.set_keep_above(True)
-        dialog.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
-        dialog.add_button(_("Save"), Gtk.ResponseType.OK)
-        dialog.set_current_name("clipman-backup.db")
-        dialog.set_do_overwrite_confirmation(True)
-
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            path = dialog.get_filename()
-            try:
-                self.db.export_backup(path)
-            except (OSError, sqlite3.Error) as e:
-                err = Gtk.MessageDialog(
-                    transient_for=self, modal=True,
-                    message_type=Gtk.MessageType.ERROR,
-                    buttons=Gtk.ButtonsType.OK,
-                    text=_("Backup failed"),
-                )
-                err.format_secondary_text(str(e))
-                err.run()
-                err.destroy()
-        dialog.destroy()
-        self._ignore_focus_out = False
-
-    def _on_restore_clicked(self, button):
-        self._ignore_focus_out = True
-        dialog = Gtk.FileChooserDialog(
-            title=_("Restore Clipboard Database"),
-            action=Gtk.FileChooserAction.OPEN,
-        )
-        dialog.set_keep_above(True)
-        dialog.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
-        dialog.add_button(_("Open"), Gtk.ResponseType.OK)
-
-        db_filter = Gtk.FileFilter()
-        db_filter.set_name(_("Database files"))
-        db_filter.add_pattern("*.db")
-        dialog.add_filter(db_filter)
-
-        all_filter = Gtk.FileFilter()
-        all_filter.set_name(_("All files"))
-        all_filter.add_pattern("*")
-        dialog.add_filter(all_filter)
-
-        response = dialog.run()
-        if response == Gtk.ResponseType.OK:
-            path = dialog.get_filename()
-            try:
-                self.db.import_backup(path)
-                self.refresh()
-            except (OSError, sqlite3.Error) as e:
-                err = Gtk.MessageDialog(
-                    transient_for=self, modal=True,
-                    message_type=Gtk.MessageType.ERROR,
-                    buttons=Gtk.ButtonsType.OK,
-                    text=_("Restore failed"),
-                )
-                err.format_secondary_text(str(e))
-                err.run()
-                err.destroy()
-        dialog.destroy()
-        self._ignore_focus_out = False
-
-    # -- Snippet dialogs ---------------------------------------------------
-
-    def _on_add_snippet_clicked(self, button):
-        self._show_snippet_dialog()
-
-    def _on_snippet_edit_click(self, button, snippet):
-        self._show_snippet_dialog(snippet)
-
-    def _on_snippet_delete_click(self, button, snippet_id):
-        self.db.delete_snippet(snippet_id)
-        self.refresh()
-
-    def _show_snippet_dialog(self, snippet=None):
-        self._ignore_focus_out = True
-        editing = snippet is not None
-
-        # Hide the main window to avoid Wayland "unmap parent of popup" warnings
-        self.hide()
-
-        dialog = Gtk.Dialog(
-            title=_("Edit Snippet") if editing else _("Add Snippet"),
-            flags=Gtk.DialogFlags.MODAL,
-        )
-        dialog.get_style_context().add_class("snippet-dialog")
-        dialog.set_keep_above(True)
-        dialog.set_position(Gtk.WindowPosition.CENTER)
-        dialog.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
-        dialog.add_button(_("Save"), Gtk.ResponseType.OK)
-        dialog.set_default_size(360, 280)
-
-        area = dialog.get_content_area()
-        area.get_style_context().add_class("snippet-dialog-content")
-        area.set_spacing(8)
-        area.set_margin_start(12)
-        area.set_margin_end(12)
-        area.set_margin_top(12)
-
-        name_label = Gtk.Label(label=_("Name"))
-        name_label.get_style_context().add_class("snippet-dialog-label")
-        name_label.set_halign(Gtk.Align.START)
-        area.pack_start(name_label, False, False, 0)
-
-        name_entry = Gtk.Entry()
-        name_entry.get_style_context().add_class("snippet-dialog-entry")
-        name_entry.set_placeholder_text(_("e.g., Email signature"))
-        if editing:
-            name_entry.set_text(snippet["name"])
-        area.pack_start(name_entry, False, False, 0)
-
-        content_label = Gtk.Label(label=_("Content"))
-        content_label.get_style_context().add_class("snippet-dialog-label")
-        content_label.set_halign(Gtk.Align.START)
-        area.pack_start(content_label, False, False, 0)
-
-        scrolled = Gtk.ScrolledWindow()
-        scrolled.set_size_request(-1, 150)
-        text_view = Gtk.TextView()
-        text_view.get_style_context().add_class("snippet-dialog-textview")
-        text_view.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        text_view.set_left_margin(6)
-        text_view.set_right_margin(6)
-        text_view.set_top_margin(4)
-        text_view.set_bottom_margin(4)
-        if editing:
-            text_view.get_buffer().set_text(snippet["content_text"])
-        scrolled.add(text_view)
-        area.pack_start(scrolled, True, True, 0)
-
-        dialog.show_all()
-        response = dialog.run()
-
-        if response == Gtk.ResponseType.OK:
-            name = name_entry.get_text().strip()
-            buf = text_view.get_buffer()
-            content = buf.get_text(
-                buf.get_start_iter(), buf.get_end_iter(), False
-            )
-            if name and content:
-                if editing:
-                    self.db.update_snippet(snippet["id"], name, content)
-                else:
-                    self.db.add_snippet(name, content)
-
-        dialog.destroy()
-        self._ignore_focus_out = False
-        self.show_all()
-        self.refresh()
-        self.present()
-
-    # -- Key handling ------------------------------------------------------
-
-    def _on_key_press(self, widget, event):
-        if event.keyval == Gdk.KEY_Escape:
-            self.hide()
-            return True
-
-        if event.keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter):
-            if event.state & Gdk.ModifierType.SHIFT_MASK:
-                row = self.listbox.get_selected_row()
-                if row and hasattr(row, "entry_data"):
-                    self._copy_only(row.entry_data)
-                    return True
-                elif row and hasattr(row, "snippet_data"):
-                    self._copy_only(row.snippet_data)
-                    return True
-
-        if event.keyval == Gdk.KEY_Down and self.search_entry.has_focus():
-            idx = 0
-            row = self.listbox.get_row_at_index(idx)
-            while row and not row.get_selectable():
-                idx += 1
-                row = self.listbox.get_row_at_index(idx)
-            if row:
-                self.listbox.select_row(row)
-                row.grab_focus()
-                return True
-
-        if not self.search_entry.has_focus():
-            if event.keyval == Gdk.KEY_Delete:
-                row = self.listbox.get_selected_row()
-                if row and hasattr(row, "entry_data"):
-                    self.db.delete_entry(row.entry_data["id"])
-                    self.refresh()
-                    return True
-                elif row and hasattr(row, "snippet_data"):
-                    self.db.delete_snippet(row.snippet_data["id"])
-                    self.refresh()
-                    return True
-
-            if event.keyval in (Gdk.KEY_p, Gdk.KEY_P):
-                row = self.listbox.get_selected_row()
-                if row and hasattr(row, "entry_data"):
-                    self.db.toggle_pin(row.entry_data["id"])
-                    self.refresh()
-                    return True
-
-        return False
-
-    def _on_delete(self, widget, event):
-        self.hide()
-        return True
-
-    # -- Toggle ------------------------------------------------------------
-
     def _move_to_cursor(self):
+        """Ask the GNOME Shell extension to reposition us near the cursor.
+
+        Best-effort — if the extension isn't installed the window stays
+        wherever the compositor placed it, which is acceptable for Phase 1.
+        """
         try:
             import dbus
             bus = dbus.SessionBus()
             proxy = bus.get_object(
-                "org.gnome.Shell.Extensions.clipman", "/org/gnome/Shell/Extensions/clipman"
+                "org.gnome.Shell.Extensions.clipman",
+                "/org/gnome/Shell/Extensions/clipman",
             )
-            iface = dbus.Interface(proxy, "org.gnome.Shell.Extensions.clipman")
+            iface = dbus.Interface(
+                proxy, "org.gnome.Shell.Extensions.clipman"
+            )
             iface.MoveWindowToCursor("Clipman")
-        except dbus.DBusException:
-            pass
+        except Exception as exc:
+            # The python-dbus module or the GNOME Shell extension may
+            # be absent — both are expected on non-GNOME desktops, and
+            # dbus raises a wide variety of error types when the bus
+            # name isn't owned. Trace the failure for support requests
+            # but leave the window where the compositor placed it.
+            logger.debug(
+                "Shell extension move-to-cursor unavailable: %s",
+                exc,
+                exc_info=True,
+            )
         return False
+
+    # ------------------------------------------------------------------
+    # Toggle (public — dbus_service.Toggle() routes here)
+    # ------------------------------------------------------------------
 
     def toggle(self):
         if self.get_visible():
-            self.hide()
-        else:
-            self.show_all()
-            self.refresh()
-            self.search_entry.grab_focus()
-            self.present()
-            GLib.timeout_add(50, self._move_to_cursor)
-
-
-class _ShortcutCaptureDialog(Gtk.Dialog):
-    """Modal dialog that captures the next key combo for the toggle shortcut."""
-
-    def __init__(self, parent):
-        super().__init__(
-            title=_("Set toggle shortcut"),
-            transient_for=parent,
-            modal=True,
-        )
-        self.set_default_size(360, 140)
-        self.captured_binding = None
-
-        self.add_button(_("Cancel"), Gtk.ResponseType.CANCEL)
-        self._save_btn = self.add_button(_("Save"), Gtk.ResponseType.OK)
-        self._save_btn.set_sensitive(False)
-
-        box = self.get_content_area()
-        box.set_spacing(8)
-        box.set_margin_top(12)
-        box.set_margin_bottom(12)
-        box.set_margin_start(16)
-        box.set_margin_end(16)
-
-        self._instruction = Gtk.Label()
-        self._instruction.set_text(
-            _("Press a key combination (must include Ctrl, Super, Alt, or Shift)")
-        )
-        self._instruction.set_line_wrap(True)
-        self._instruction.set_halign(Gtk.Align.START)
-        box.pack_start(self._instruction, False, False, 0)
-
-        self._preview = Gtk.Label(label=_("(no keys pressed yet)"))
-        self._preview.get_style_context().add_class("settings-value")
-        box.pack_start(self._preview, False, False, 0)
-
-        self.connect("key-press-event", self._on_key_press)
-        self.show_all()
-
-    def _on_key_press(self, _widget, event):
-        # Use defined values when available; treat keyval/state directly.
-        keyval = getattr(event, "keyval", None) or event.get_keyval()[1]
-        state = getattr(event, "state", None)
-        if state is None:
-            state = event.get_state()
-        binding = keybindings.keyval_to_binding(keyval, int(state))
-        if binding is None:
-            # Pure modifier or unusable key — keep waiting.
-            return True
-        self.captured_binding = binding
-        self._preview.set_text(keybindings.format_binding_for_display(binding))
-        self._save_btn.set_sensitive(True)
-        return True
+            self.set_visible(False)
+            return
+        self.refresh()
+        self.set_visible(True)
+        self.present()
+        self.search_entry.grab_focus()
+        GLib.timeout_add(50, self._move_to_cursor)
