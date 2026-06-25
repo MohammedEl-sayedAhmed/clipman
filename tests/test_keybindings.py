@@ -4,6 +4,23 @@ from unittest.mock import patch
 
 from clipman import keybindings
 
+# Probe for real GTK / Gdk so the TestKeyvalToBinding class can skip
+# cleanly when running on a stock CI image without the typelibs. We do
+# NOT mutate sys.modules from these tests — previous iterations stubbed
+# ``gi`` in setUp and ``addCleanup``-restored a captured snapshot, but
+# the snapshot was taken AFTER the stubs were already installed so
+# tearDown left the stub in place and leaked it into every subsequent
+# test module (test_window.py errored with AttributeError: 'module'
+# object has no attribute 'require_version'). Skipping is simpler and
+# safer than mock-patching sys.modules.
+try:
+    import gi
+    gi.require_version("Gdk", "4.0")
+    from gi.repository import Gdk as _RealGdk  # noqa: F401
+    _HAS_GDK = True
+except (ImportError, ValueError, AttributeError, RuntimeError):
+    _HAS_GDK = False
+
 
 class TestFormatBindingForDisplay(unittest.TestCase):
     def test_super_v(self):
@@ -147,90 +164,74 @@ class TestGsettingsShellouts(unittest.TestCase):
         )
 
 
+@unittest.skipUnless(_HAS_GDK, "gi.repository.Gdk not importable")
 class TestKeyvalToBinding(unittest.TestCase):
-    """Use a stub Gdk so the test doesn't require gi at import time."""
+    """Exercise keyval_to_binding against the REAL Gdk typelib.
+
+    Previously this class stubbed ``gi`` in ``sys.modules`` for the
+    duration of each test. That approach was fragile: the snapshot used
+    to "restore" the original modules was captured AFTER the stubs were
+    installed, so tearDown re-stamped the stub into ``sys.modules`` and
+    every later test module (e.g. ``test_window``) ran against the
+    broken shim. Skipping when GTK isn't available is cleaner — the
+    rest of test_keybindings doesn't need GTK at all.
+    """
 
     def setUp(self):
-        # Inject a fake gi.repository.Gdk into sys.modules so the
-        # local-import inside keyval_to_binding picks it up.
-        import sys
-        import types
+        from gi.repository import Gdk
+        self._Gdk = Gdk
+        self._ModifierType = Gdk.ModifierType
 
-        gi_mod = types.ModuleType("gi")
-        repo_mod = types.ModuleType("gi.repository")
-        gdk_mod = types.ModuleType("gi.repository.Gdk")
-
-        class _ModifierType:
-            CONTROL_MASK = 1 << 2
-            SHIFT_MASK = 1 << 0
-            MOD1_MASK = 1 << 3      # Alt
-            SUPER_MASK = 1 << 26
-
-        # Map of fake keyval -> name; only fixtures we use in tests.
-        _KEYVAL_NAMES = {
-            0x76: "v",
-            0xff63: "Insert",
-            0xffbe: "F1",
-            0xffe1: "Shift_L",
-            0xffe3: "Control_L",
-        }
-
-        def _keyval_name(keyval):
-            return _KEYVAL_NAMES.get(keyval)
-
-        gdk_mod.ModifierType = _ModifierType
-        gdk_mod.keyval_name = _keyval_name
-
-        sys.modules["gi"] = gi_mod
-        sys.modules["gi.repository"] = repo_mod
-        sys.modules["gi.repository.Gdk"] = gdk_mod
-        repo_mod.Gdk = gdk_mod
-        gi_mod.repository = repo_mod
-
-        self._ModifierType = _ModifierType
-        self.addCleanup(self._restore)
-        self._original = {
-            "gi": sys.modules.get("gi"),
-            "gi.repository": sys.modules.get("gi.repository"),
-            "gi.repository.Gdk": sys.modules.get("gi.repository.Gdk"),
-        }
-
-    def _restore(self):
-        import sys
-        for k, v in self._original.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
+    def _keyval(self, name):
+        # Map symbolic names to keyvals via the real typelib so we
+        # don't have to hard-code Gdk.KEY_* constants here.
+        kv = getattr(self._Gdk, f"KEY_{name}", None)
+        if kv is None:
+            self.fail(f"Gdk has no KEY_{name}")
+        return kv
 
     def test_super_v(self):
         m = self._ModifierType.SUPER_MASK
-        self.assertEqual(keybindings.keyval_to_binding(0x76, m), "<Super>v")
+        self.assertEqual(
+            keybindings.keyval_to_binding(self._keyval("v"), m), "<Super>v"
+        )
 
     def test_ctrl_shift_v(self):
         m = self._ModifierType.CONTROL_MASK | self._ModifierType.SHIFT_MASK
-        self.assertEqual(keybindings.keyval_to_binding(0x76, m), "<Ctrl><Shift>v")
+        self.assertEqual(
+            keybindings.keyval_to_binding(self._keyval("v"), m),
+            "<Ctrl><Shift>v",
+        )
 
     def test_shift_insert(self):
         m = self._ModifierType.SHIFT_MASK
         self.assertEqual(
-            keybindings.keyval_to_binding(0xff63, m), "<Shift>Insert"
+            keybindings.keyval_to_binding(self._keyval("Insert"), m),
+            "<Shift>Insert",
         )
 
     def test_rejects_pure_modifier_key(self):
         m = self._ModifierType.SHIFT_MASK
-        self.assertIsNone(keybindings.keyval_to_binding(0xffe1, m))
+        self.assertIsNone(
+            keybindings.keyval_to_binding(self._keyval("Shift_L"), m)
+        )
 
     def test_rejects_no_modifier(self):
-        self.assertIsNone(keybindings.keyval_to_binding(0x76, 0))
+        self.assertIsNone(
+            keybindings.keyval_to_binding(self._keyval("v"), 0)
+        )
 
     def test_rejects_unknown_keyval(self):
         m = self._ModifierType.SUPER_MASK
+        # 0xdeadbeef is well outside the Gdk keyval space — keyval_name
+        # returns None, which keyval_to_binding must reject.
         self.assertIsNone(keybindings.keyval_to_binding(0xdeadbeef, m))
 
     def test_alt_plus_function_key(self):
         m = self._ModifierType.MOD1_MASK  # Alt
-        self.assertEqual(keybindings.keyval_to_binding(0xffbe, m), "<Alt>F1")
+        self.assertEqual(
+            keybindings.keyval_to_binding(self._keyval("F1"), m), "<Alt>F1"
+        )
 
     def test_all_four_modifiers(self):
         m = (self._ModifierType.CONTROL_MASK
@@ -238,19 +239,19 @@ class TestKeyvalToBinding(unittest.TestCase):
              | self._ModifierType.MOD1_MASK
              | self._ModifierType.SUPER_MASK)
         self.assertEqual(
-            keybindings.keyval_to_binding(0x76, m),
+            keybindings.keyval_to_binding(self._keyval("v"), m),
             "<Ctrl><Super><Alt><Shift>v",
         )
 
     def test_round_trip_super_v(self):
-        # keyval_to_binding(...) → format_binding_for_display(...)
+        # keyval_to_binding(...) -> format_binding_for_display(...)
         m = self._ModifierType.SUPER_MASK
-        b = keybindings.keyval_to_binding(0x76, m)
+        b = keybindings.keyval_to_binding(self._keyval("v"), m)
         self.assertEqual(keybindings.format_binding_for_display(b), "Super+V")
 
     def test_round_trip_ctrl_shift_v(self):
         m = self._ModifierType.CONTROL_MASK | self._ModifierType.SHIFT_MASK
-        b = keybindings.keyval_to_binding(0x76, m)
+        b = keybindings.keyval_to_binding(self._keyval("v"), m)
         self.assertEqual(
             keybindings.format_binding_for_display(b), "Ctrl+Shift+V"
         )
