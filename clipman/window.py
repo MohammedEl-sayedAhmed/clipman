@@ -43,6 +43,69 @@ except (AttributeError, ValueError, ImportError) as e:
 DEFAULT_FONT_SIZE = 12
 DEFAULT_THEME = "dark"
 DEFAULT_SENSITIVE_TIMEOUT = 30
+
+# Catppuccin palette overrides for libadwaita @-tokens. Mirrors
+# docs/design/tokens.css so the live app matches the marketing mockup
+# regardless of the user's system Adwaita accent. Values are the
+# canonical Catppuccin Mocha (dark) and Latte (light) palettes.
+_CATPPUCCIN_MOCHA = {
+    "window_bg_color":     "#1e1e2e",
+    "view_bg_color":       "#1e1e2e",
+    "headerbar_bg_color":  "#181825",
+    "card_bg_color":       "#313244",
+    "dialog_bg_color":     "#1e1e2e",
+    "popover_bg_color":    "#313244",
+    "window_fg_color":     "#cdd6f4",
+    "view_fg_color":       "#cdd6f4",
+    "headerbar_fg_color":  "#cdd6f4",
+    "card_fg_color":       "#cdd6f4",
+    "dialog_fg_color":     "#cdd6f4",
+    "popover_fg_color":    "#cdd6f4",
+    "accent_color":        "#cba6f7",
+    "accent_bg_color":     "#cba6f7",
+    "accent_fg_color":     "#1e1e2e",
+    "destructive_color":   "#f38ba8",
+    "destructive_bg_color":"#f38ba8",
+    "destructive_fg_color":"#1e1e2e",
+    "success_color":       "#a6e3a1",
+    "success_bg_color":    "#a6e3a1",
+    "success_fg_color":    "#1e1e2e",
+    "warning_color":       "#f9e2af",
+    "warning_bg_color":    "#f9e2af",
+    "warning_fg_color":    "#1e1e2e",
+    "error_color":         "#f38ba8",
+    "error_bg_color":      "#f38ba8",
+    "error_fg_color":      "#1e1e2e",
+}
+_CATPPUCCIN_LATTE = {
+    "window_bg_color":     "#eff1f5",
+    "view_bg_color":       "#eff1f5",
+    "headerbar_bg_color":  "#e6e9ef",
+    "card_bg_color":       "#ccd0da",
+    "dialog_bg_color":     "#eff1f5",
+    "popover_bg_color":    "#ccd0da",
+    "window_fg_color":     "#4c4f69",
+    "view_fg_color":       "#4c4f69",
+    "headerbar_fg_color":  "#4c4f69",
+    "card_fg_color":       "#4c4f69",
+    "dialog_fg_color":     "#4c4f69",
+    "popover_fg_color":    "#4c4f69",
+    "accent_color":        "#8839ef",
+    "accent_bg_color":     "#8839ef",
+    "accent_fg_color":     "#eff1f5",
+    "destructive_color":   "#d20f39",
+    "destructive_bg_color":"#d20f39",
+    "destructive_fg_color":"#eff1f5",
+    "success_color":       "#40a02b",
+    "success_bg_color":    "#40a02b",
+    "success_fg_color":    "#eff1f5",
+    "warning_color":       "#df8e1d",
+    "warning_bg_color":    "#df8e1d",
+    "warning_fg_color":    "#eff1f5",
+    "error_color":         "#d20f39",
+    "error_bg_color":      "#d20f39",
+    "error_fg_color":      "#eff1f5",
+}
 DEFAULT_FONT_COLOR = "default"
 
 # Fallback CSS token used when the user picked the "default" preset.
@@ -160,21 +223,51 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 return hex_value
         return _DEFAULT_FONT_COLOR_TOKEN
 
+    def _catppuccin_palette_block(self):
+        """Return a CSS block that overrides libadwaita's @-tokens with
+        the Catppuccin palette appropriate for the active theme.
+
+        For ``self._theme == 'auto'``, we ask ``Adw.StyleManager.get_dark()``
+        which reads the system preference; default to Mocha (dark)
+        otherwise — matches the marketing mockup default.
+        """
+        if self._theme == "light":
+            palette = _CATPPUCCIN_LATTE
+        elif self._theme == "dark":
+            palette = _CATPPUCCIN_MOCHA
+        else:  # auto — follow system, default dark
+            try:
+                is_dark = Adw.StyleManager.get_default().get_dark()
+            except Exception:
+                is_dark = True
+            palette = _CATPPUCCIN_MOCHA if is_dark else _CATPPUCCIN_LATTE
+        return "\n".join(
+            f"@define-color {name} {hex_value};"
+            for name, hex_value in palette.items()
+        )
+
     def _apply_css(self):
         """Inject ``style.css`` with Python ``string.Template`` substitutions.
 
         The template exposes ``${font_size}`` and ``${font_color}`` so
         font size and the .clip-row title colour both hot-reload from
         the preferences window without touching the .css file on disk.
+
+        We also prepend a libadwaita ``@define-color`` palette block so
+        the entire app picks up Catppuccin colours regardless of the
+        user's system Adwaita accent. Without this the popup inherits
+        e.g. Ubuntu's orange/Yaru palette and stops matching the
+        marketing mockup.
         """
         css_path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "style.css"
         )
         with open(css_path, "r", encoding="utf-8") as f:
-            css_string = Template(f.read()).safe_substitute(
+            template_body = Template(f.read()).safe_substitute(
                 font_size=str(self._font_size),
                 font_color=self._resolve_font_color(),
             )
+        css_string = self._catppuccin_palette_block() + "\n" + template_body
 
         display = Gdk.Display.get_default()
         if self._css_provider is not None:
