@@ -10,6 +10,11 @@ description: |
   incognito mode, sensitive data detection, Catppuccin themes,
   reusable snippets, and backup/restore.
 
+website: https://mohammedel-sayedahmed.github.io/clipman/
+source-code: https://github.com/MohammedEl-sayedAhmed/clipman
+issues: https://github.com/MohammedEl-sayedAhmed/clipman/issues
+contact: https://github.com/MohammedEl-sayedAhmed/clipman/issues
+
 base: core22
 grade: stable
 confinement: strict
