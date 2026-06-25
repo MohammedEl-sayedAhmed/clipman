@@ -23,8 +23,7 @@ class ClipmanDBusService(dbus.service.Object):
     def Show(self):
         # GTK 4 dropped ``show_all`` / ``hide`` — every widget is
         # visible by default, so ``set_visible(True/False)`` is the
-        # canonical API. Standardising on it here lets us remove the
-        # ``show_all`` compatibility shim from ``window.py``.
+        # canonical API.
         self.window.refresh()
         self.window.set_visible(True)
         self.window.search_entry.grab_focus()

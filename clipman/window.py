@@ -343,19 +343,6 @@ class ClipmanWindow(Adw.ApplicationWindow):
         root.append(footer)
 
     # ------------------------------------------------------------------
-    # Compatibility shim for dbus_service.Show().
-    #
-    # In GTK 4 widgets are visible by default and ``Gtk.Widget.show_all``
-    # no longer exists. We keep a small forwarding method here so the
-    # existing dbus_service module — which still calls ``show_all()``
-    # — resolves against the window object without needing changes from
-    # this commit. Once dbus_service migrates, this can be deleted.
-    # ------------------------------------------------------------------
-
-    def show_all(self):
-        self.set_visible(True)
-
-    # ------------------------------------------------------------------
     # Refresh
     # ------------------------------------------------------------------
 
