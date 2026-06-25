@@ -532,12 +532,55 @@ class ClipmanPreferences(Adw.PreferencesWindow):
         if response == Gtk.ResponseType.ACCEPT:
             file = chooser.get_file()
             if file is not None:
-                try:
-                    self.db.import_backup(file.get_path())
-                    self._on_setting_changed("restore_succeeded", file.get_path())
-                except Exception as exc:
-                    self._on_setting_changed("restore_failed", str(exc))
+                self._confirm_restore(file.get_path())
         chooser.destroy()
+
+    def _confirm_restore(self, source_path):
+        """Show a destructive AlertDialog before overwriting the DB.
+
+        Restore is irreversible: the running connection is closed,
+        ``DB_PATH`` is replaced, and any unbacked-up history is lost.
+        We snapshot the current DB to a sibling ``.bak`` file (using
+        the same ``export_backup`` code path the user invokes manually)
+        so a botched restore can still be rolled back from disk.
+        """
+        dialog = Adw.AlertDialog.new(
+            _("Restore from backup?"),
+            _(
+                "This replaces your entire clipboard history with the "
+                "contents of:\n\n{path}\n\nA safety copy of the current "
+                "database will be written next to it as a .bak file. "
+                "This action cannot be undone from inside Clipman."
+            ).format(path=source_path),
+        )
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("restore", _("Restore"))
+        dialog.set_response_appearance(
+            "restore", Adw.ResponseAppearance.DESTRUCTIVE
+        )
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_restore_confirmed, source_path)
+        dialog.present(self)
+
+    def _on_restore_confirmed(self, _dialog, response, source_path):
+        if response != "restore":
+            return
+        # Snapshot current DB to a sibling .bak before overwriting.
+        # If the snapshot itself fails (e.g. disk full) we abort the
+        # restore — the user is better off keeping their current
+        # history than losing it to a half-written copy.
+        backup_path = str(DB_PATH) + ".bak"
+        try:
+            self.db.export_backup(backup_path)
+        except Exception as exc:
+            self._on_setting_changed("restore_failed", str(exc))
+            return
+        try:
+            self.db.import_backup(source_path)
+            self._on_setting_changed("restore_succeeded", source_path)
+        except Exception as exc:
+            self._on_setting_changed("restore_failed", str(exc))
 
     # ------------------------------------------------------------------
     # Pane 5: Updates
