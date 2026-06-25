@@ -170,6 +170,12 @@
            ------------------------------------------------------------ */
         @media (max-width: 640px) {
             body {
+                /* Desktop body is display:flex; justify-content:center, which
+                   keeps the .page block centered. On mobile we want
+                   vertical stacking — the theme-toggle pill sits above
+                   the content, not next to it. */
+                flex-direction: column;
+                align-items: stretch;
                 padding: 16px;
                 overflow-x: hidden;
             }
