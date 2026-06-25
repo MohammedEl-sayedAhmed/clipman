@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="../logo.svg">
     <link rel="apple-touch-icon" href="../logo.svg">
     <title>Clipman — Snippets editor mockup</title>
@@ -558,6 +559,31 @@
             box-shadow: 0 1px 0 var(--border-strong);
         }
         .status-kbd { margin-top: var(--space-4); font-size: var(--size-caption); color: var(--fg-muted); display: flex; gap: 6px; align-items: center; justify-content: center; }
+
+        /* ------------------------------------------------------------
+           Mobile: collapse the 280px+1fr master-detail into a single
+           column so neither pane is cramped. Snippet list above, edit
+           form below. Let the page scroll naturally.
+           ------------------------------------------------------------ */
+        @media (max-width: 640px) {
+            body {
+                min-height: auto;
+                align-items: flex-start;
+                padding: 16px;
+                overflow-x: hidden;
+            }
+            .theme-toggle {
+                position: static;
+                margin: 0 auto 12px;
+            }
+            .snip-window {
+                width: 100%;
+                max-width: 100%;
+                height: auto;
+                min-height: 560px;
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 <script src="theme.js" defer></script>
 </head>

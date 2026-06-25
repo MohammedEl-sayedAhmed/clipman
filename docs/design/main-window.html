@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="../logo.svg">
     <link rel="apple-touch-icon" href="../logo.svg">
     <title>Clipman — main window mockup</title>
@@ -431,6 +432,30 @@
         }
         .footer .text-btn.danger:hover {
             color: var(--error);
+        }
+
+        /* ------------------------------------------------------------
+           Mobile: drop the vertical centering, shrink the popup to fit
+           a phone viewport, let the page scroll naturally instead of
+           forcing a 100vh layout that pushes content off-screen.
+           ------------------------------------------------------------ */
+        @media (max-width: 640px) {
+            body {
+                min-height: auto;
+                align-items: flex-start;
+                padding: 16px;
+                overflow-x: hidden;
+            }
+            .theme-toggle {
+                position: static;
+                margin: 0 auto 12px;
+            }
+            .window {
+                width: 100%;
+                max-width: 360px;
+                height: auto;
+                min-height: 580px;
+            }
         }
     </style>
 <script src="theme.js" defer></script>

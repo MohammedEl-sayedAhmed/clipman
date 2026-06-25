@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" href="../logo.svg">
     <link rel="apple-touch-icon" href="../logo.svg">
     <title>Clipman — edge states</title>
@@ -513,6 +514,38 @@
         .picker-item .dot.t-warn { background: var(--warning); }
         .picker-item .dot.t-err  { background: var(--error); }
         .picker-item .dot.t-neu  { background: var(--fg-muted); }
+
+        /* ------------------------------------------------------------
+           Mobile: drop the side-by-side popup+picker grid, hide the
+           picker (the 15 states are still browsable by editing the
+           URL or using the iframe-embedded version on the marketing
+           page), and let the popup fill the row.
+           ------------------------------------------------------------ */
+        @media (max-width: 640px) {
+            body {
+                min-height: auto;
+                padding: 16px;
+                overflow-x: hidden;
+            }
+            .theme-toggle {
+                position: static;
+                margin: 0 auto 12px;
+                display: inline-flex;
+            }
+            .layout {
+                grid-template-columns: 1fr;
+                gap: var(--space-4);
+                max-width: 100%;
+            }
+            .picker { display: none; }
+            .window {
+                width: 100%;
+                max-width: 360px;
+                margin: 0 auto;
+                height: auto;
+                min-height: 580px;
+            }
+        }
     </style>
 <script src="theme.js" defer></script>
 </head>

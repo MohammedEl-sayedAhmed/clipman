@@ -244,6 +244,23 @@ header.site nav {
     align-items: center;
     gap: 22px;
 }
+/* Hamburger button — visible only at mobile widths. */
+.hamburger {
+    display: none;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    color: var(--text);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    margin-left: 8px;
+}
+.hamburger:hover { border-color: var(--accent); }
+.hamburger svg { width: 22px; height: 22px; }
 header.site nav a {
     color: var(--text);
     font-size: 0.95rem;
@@ -811,7 +828,10 @@ footer.site .legal .mono { font-size: 0.78rem; }
     display: none;
     align-items: center;
     justify-content: center;
-    padding: 24px;
+    /* Reserve a 64px band at the top so the close button (pinned to
+       the modal viewport, NOT the image) has its own breathing room
+       and never overlaps the screenshot. */
+    padding: 64px 24px 24px;
     z-index: 1000;
     -webkit-tap-highlight-color: transparent;
 }
@@ -819,7 +839,6 @@ footer.site .legal .mono { font-size: 0.78rem; }
     display: flex;
 }
 .img-modal-inner {
-    position: relative;
     max-width: min(1100px, 100%);
     max-height: 100%;
     display: flex;
@@ -828,7 +847,9 @@ footer.site .legal .mono { font-size: 0.78rem; }
 }
 .img-modal img {
     max-width: 100%;
-    max-height: 88vh;
+    /* Subtract the close-button band so the image vertically centers
+       inside the remaining 88vh-ish without ever ducking under the X. */
+    max-height: calc(100vh - 96px);
     width: auto;
     height: auto;
     object-fit: contain;
@@ -837,9 +858,10 @@ footer.site .legal .mono { font-size: 0.78rem; }
     background: var(--bg);
 }
 .img-modal-close {
+    /* Pinned to the modal viewport corner, not the image. */
     position: absolute;
-    top: -12px;
-    right: -12px;
+    top: 16px;
+    right: 16px;
     width: 44px;
     height: 44px;
     border-radius: 50%;
@@ -853,11 +875,13 @@ footer.site .legal .mono { font-size: 0.78rem; }
     justify-content: center;
     cursor: pointer;
     box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.4);
+    z-index: 1;
 }
 .img-modal-close:hover { background: #292524; }
 @media (max-width: 640px) {
-    .img-modal { padding: 16px; }
-    .img-modal-close { top: 4px; right: 4px; }
+    .img-modal { padding: 56px 12px 12px; }
+    .img-modal-close { top: 8px; right: 8px; }
+    .img-modal img { max-height: calc(100vh - 80px); }
 }
 
 /* ================================================================
@@ -872,13 +896,47 @@ footer.site .legal .mono { font-size: 0.78rem; }
     /* Tighten the page gutter so 327px content -> 343px content. */
     .wrap { padding: 0 16px; }
 
-    /* The in-page anchor links push the header off-screen on iPhone SE.
-       Hide them on mobile — the page is short enough to scroll, and the
-       theme toggle stays accessible. "source" lives in the footer too. */
-    header.site nav a { display: none; }
+    /* Header gets a hamburger menu instead of inline links. The header
+       row still shows the brand on the left + hamburger + theme toggle
+       on the right. The full nav opens as a dropdown panel from the
+       hamburger; links and the theme toggle live inside it. */
+    header.site .wrap { position: relative; }
+    .hamburger { display: inline-flex; }
+
+    header.site nav {
+        display: none;
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 16px;
+        left: 16px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: 16px 18px;
+        box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.30),
+                    0 4px  10px  -4px rgba(0, 0, 0, 0.12);
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        z-index: 50;
+    }
+    header.site nav.is-open { display: flex; }
+    header.site nav a {
+        font-size: 1.05rem;
+        padding: 10px 4px;
+        opacity: 1;
+        font-family: var(--mono);
+        border-bottom: 1px solid var(--border);
+    }
+    header.site nav a:last-of-type { border-bottom: none; }
+
     .theme-toggle {
-        width: 44px;
-        height: 44px;     /* WCAG-AA touch target */
+        /* Bigger inside the hamburger panel; aligned to the row. */
+        width: 100%;
+        height: 44px;
+        border-radius: var(--r-md);
+        margin-top: 4px;
+        gap: 8px;
     }
 
     /* Hero CTA buttons: meet the 44px touch-target minimum. */
@@ -913,6 +971,29 @@ footer.site .legal .mono { font-size: 0.78rem; }
         padding: 14px 16px;
         font-size: 0.82rem;
     }
+
+    /* Live demo on mobile: the existing rule at 540px shrinks padding
+       but the iframe still tries to hold 460px of width. Let it use the
+       full row, drop the fixed height in favor of the aspect ratio, and
+       fall back to an explicit min-height for the popup content. */
+    .demo-stage iframe {
+        max-width: 100%;
+        height: auto;
+        min-height: 600px;
+        aspect-ratio: auto;
+    }
+    /* Demo bar (label + desc + state pills) stacks on mobile so the
+       state picker doesn't get pushed off-screen. */
+    .demo-bar {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+    .demo-states {
+        overflow-x: auto;
+        scrollbar-width: none;
+    }
+    .demo-states::-webkit-scrollbar { display: none; }
 }
 
 </style>
@@ -927,7 +1008,16 @@ footer.site .legal .mono { font-size: 0.78rem; }
       <img src="logo.svg" alt="" width="28" height="28">
       Clipman
     </a>
-    <nav aria-label="Primary">
+    <button class="hamburger" id="nav-toggle" type="button"
+            aria-label="Open navigation menu" aria-expanded="false" aria-controls="primary-nav">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="4" y1="7"  x2="20" y2="7"/>
+        <line x1="4" y1="12" x2="20" y2="12"/>
+        <line x1="4" y1="17" x2="20" y2="17"/>
+      </svg>
+    </button>
+    <nav id="primary-nav" aria-label="Primary">
       <a href="#demo">demo</a>
       <a href="#features">features</a>
       <a href="#design">design</a>
@@ -1421,6 +1511,29 @@ footer.site .legal .mono { font-size: 0.78rem; }
         loadNumbers();
     }
 
+    // ---- Mobile nav (hamburger toggle) ------------------------------
+    (function () {
+        const toggle = document.getElementById('nav-toggle');
+        const nav    = document.getElementById('primary-nav');
+        if (!toggle || !nav) return;
+        function setOpen(open) {
+            nav.classList.toggle('is-open', open);
+            toggle.setAttribute('aria-expanded', String(open));
+        }
+        toggle.addEventListener('click', () => setOpen(!nav.classList.contains('is-open')));
+        // Close on link tap so the page navigates to the section.
+        nav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => setOpen(false)));
+        // Esc closes; outside-click closes.
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && nav.classList.contains('is-open')) setOpen(false);
+        });
+        document.addEventListener('click', (e) => {
+            if (!nav.classList.contains('is-open')) return;
+            if (nav.contains(e.target) || toggle.contains(e.target)) return;
+            setOpen(false);
+        });
+    })();
+
     // ---- Image lightbox ---------------------------------------------
     // Click any hero / feature screenshot to open it full-size in a
     // modal. Close on backdrop click, X button, or Escape.
@@ -1483,9 +1596,12 @@ footer.site .legal .mono { font-size: 0.78rem; }
 <!-- Image lightbox modal — populated by initLightbox() above. -->
 <div id="img-modal" class="img-modal" role="dialog" aria-modal="true"
      aria-label="Full-size screenshot" aria-hidden="true">
+  <!-- Close button sits at the modal viewport corner so it never
+       overlaps the screenshot itself. The CSS reserves a 64px top band
+       (56px on mobile) for it. -->
+  <button type="button" id="img-modal-close" class="img-modal-close"
+          aria-label="Close screenshot">&times;</button>
   <div class="img-modal-inner">
-    <button type="button" id="img-modal-close" class="img-modal-close"
-            aria-label="Close screenshot">&times;</button>
     <img id="img-modal-img" alt="">
   </div>
 </div>
