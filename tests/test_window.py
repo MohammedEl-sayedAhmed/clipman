@@ -62,7 +62,13 @@ class TestEdgeStates(unittest.TestCase):
         "history-too-large",
     }
 
-    def test_all_states_declared(self):
+    def test_state_id_inventory(self):
+        """Lock the inventory — adding a state requires updating this set.
+
+        Renamed from ``test_all_states_declared`` to make the intent
+        (inventory lock-in, not a smoke test) explicit. Touching this
+        list should be a deliberate, reviewer-visible action.
+        """
         from clipman.edge_states import STATES
         self.assertEqual(set(STATES.keys()), self.EXPECTED_IDS)
         self.assertEqual(len(STATES), 16)
@@ -77,11 +83,26 @@ class TestEdgeStates(unittest.TestCase):
                 # introspection (used by the action-id dispatch).
                 self.assertTrue(hasattr(widget, "state_spec"))
                 self.assertEqual(widget.state_spec.id, state_id)
+                # ``kind`` -> widget class invariant. The renderer
+                # dispatches on ``spec.kind`` and the host window relies
+                # on the resulting type to decide where to mount it.
+                spec = widget.state_spec
+                if spec.kind == "banner":
+                    self.assertIsInstance(widget, Adw.Banner)
+                elif spec.kind == "alertdialog":
+                    self.assertIsInstance(widget, Adw.AlertDialog)
+                else:
+                    self.assertEqual(spec.kind, "statuspage")
+                    self.assertIsInstance(widget, Adw.StatusPage)
 
     def test_unknown_state_falls_back_to_empty(self):
         from clipman.edge_states import render_edge_state
         widget = render_edge_state("does-not-exist")
         self.assertIsNotNone(widget)
+        # The fallback must be the ``empty`` spec specifically — the
+        # popup relies on this so a typo in window.py doesn't leak a
+        # random spec into the empty slot.
+        self.assertEqual(widget.state_spec.id, "empty")
 
 
 @unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
@@ -231,7 +252,17 @@ class TestEdgeStateDeclaration(unittest.TestCase):
         # so the module itself must import on a stock CI runner with
         # no system GTK installed. If this raises we've regressed the
         # import-policy invariant — fail loudly instead of skipping.
-        from clipman import edge_states  # noqa: F401
+        from clipman import edge_states
+
+        # The lazy-import invariant: the inventory dict exists at
+        # module scope, but Adw must NOT have been pulled into the
+        # module namespace by the import — that would defeat the
+        # whole point of the lazy import inside render_edge_state.
+        self.assertTrue(hasattr(edge_states, "STATES"))
+        self.assertFalse(
+            hasattr(edge_states, "Adw"),
+            "edge_states must not eagerly import Adw at module scope",
+        )
 
     def test_state_specs_have_required_fields(self):
         from clipman.edge_states import STATES
@@ -249,6 +280,26 @@ class TestEdgeStateDeclaration(unittest.TestCase):
                 self.assertTrue(spec.title)
                 self.assertTrue(spec.body)
                 self.assertTrue(spec.icon_name)
+                # Adwaita StatusPage / Banner artwork is the symbolic
+                # variant — anything else looks chunky and out of place
+                # next to the rest of GNOME's UI.
+                self.assertTrue(
+                    spec.icon_name.endswith("-symbolic"),
+                    f"{state_id} icon {spec.icon_name!r} must be symbolic",
+                )
+                # Action specs (when present) are ``(label, action_id)``
+                # tuples — the renderer indexes both fields and the host
+                # window dispatches on ``action_id``.
+                for slot in ("primary_action", "secondary_action"):
+                    action = getattr(spec, slot)
+                    if action is None:
+                        continue
+                    self.assertIsInstance(action, tuple)
+                    self.assertEqual(len(action), 2)
+                    label, action_id = action
+                    self.assertTrue(label)
+                    self.assertTrue(action_id)
+                    self.assertIsInstance(action_id, str)
 
 
 if __name__ == "__main__":
