@@ -112,6 +112,16 @@ class ClipmanWindow(Adw.ApplicationWindow):
         key_ctrl.connect("key-pressed", self._on_key_pressed)
         self.add_controller(key_ctrl)
 
+        # On Wayland the compositor delivers ``close-request`` when the
+        # user clicks outside the popup or hits the compositor close
+        # gesture. We want the popup to hide rather than destroy so the
+        # daemon can re-show it on the next D-Bus Toggle without
+        # reconstructing the entire widget tree.
+        self.connect(
+            "close-request",
+            lambda _w: (self.set_visible(False), True)[1],
+        )
+
         # Sensitive-entry purge loop — kept identical to the GTK 3 version.
         GLib.timeout_add_seconds(10, self._cleanup_sensitive)
 
@@ -191,6 +201,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # -- Header bar (incognito start, prefs end) -----------------------
         header = Adw.HeaderBar()
         header.set_title_widget(Gtk.Label(label="Clipman"))
+        # The popup is its own GtkApplicationWindow but doubles as a
+        # transient overlay — title-bar controls (close / minimise /
+        # maximise) clash with the close-on-Escape interaction model.
+        header.set_show_start_title_buttons(False)
+        header.set_show_end_title_buttons(False)
 
         self._incognito_btn = Gtk.ToggleButton()
         self._incognito_btn.set_icon_name("view-conceal-symbolic")
@@ -328,10 +343,13 @@ class ClipmanWindow(Adw.ApplicationWindow):
         root.append(footer)
 
     # ------------------------------------------------------------------
-    # Compatibility shim for dbus_service.Show() — GTK 4 widgets are
-    # visible by default, so ``show_all`` is just ``set_visible(True)``.
-    # Kept here so the existing dbus_service.py keeps resolving against
-    # the window object without modification.
+    # Compatibility shim for dbus_service.Show().
+    #
+    # In GTK 4 widgets are visible by default and ``Gtk.Widget.show_all``
+    # no longer exists. We keep a small forwarding method here so the
+    # existing dbus_service module — which still calls ``show_all()``
+    # — resolves against the window object without needing changes from
+    # this commit. Once dbus_service migrates, this can be deleted.
     # ------------------------------------------------------------------
 
     def show_all(self):
