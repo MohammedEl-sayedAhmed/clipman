@@ -14,7 +14,11 @@ ARE importable, the tests assert that:
 from __future__ import annotations
 
 import os
+import shutil
+import tempfile
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
 # Force off-screen behaviour so the test runner doesn't need a real
 # display server. Adw still needs to initialise but it's happy to do
@@ -87,14 +91,27 @@ class TestWindowConstruction(unittest.TestCase):
 
     def _make_db(self):
         # Use a temp dir so the test never touches the real DB.
-        import tempfile
+        # Mirrors the pattern in test_database.py: patch the module-level
+        # paths (do NOT mutate them — that leaks across tests) and register
+        # an addCleanup for each patch + the tmpdir.
         from clipman import database
 
         tmp = tempfile.mkdtemp(prefix="clipman-test-")
-        database.DATA_DIR = type(database.DATA_DIR)(tmp)
-        database.IMAGES_DIR = database.DATA_DIR / "images"
-        database.DB_PATH = database.DATA_DIR / "clipman.db"
-        return database.ClipboardDB()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        data_dir = Path(tmp) / "clipman"
+        images_dir = data_dir / "images"
+        db_path = data_dir / "clipman.db"
+        for target, value in (
+            ("clipman.database.DATA_DIR", data_dir),
+            ("clipman.database.IMAGES_DIR", images_dir),
+            ("clipman.database.DB_PATH", db_path),
+        ):
+            p = patch(target, value)
+            p.start()
+            self.addCleanup(p.stop)
+        db = database.ClipboardDB()
+        self.addCleanup(db.close)
+        return db
 
     def test_window_boots(self):
         from clipman.window import ClipmanWindow
