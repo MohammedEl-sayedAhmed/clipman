@@ -147,6 +147,53 @@
             color: var(--fg-on-accent);
             font-weight: var(--weight-semibold);
         }
+
+        /* Tables are wide (3 columns of code-like text) — on narrow
+           viewports they were pushing the page wider than the viewport,
+           causing horizontal page scroll and visually clipping the
+           fixed-position theme toggle. Wrap them in their own scroller. */
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            border-radius: var(--radius-md);
+        }
+        .table-wrap table {
+            min-width: 520px;   /* keep columns readable; scroll inside the wrap */
+        }
+
+        /* ------------------------------------------------------------
+           Mobile: tighten outer padding, take the theme toggle out of
+           position:fixed so its Dark/Light buttons don't get clipped
+           behind the right viewport edge, and let the table scroll
+           inside its own wrapper instead of forcing the page wider.
+           ------------------------------------------------------------ */
+        @media (max-width: 640px) {
+            body {
+                padding: 16px;
+                overflow-x: hidden;
+            }
+            h1 { font-size: 22px; }
+            .lead { font-size: var(--size-body); }
+            .theme-toggle {
+                position: static;
+                margin: 0 auto var(--space-4);
+                justify-content: center;
+            }
+            .theme-toggle button {
+                min-height: 36px;
+                padding: 8px 14px;
+            }
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+            .card .preview { height: 120px; }
+        }
+        /* Galaxy Fold / very narrow phones — drop the "theme" caption so the
+           pill never has to scroll horizontally to expose the buttons. */
+        @media (max-width: 360px) {
+            .theme-toggle > span { display: none; }
+        }
     </style>
 <script src="theme.js" defer></script>
 </head>
@@ -236,6 +283,7 @@
     </div>
 
     <h2>libadwaita component map</h2>
+    <div class="table-wrap">
     <table>
         <thead>
             <tr>
@@ -257,6 +305,7 @@
             <tr><td>Toast notifications</td>         <td><code>Adw.Toast</code></td>                 <td>(none today)</td></tr>
         </tbody>
     </table>
+    </div>
 
     <h2>Design principles</h2>
     <ul style="line-height: 1.7; color: var(--fg-subtext);">

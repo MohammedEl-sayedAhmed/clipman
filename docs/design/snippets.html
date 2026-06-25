@@ -571,10 +571,19 @@
                 align-items: flex-start;
                 padding: 16px;
                 overflow-x: hidden;
+                flex-direction: column;
+                gap: 8px;
             }
-            .theme-toggle {
+            .theme-toggle,
+            .state-toggle {
                 position: static;
-                margin: 0 auto 12px;
+                margin: 0 auto;
+            }
+            .theme-toggle { margin-top: 0; }
+            .theme-toggle button,
+            .state-toggle button {
+                min-height: 36px;
+                padding: 8px 14px;
             }
             .snip-window {
                 width: 100%;
@@ -582,7 +591,30 @@
                 height: auto;
                 min-height: 560px;
                 grid-template-columns: 1fr;
+                /* Realign grid areas to a single column. Without this the
+                   2-col template (lh rh / list edit) leaves the right-side
+                   headerbar + edit pane unplaced when only one column exists. */
+                grid-template-rows: auto auto auto auto;
+                grid-template-areas:
+                    "lh"
+                    "list"
+                    "rh"
+                    "edit";
             }
+            .header-l { border-right: none; border-bottom: 1px solid var(--divider); }
+            /* Edit footer: many icon buttons + Cancel/Save — wrap so neither
+               group is clipped at 320px. */
+            .edit-footer { flex-wrap: wrap; gap: 8px; }
+            .edit-footer .group { flex-wrap: wrap; }
+            /* Smaller status-page padding so the empty state doesn't add
+               unnecessary scroll on phones. */
+            .status-page { padding: var(--space-5) var(--space-4); }
+            /* Smaller form padding to give the textarea more room. */
+            .form { padding: var(--space-3) var(--space-4); }
+        }
+        @media (max-width: 360px) {
+            .theme-toggle > span,
+            .state-toggle > span { display: none; }
         }
     </style>
 <script src="theme.js" defer></script>
