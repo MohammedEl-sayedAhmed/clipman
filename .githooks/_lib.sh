@@ -122,6 +122,103 @@ allowed_list_for_message() {
 }
 
 # ---------------------------------------------------------------------------
+# Trailer-identity allowlist
+# ---------------------------------------------------------------------------
+#
+# Background: ``contains_allowed_identity`` (above) is used to validate the
+# author/committer of an outgoing commit. It's also tempting to apply it
+# to ``Co-Authored-By:`` / ``Signed-off-by:`` / ``Reviewed-by:`` trailers,
+# but those routinely carry external contributor names + emails when this
+# repo accepts patches from the wider world. Plain-allowlist would reject
+# legitimate external co-authors.
+#
+# This function takes a more nuanced position: it returns 0 if the trailer
+# email is from a class of identities we KNOW are safe to surface — the
+# repo owner's allowlisted handles, GitHub's privacy-alias noreplies
+# (which are bound to a real GitHub account, so any leak there is
+# already that account's choice to expose), and the canonical bot
+# noreplies (dependabot, github-actions, etc).
+#
+# Anything else — including human emails on personal/work domains — is
+# rejected. This forces commit messages to use the privacy-alias form
+# of an email rather than the raw domain, which is what GitHub itself
+# recommends in its "Setting your commit email address" docs.
+#
+# Designed as a positive policy: there are no per-domain deny patterns
+# baked into this file, so the source doesn't track any specific
+# identity that we'd rather not appear in the repo.
+is_safe_trailer_email() {
+    local email="${1,,}"
+    [ -z "$email" ] && return 1
+
+    # GitHub privacy-alias noreply addresses (any user, any bot).
+    # Pattern: <numericid>+<login>@users.noreply.github.com  OR  <login>@users.noreply.github.com
+    if [[ "$email" =~ ^([0-9]+\+)?[a-z0-9._-]+(\[bot\])?@users\.noreply\.github\.com$ ]]; then
+        return 0
+    fi
+
+    # GitHub's web-flow merge identity (used on web-merged squashes).
+    if [[ "$email" == "noreply@github.com" ]]; then
+        return 0
+    fi
+
+    # Allowlisted handles, matched against the local-part of the address
+    # (the bit before '@'). Same case-insensitive substring rule as
+    # contains_allowed_identity.
+    local local_part="${email%@*}"
+    local allow
+    for allow in "${HOOKS_ALLOW[@]}"; do
+        [ -z "$allow" ] && continue
+        [ "${#allow}" -lt 4 ] && continue
+        if [[ "$local_part" == *"${allow,,}"* ]]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+# Walk a commit message file's trailers and validate every identity-
+# carrying trailer (Co-Authored-By, Signed-off-by, Reviewed-by, Tested-
+# by, Helped-by, etc.) against is_safe_trailer_email. Echoes one error
+# line per offending trailer; returns 0 if all clean, 1 otherwise.
+scan_trailer_identities() {
+    local msg_path="$1"
+    [ -f "$msg_path" ] || return 0
+
+    local bad=0
+    while IFS=$'\t' read -r key value; do
+        # Only key types that may carry person identity. Skip purely
+        # informational ones like "Closes:", "Refs:", "Fixes:".
+        case "${key,,}" in
+            co-authored-by|signed-off-by|reviewed-by|tested-by|helped-by|reported-by|acked-by|cc)
+                ;;
+            *)
+                continue
+                ;;
+        esac
+        # Extract <email> from "Name <email>" trailer values.
+        local email=""
+        if [[ "$value" =~ \<([^>]+)\> ]]; then
+            email="${BASH_REMATCH[1]}"
+        else
+            email="$value"
+        fi
+        if ! is_safe_trailer_email "$email"; then
+            hook_error "trailer identity not allowed: ${key}: ${value}"
+            hook_detail "  This repo only allows trailers carrying:"
+            hook_detail "    - owner allowlist ($(allowed_list_for_message))"
+            hook_detail "    - GitHub privacy-alias noreplies (id+login@users.noreply.github.com)"
+            hook_detail "    - GitHub's web-flow merge identity (noreply@github.com)"
+            hook_detail "  Use the GitHub privacy-alias form of the email instead."
+            bad=1
+        fi
+    done < <(parse_message_trailers "$msg_path")
+
+    return "$bad"
+}
+
+# ---------------------------------------------------------------------------
 # Footprint scanner
 # ---------------------------------------------------------------------------
 #
