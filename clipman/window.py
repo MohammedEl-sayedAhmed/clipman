@@ -133,7 +133,17 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 display, self._css_provider
             )
         self._css_provider = Gtk.CssProvider()
-        self._css_provider.load_from_data(css_string, -1)
+        # ``load_from_data`` is binding-typed as ``bytes`` on older PyGObject
+        # — passing a Python ``str`` raises ``TypeError`` before the popup
+        # finishes building. Adw 4.12+ ships ``load_from_string`` which
+        # accepts ``str`` directly; fall back to the bytes form everywhere
+        # else.
+        if hasattr(self._css_provider, "load_from_string"):
+            self._css_provider.load_from_string(css_string)
+        else:
+            self._css_provider.load_from_data(
+                css_string.encode("utf-8"), -1
+            )
         Gtk.StyleContext.add_provider_for_display(
             display,
             self._css_provider,
