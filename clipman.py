@@ -12,7 +12,7 @@ try:
     import importlib
     importlib.import_module("gi")
 except ImportError:
-    _MISSING.append("python3-gi gir1.2-gtk-3.0")
+    _MISSING.append("python3-gi gir1.2-gtk-4.0 gir1.2-adw-1")
 
 try:
     import dbus
