@@ -797,7 +797,20 @@ class ClipmanPreferences(Adw.PreferencesWindow):
 
 
 def open_url(url):
-    """Best-effort xdg-open helper. Returns ``False`` so it's GLib-idle safe."""
+    """Best-effort xdg-open helper. Returns ``False`` so it's GLib-idle safe.
+
+    Restricted to ``http://`` and ``https://`` URLs. ``xdg-open`` will
+    happily launch handlers for ``file://``, ``mailto:``, ``gopher:``,
+    and (on misconfigured systems) arbitrary scheme-based exec rules,
+    so an attacker-controlled string reaching this function would be
+    a privilege-escalation surface. Anything that isn't plain web
+    traffic is logged and dropped.
+    """
+    if not isinstance(url, str) or not (
+        url.startswith("http://") or url.startswith("https://")
+    ):
+        logger.debug("open_url refused non-http(s) URL: %r", url)
+        return False
     try:
         subprocess.Popen(
             ["xdg-open", url],
