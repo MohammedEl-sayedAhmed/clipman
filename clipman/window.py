@@ -69,7 +69,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._current_edge_banner = None
 
         self.set_title("Clipman")
-        self.set_default_size(380, 540)
+        self.set_default_size(380, self._clamped_default_height())
         self.add_css_class("clipman-window")
 
         # Load persisted settings (only the subset Phase 1 actually uses;
@@ -926,6 +926,31 @@ class ClipmanWindow(Adw.ApplicationWindow):
             return _("{n}h ago").format(n=hours)
         days = int(diff / 86400)
         return _("{n}d ago").format(n=days)
+
+    def _clamped_default_height(self):
+        """Pick a sensible default popup height for the current monitor.
+
+        Uses the primary monitor's geometry and caps at 60% of its
+        height, with 540 as the upper bound. Falls back to 540 if the
+        monitor metadata isn't queryable (offscreen / headless CI).
+        """
+        default = 540
+        try:
+            display = Gdk.Display.get_default()
+            if display is None:
+                return default
+            monitors = display.get_monitors()
+            monitor = monitors.get_item(0) if monitors is not None else None
+            if monitor is None:
+                return default
+            geom = monitor.get_geometry()
+            return min(default, int(0.6 * geom.height))
+        except Exception:
+            logger.debug(
+                "monitor geometry unavailable; using default popup height",
+                exc_info=True,
+            )
+            return default
 
     def _cleanup_sensitive(self):
         deleted = self.db.delete_expired_sensitive(self._sensitive_timeout)
