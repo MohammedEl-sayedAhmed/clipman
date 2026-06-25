@@ -531,20 +531,27 @@ section h2 .accent { color: var(--accent); }
     background: transparent;
 }
 .demo-stage iframe {
-    /* The embedded popup (states.html?embed=1) already renders as a
-       proper card with its own shadow on a soft gradient — exactly like
-       the standalone design workspace. The iframe wrapper therefore
-       carries NO border and NO shadow; it's just a transparent window
-       into the same scene. */
-    border: none;
-    box-shadow: none;
-    background: transparent;
+    /* The iframe is itself rendered as a rounded "card" so its edges
+       match the design-workspace popup style (rounded corners + soft
+       shadow on a stone backdrop). The embedded popup inside states.html
+       carries its own inner card shadow, layered on top of this outer
+       frame. */
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--bg);          /* matches body bg so the iframe edge blends */
+    box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.30),
+                0 4px  10px  -4px rgba(0, 0, 0, 0.12);
     display: block;
     /* Responsive sizing — never overflow the demo-stage. */
     width: 100%;
     max-width: 480px;
     height: 720px;
     aspect-ratio: 480 / 720;
+    overflow: hidden;
+}
+html[data-theme="light"] .demo-stage iframe {
+    box-shadow: 0 12px 32px -12px rgba(28, 25, 23, 0.14),
+                0 4px  10px  -4px rgba(28, 25, 23, 0.06);
 }
 @media (max-width: 540px) {
     .demo-stage { padding: 12px 0; }
