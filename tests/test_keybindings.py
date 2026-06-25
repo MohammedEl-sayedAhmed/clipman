@@ -14,9 +14,17 @@ from clipman import keybindings
 # object has no attribute 'require_version'). Skipping is simpler and
 # safer than mock-patching sys.modules.
 try:
+    import importlib
+
     import gi
     gi.require_version("Gdk", "4.0")
-    from gi.repository import Gdk as _RealGdk  # noqa: F401
+    # Touching the attribute is the actual typelib probe: importing
+    # ``gi.repository`` succeeds even when the Gdk typelib is missing,
+    # but the attribute lookup raises in that case. Using importlib
+    # avoids binding an unused name (CodeQL py/unused-import fires on
+    # ``from gi.repository import Gdk as _RealGdk`` even with a ruff
+    # suppression comment).
+    importlib.import_module("gi.repository").Gdk
     _HAS_GDK = True
 except (ImportError, ValueError, AttributeError, RuntimeError):
     _HAS_GDK = False
