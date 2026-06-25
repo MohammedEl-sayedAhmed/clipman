@@ -120,20 +120,25 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     [ -z "$local_sha" ] && continue
     [ "$local_sha" = "$zero" ] && continue  # branch deletion
 
-    if [ "$remote_sha" = "$zero" ]; then
-        # New branch — find ancestors reachable from local_sha but NOT from
-        # ANY ref on the remote. This is the safest framing for the common
-        # case (maintainer creating a feature branch off main): we only
-        # scan the commits this push is actually contributing, not the
-        # history the remote already has.
-        commits=$(git rev-list "$local_sha" --not --remotes="$remote_name" 2>/dev/null)
-        if [ -z "$commits" ]; then
-            # Fall back to a bounded local-only scan (last 200 commits) so we
-            # don't iterate ALL of history on a brand-new remote.
-            commits=$(git rev-list "$local_sha" --max-count=200)
-        fi
-    else
-        commits=$(git rev-list "${remote_sha}..${local_sha}")
+    # Always scan only commits this push contributes to the remote:
+    # ancestors reachable from local_sha but NOT from ANY ref on the
+    # remote. This handles three cases uniformly —
+    #   1. New branch off main: scans only the new commits, not main's
+    #      history that's already on origin.
+    #   2. Fast-forward update: scans only the new top-of-branch commits.
+    #   3. Force-push after rebase / merge of main: scans only the
+    #      rebased / merge commit, NOT the upstream commits pulled in
+    #      from origin/main (which were already vetted when they merged).
+    # The previous existing-branch path used $remote_sha..$local_sha,
+    # which over-scanned in case (3): after rebasing onto an updated
+    # main, every commit from main that wasn't reachable from the old
+    # remote tip appeared in the range and tripped the identity check.
+    commits=$(git rev-list "$local_sha" --not --remotes="$remote_name" 2>/dev/null)
+    if [ -z "$commits" ] && [ "$remote_sha" = "$zero" ]; then
+        # Fall back to a bounded local-only scan (last 200 commits) so a
+        # brand-new remote with no refs to anchor against doesn't make
+        # us iterate ALL of history.
+        commits=$(git rev-list "$local_sha" --max-count=200)
     fi
 
     [ -z "$commits" ] && continue
