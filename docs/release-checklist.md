@@ -29,8 +29,8 @@ git reset --hard origin/main
 
 # 2. Bump versions in lockstep.
 ./scripts/bump-version.sh 1.0.5
-# This touches pyproject.toml, snap/snapcraft.yaml, flathub/*.json,
-# aur/PKGBUILD, and clipman/__init__.py.
+# This touches pyproject.toml, snap/snapcraft.yaml, aur/PKGBUILD,
+# and clipman/__init__.py.
 
 # 3. Promote the Unreleased section in CHANGELOG.md.
 #    Open CHANGELOG.md and rename `## [Unreleased]` to
@@ -43,7 +43,7 @@ python3 -m unittest discover -s tests
 ruff check clipman tests
 
 # 5. Commit the bump.
-git add pyproject.toml snap/snapcraft.yaml flathub/*.json aur/PKGBUILD \
+git add pyproject.toml snap/snapcraft.yaml aur/PKGBUILD \
         clipman/__init__.py CHANGELOG.md
 git commit -m "chore: bump to 1.0.5"
 git push origin main
@@ -85,10 +85,6 @@ These steps aren't automatable today:
   upload API.
 - **AUR** — bump `aur/PKGBUILD` (the bump script already did this) and
   push to the AUR remote if you maintain a separate AUR repo.
-- **Flathub** — not a current channel. The in-repo manifest under
-  `flathub/` is kept for reference only; if a Flathub submission
-  is ever made, this step becomes "open a PR against the Flathub
-  repo bumping the manifest source URL / commit".
 
 ## Verify the release publicly
 

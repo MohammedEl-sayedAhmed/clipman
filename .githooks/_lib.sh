@@ -67,49 +67,58 @@ is_path_allowlisted() {
 }
 
 # ---------------------------------------------------------------------------
-# Denylist: account names the repo owner must never commit/push as.
+# Identity allowlist: the only account(s) allowed to commit/push from this
+# clone after the local hooks are installed.
 # ---------------------------------------------------------------------------
 #
-# Override via env: CLIPMAN_HOOKS_DENY="foo bar"  (space-separated usernames)
-# Empty/whitespace values restore the safe default rather than disabling the
-# check entirely (BYPASS-11).
+# Default whitelist holds only the repo owner's personal account. Override
+# via env: CLIPMAN_HOOKS_ALLOW="login1 login2"  (space-separated usernames).
+# Empty/whitespace values restore the safe default rather than turning the
+# check off — there is no "off" without setting CLIPMAN_HOOKS_BYPASS=1 (one
+# of the matched patterns must be present).
+#
+# Match is case-insensitive substring against:
+#   - git user.name / user.email
+#   - GIT_AUTHOR_NAME/_EMAIL, GIT_COMMITTER_NAME/_EMAIL env vars
+#   - GIT_AUTHOR_IDENT, GIT_COMMITTER_IDENT (the post-override truth)
+#   - the gh-CLI active login (best-effort, not blocking when gh missing)
+#   - commit-trailer values on per-commit scans
 
-HOOKS_DENY_DEFAULT=("mammar97" "salmaamr129")
+HOOKS_ALLOW_DEFAULT=("MohammedEl-sayedAhmed")
 
-_resolve_denylist() {
-    local raw="${CLIPMAN_HOOKS_DENY-}"
+_resolve_allowlist() {
+    local raw="${CLIPMAN_HOOKS_ALLOW-}"
     # Trim whitespace
     raw="${raw#"${raw%%[![:space:]]*}"}"
     raw="${raw%"${raw##*[![:space:]]}"}"
     if [ -z "$raw" ]; then
-        HOOKS_DENY=("${HOOKS_DENY_DEFAULT[@]}")
+        HOOKS_ALLOW=("${HOOKS_ALLOW_DEFAULT[@]}")
     else
         # shellcheck disable=SC2034
-        read -r -a HOOKS_DENY <<<"$raw"
+        read -r -a HOOKS_ALLOW <<<"$raw"
     fi
 }
-_resolve_denylist
+_resolve_allowlist
 
-# Returns 0 if $1 contains any denied username (case-insensitive substring).
-# Each denied token must be at least 4 chars to avoid false-positives on
-# short substrings appearing in real names (e.g. "amr" inside "salmaamr").
-contains_denied_identity() {
+# Returns 0 if $1 contains ANY allowed account (case-insensitive substring).
+# Tokens shorter than 4 chars are skipped to avoid false-positives on
+# common short fragments inside real names.
+contains_allowed_identity() {
     local needle="${1,,}"
-    local deny
-    for deny in "${HOOKS_DENY[@]}"; do
-        [ -z "$deny" ] && continue
-        # Skip too-short tokens (would over-match)
-        [ "${#deny}" -lt 4 ] && continue
-        if [[ "$needle" == *"${deny,,}"* ]]; then
+    local allow
+    for allow in "${HOOKS_ALLOW[@]}"; do
+        [ -z "$allow" ] && continue
+        [ "${#allow}" -lt 4 ] && continue
+        if [[ "$needle" == *"${allow,,}"* ]]; then
             return 0
         fi
     done
     return 1
 }
 
-denied_list_for_message() {
+allowed_list_for_message() {
     local IFS=", "
-    printf '%s' "${HOOKS_DENY[*]}"
+    printf '%s' "${HOOKS_ALLOW[*]}"
 }
 
 # ---------------------------------------------------------------------------

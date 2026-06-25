@@ -16,12 +16,6 @@ updates manually. Today there is **no signal inside the running app**
 that a new release exists — users discover updates only by visiting
 GitHub, the AUR, or PyPI on their own initiative.
 
-(Flathub is *not* a current channel. There is no submission in flight;
-a reference manifest is kept under `flathub/` for possible future use.
-The per-install default for the update check still treats a hypothetical
-Flatpak install as auto-refreshing, since the technology itself
-refreshes when configured by a store.)
-
 We want a low-friction, privacy-respecting nudge: when a newer
 release is published, the running daemon should surface a small
 in-app indicator the next time the user opens the popup. Concretely:

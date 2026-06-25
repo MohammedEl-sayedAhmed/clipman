@@ -18,13 +18,13 @@ failed=0
 bad_urls=()
 while IFS= read -r url; do
     [ -z "$url" ] && continue
-    if contains_denied_identity "$url"; then
+    if ! contains_allowed_identity "$url"; then
         bad_urls+=("$url")
     fi
 done < <(printf '%s\n' "$remote_url"; collect_push_urls)
 
 if [ "${#bad_urls[@]}" -gt 0 ]; then
-    hook_error "push URL points to a denied account ($(denied_list_for_message))"
+    hook_error "push URL points to an account outside the allowlist ($(allowed_list_for_message))"
     for u in "${bad_urls[@]}"; do hook_detail "$u"; done
     hook_detail "Reset: git remote set-url --push $remote_name git@github.com:MohammedEl-sayedAhmed/clipman.git"
     failed=1
@@ -33,8 +33,8 @@ fi
 # ----- gh active account warning ------------------------------------------
 
 active=$(gh_active_login)
-if [ -n "$active" ] && contains_denied_identity "$active"; then
-    hook_warn "gh-CLI active account is '$active' (denylisted)"
+if [ -n "$active" ] && ! contains_allowed_identity "$active"; then
+    hook_warn "gh-CLI active account is '$active' (outside the allowlist)"
     hook_detail "ssh push is unaffected, but 'gh pr create / gh pr merge' would use this account."
     hook_detail "Switch: gh auth switch -u MohammedEl-sayedAhmed"
 fi
@@ -54,26 +54,19 @@ scan_commit() {
     an=$(git log -1 --format='%an' "$sha")
     cn=$(git log -1 --format='%cn' "$sha")
     for ident in "$ae" "$ce" "$an" "$cn"; do
-        if [ -n "$ident" ] && contains_denied_identity "$ident"; then
-            hook_error "commit $sha attributed to denied account"
+        if [ -n "$ident" ] && ! contains_allowed_identity "$ident"; then
+            hook_error "commit $sha attributed to an account outside the allowlist"
             hook_detail "  $ident"
             local_failed=1
         fi
     done
 
-    # Trailers via git's own parser
-    local trailers
-    trailers=$(git log -1 --format='%B' "$sha" | git interpret-trailers --parse --no-divider 2>/dev/null)
-    if [ -n "$trailers" ]; then
-        while IFS=$'\t' read -r key value; do
-            [ -z "$key$value" ] && continue
-            if contains_denied_identity "$value"; then
-                hook_error "commit $sha has trailer citing a denied account"
-                hook_detail "  $key: $value"
-                local_failed=1
-            fi
-        done <<<"$trailers"
-    fi
+    # Trailer-by-trailer identity check intentionally not done here:
+    # Co-Authored-By / Signed-off-by / Reviewed-by routinely name external
+    # contributors who are not on the personal allowlist, and rejecting
+    # those would break normal PR-accepting flow. The Claude/Anthropic
+    # footprint regex set in scan_footprints (below) already catches AI
+    # attribution in any trailer line, which is the actual concern.
 
     # Footprint scan: message
     local message

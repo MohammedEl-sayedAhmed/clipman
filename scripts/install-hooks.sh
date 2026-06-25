@@ -2,7 +2,7 @@
 # install-hooks.sh — opt-in installer for Clipman's local git hooks.
 #
 # Run once after cloning if you want the local guardrails (identity
-# denylist + AI-footprint scanner). External contributors do NOT need
+# allowlist + AI-footprint scanner). External contributors do NOT need
 # to run this; the CI does not require it; nothing about your workflow
 # breaks if you skip it.
 #
@@ -46,16 +46,16 @@ cat <<'EOF'
 What this enabled:
   • commit-msg : aborts commits whose message contains an AI/Claude footprint
                  OR a trailer (Co-Authored-By:, Signed-off-by:, etc.) citing
-                 a denied account
-  • pre-commit : aborts if your git identity is on the personal denylist,
+                 a non-allowed account
+  • pre-commit : aborts if your git identity is not on the personal allowlist,
                  or if the staged diff *adds* an AI footprint to a tracked
                  file (skips paths in HOOKS_PATH_ALLOWLIST, e.g. docs/hooks.md)
   • pre-push   : per-commit final check before commits leave the machine,
                  including a scan of diff additions (catches binaries +
                  commits made outside this hook chain)
 
-Denied account names (override via CLIPMAN_HOOKS_DENY="..."):
-  mammar97, salmaamr129
+Allowed account names (override via CLIPMAN_HOOKS_ALLOW="..."):
+  MohammedEl-sayedAhmed
 
 Uninstall:
   git config --unset core.hooksPath
