@@ -1,4 +1,4 @@
-"""Pure-data declarations for the 15 edge states from the mockups.
+"""Pure-data declarations for the 16 edge states from the mockups.
 
 Each ``StateSpec`` captures everything the renderer needs:
 - ``id``: stable identifier used by ``window.py`` to look the state up.
@@ -60,8 +60,12 @@ class StateSpec:
 
 
 # ---------------------------------------------------------------------
-# The 15 specs. Order matches the mockup picker (states.html), reading
+# The 16 specs. Order matches the mockup picker (states.html), reading
 # top-to-bottom: Baseline / Informational / Privacy / Setup / Errors.
+# "populated" is a sentinel: it represents the normal list-view popup,
+# is never actually rendered through ``render_edge_state`` (the list
+# takes over), but stays in STATES so the dispatcher can compare
+# against a single canonical id set.
 # ---------------------------------------------------------------------
 
 STATES: dict[str, StateSpec] = {
