@@ -157,6 +157,17 @@ class ClipmanWindow(Adw.ApplicationWindow):
         prefs_btn.connect("clicked", self._on_prefs_clicked)
         header.pack_end(prefs_btn)
 
+        # "New snippet" appears only while the Snippets filter is active;
+        # hidden in the All / Pinned views so the headerbar stays light.
+        self._new_snippet_btn = Gtk.Button.new_from_icon_name(
+            "list-add-symbolic"
+        )
+        self._new_snippet_btn.set_tooltip_text(_("Manage snippets"))
+        self._new_snippet_btn.add_css_class("flat")
+        self._new_snippet_btn.set_visible(False)
+        self._new_snippet_btn.connect("clicked", self._on_snippets_clicked)
+        header.pack_end(self._new_snippet_btn)
+
         root.append(header)
 
         # -- Update banner (libadwaita native) -----------------------------
@@ -500,7 +511,15 @@ class ClipmanWindow(Adw.ApplicationWindow):
             if fid == filter_id:
                 btn.add_css_class("filter-tab-active")
         self._active_filter = filter_id
+        self._new_snippet_btn.set_visible(filter_id == "snippets")
         self.refresh()
+
+    def _on_snippets_clicked(self, _button):
+        from clipman.snippets_dialog import SnippetsDialog
+
+        dialog = SnippetsDialog(self.db)
+        dialog.connect("closed", lambda _d: self.refresh())
+        dialog.present(self)
 
     def _on_row_activated(self, _listbox, row):
         if row is None:
