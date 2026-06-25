@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use Clipman in academic work, blog posts, or downstream packages, please cite it using the metadata below."
+title: Clipman
+type: software
+authors:
+  - given-names: Mohammed
+    family-names: El-sayed Ahmed
+abstract: "Clipman is a clipboard history manager for Wayland (GNOME, KDE, Sway, Hyprland). Press Super+V to view your clipboard history, search entries, pin favorites, and instantly paste previous copies — like Windows Win+V, but for Linux."
+version: 1.0.6
+date-released: 2026-02-22
+url: "https://mohammedel-sayedahmed.github.io/clipman/"
+repository-code: "https://github.com/MohammedEl-sayedAhmed/clipman"
+license: Apache-2.0
+keywords:
+  - clipboard
+  - wayland
+  - gnome
+  - linux
+  - gtk
