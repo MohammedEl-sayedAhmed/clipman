@@ -25,7 +25,7 @@ import time
 import urllib.error
 import urllib.request
 
-from clipman import __version__
+from clipman._version import __version__
 
 RELEASES_URL = (
     "https://api.github.com/repos/MohammedEl-sayedAhmed/clipman/releases/latest"

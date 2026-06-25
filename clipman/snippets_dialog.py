@@ -11,7 +11,11 @@ popup's responsibility, not this dialog's.
 
 import gi
 
-from clipman import _
+# Bind ``_`` directly to gettext.gettext to avoid the
+# ``from clipman import _`` back-reference that closes a CodeQL
+# py/cyclic-import. clipman/__init__.py has already called
+# ``textdomain("clipman")`` by the time this submodule loads.
+from gettext import gettext as _
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")

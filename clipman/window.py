@@ -17,7 +17,12 @@ from string import Template
 
 import gi
 
-from clipman import _, __version__, updates
+# Direct submodule imports — avoid ``from clipman import …`` which
+# CodeQL flags as a cyclic import (window <-> clipman package).
+from gettext import gettext as _
+
+from clipman import updates
+from clipman._version import __version__
 
 logger = logging.getLogger(__name__)
 

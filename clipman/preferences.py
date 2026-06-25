@@ -19,7 +19,12 @@ import time
 
 import gi
 
-from clipman import _, __version__, keybindings, updates
+# Direct submodule imports — avoid ``from clipman import …`` which
+# CodeQL flags as a cyclic import (preferences <-> clipman package).
+from gettext import gettext as _
+
+from clipman import keybindings, updates
+from clipman._version import __version__
 from clipman.database import DB_PATH
 
 logger = logging.getLogger(__name__)
