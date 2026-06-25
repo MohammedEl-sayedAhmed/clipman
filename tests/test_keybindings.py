@@ -181,6 +181,13 @@ class TestKeyvalToBinding(unittest.TestCase):
         from gi.repository import Gdk
         self._Gdk = Gdk
         self._ModifierType = Gdk.ModifierType
+        # GTK 4 renamed MOD1_MASK -> ALT_MASK. Resolve at runtime so a
+        # contributor running GTK 3 introspection bindings (vanishingly
+        # rare but possible) doesn't see a spurious test failure.
+        self._ALT_MASK = getattr(
+            Gdk.ModifierType, "ALT_MASK",
+            getattr(Gdk.ModifierType, "MOD1_MASK", 0),
+        )
 
     def _keyval(self, name):
         # Map symbolic names to keyvals via the real typelib so we
@@ -221,14 +228,18 @@ class TestKeyvalToBinding(unittest.TestCase):
             keybindings.keyval_to_binding(self._keyval("v"), 0)
         )
 
-    def test_rejects_unknown_keyval(self):
+    def test_rejects_when_keyval_name_returns_none(self):
+        # Real Gdk.keyval_name returns a hex-string for any int it
+        # doesn't recognise, so we can't drive the "unknown keyval"
+        # reject path with a fixture int. Patch keyval_name to None
+        # directly — that's the contract keyval_to_binding actually
+        # guards (``if not name``).
         m = self._ModifierType.SUPER_MASK
-        # 0xdeadbeef is well outside the Gdk keyval space — keyval_name
-        # returns None, which keyval_to_binding must reject.
-        self.assertIsNone(keybindings.keyval_to_binding(0xdeadbeef, m))
+        with patch.object(self._Gdk, "keyval_name", return_value=None):
+            self.assertIsNone(keybindings.keyval_to_binding(0x76, m))
 
     def test_alt_plus_function_key(self):
-        m = self._ModifierType.MOD1_MASK  # Alt
+        m = self._ALT_MASK
         self.assertEqual(
             keybindings.keyval_to_binding(self._keyval("F1"), m), "<Alt>F1"
         )
@@ -236,7 +247,7 @@ class TestKeyvalToBinding(unittest.TestCase):
     def test_all_four_modifiers(self):
         m = (self._ModifierType.CONTROL_MASK
              | self._ModifierType.SHIFT_MASK
-             | self._ModifierType.MOD1_MASK
+             | self._ALT_MASK
              | self._ModifierType.SUPER_MASK)
         self.assertEqual(
             keybindings.keyval_to_binding(self._keyval("v"), m),

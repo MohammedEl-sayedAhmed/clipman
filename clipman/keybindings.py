@@ -104,7 +104,14 @@ def keyval_to_binding(keyval: int, state: int) -> str | None:
         parts.append("<Ctrl>")
     if state & Gdk.ModifierType.SUPER_MASK:
         parts.append("<Super>")
-    if state & Gdk.ModifierType.MOD1_MASK:
+    # GTK 4 renamed MOD1_MASK to ALT_MASK; fall back to MOD1_MASK so
+    # this module still works under the (very rare) GTK 3 introspection
+    # bindings a contributor might have on their machine.
+    alt_mask = getattr(
+        Gdk.ModifierType, "ALT_MASK",
+        getattr(Gdk.ModifierType, "MOD1_MASK", 0),
+    )
+    if state & alt_mask:
         parts.append("<Alt>")
     if state & Gdk.ModifierType.SHIFT_MASK:
         parts.append("<Shift>")
