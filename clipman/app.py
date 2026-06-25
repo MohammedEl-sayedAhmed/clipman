@@ -4,8 +4,12 @@ import dbus
 import gi
 import dbus.mainloop.glib
 
-gi.require_version("Gtk", "3.0")
-from gi.repository import Gtk, GLib
+# GTK 4 + libadwaita 1.4+. Adw must be initialised BEFORE any GTK widget
+# is constructed (Adw.init() runs Gtk.init() under the hood and primes
+# the libadwaita style provider).
+gi.require_version("Gtk", "4.0")
+gi.require_version("Adw", "1")
+from gi.repository import Gtk, Adw, GLib  # noqa: E402
 
 from clipman import updates
 from clipman.database import ClipboardDB
@@ -14,9 +18,11 @@ from clipman.window import ClipmanWindow
 from clipman.dbus_service import ClipmanDBusService
 
 
-class ClipmanApp(Gtk.Application):
+class ClipmanApp(Adw.Application):
     def __init__(self):
-        # Must be called before GTK main loop starts
+        # DBus glib mainloop integration must be installed before the
+        # GTK main loop starts so D-Bus signals dispatch on the same
+        # loop libadwaita uses.
         dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
         super().__init__(application_id="com.clipman.Clipman")
         self.db = None
@@ -31,10 +37,14 @@ class ClipmanApp(Gtk.Application):
 
         self.db = ClipboardDB()
         self.monitor = ClipboardMonitor(self.db, on_new_entry=self._on_new_entry)
-        self.window = ClipmanWindow(self.db, self.monitor)
+        self.window = ClipmanWindow(application=self, db=self.db, monitor=self.monitor)
+        # Adw.Application tracks windows via add_window; the popup window
+        # toggle/visibility is managed by ClipmanWindow itself.
         self.add_window(self.window)
 
-        # Keep the app running even when the window is hidden
+        # Keep the app running even when the popup is hidden — the
+        # daemon needs to stay alive to receive D-Bus toggle calls and
+        # to keep the clipboard monitor running.
         self.hold()
 
         self.dbus_service = ClipmanDBusService(self.window, self, self.monitor)
@@ -47,7 +57,6 @@ class ClipmanApp(Gtk.Application):
 
         # Schedule the first update check 30s after startup (so we
         # don't slow login) and a daily recurring tick after that.
-        # ``updates.should_check_now`` enforces opt-out + 24h rate limit.
         GLib.timeout_add_seconds(30, self._update_check_tick)
         GLib.timeout_add_seconds(updates.CHECK_INTERVAL_SECONDS,
                                  self._update_check_tick)
@@ -57,13 +66,6 @@ class ClipmanApp(Gtk.Application):
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self._shutdown)
 
     def _update_check_tick(self):
-        """Fire an async update check if rate-limit + opt-in allow it.
-
-        Returning ``True`` keeps the recurring 24h timeout alive.
-        The initial 30s-after-startup tick is a one-shot that returns
-        ``False``; both end up here, the GLib bookkeeping is handled
-        per-timeout below.
-        """
         if self.db is None:
             return False
         if updates.should_check_now(self.db):
@@ -71,12 +73,6 @@ class ClipmanApp(Gtk.Application):
         return True
 
     def _on_update_result(self, is_newer, latest, url):
-        """Callback marshalled to the GTK main loop by ``updates``.
-
-        If the window already exists, refresh its banner state. The
-        method is always defined on ClipmanWindow, so no defensive
-        guard beyond the None check is needed.
-        """
         if is_newer and self.window is not None:
             self.window.refresh_update_banner()
         return False  # idle_add: run once
