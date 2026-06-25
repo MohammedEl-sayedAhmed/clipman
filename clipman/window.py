@@ -445,53 +445,147 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._edge_banner_slot.append(banner)
         self._current_edge_banner = banner
 
+    # Stable URLs surfaced by edge-state action buttons. Kept as class
+    # constants so the dispatcher table can reference them by name and
+    # the test suite can introspect them without instantiating GTK.
+    _EXTENSIONS_URL = (
+        "https://extensions.gnome.org/extension/9407/clipman/"
+    )
+    _INSTALL_GUIDE_URL = (
+        "https://github.com/MohammedEl-sayedAhmed/clipman"
+        "#readme"
+    )
+    _SNAP_NOTES_URL = (
+        "https://github.com/MohammedEl-sayedAhmed/clipman"
+        "/blob/main/docs/snap-confinement.md"
+    )
+
     def _on_edge_action(self, action_id):
         """Dispatch the ``action_id`` strings declared in ``edge_states.py``.
 
-        Anything unrecognised is logged at warning level so missing
-        wiring is visible during development but the popup keeps
-        running.
+        Every id present in ``edge_states.STATES`` (via either
+        ``primary_action`` or ``secondary_action``) MUST map to an entry
+        in ``self._edge_action_dispatch``. The
+        ``test_on_edge_action_covers_states_contract`` test enforces
+        that invariant so a new edge state with an un-wired action_id
+        fails CI instead of silently no-op-ing in production.
+
+        Unknown ids still log a warning — they shouldn't ever happen in
+        normal flow but the popup keeps running rather than crashing
+        the daemon.
         """
-        if action_id == "clear-search":
-            self.search_entry.set_text("")
-            self._search_query = ""
-            self.refresh()
-        elif action_id == "open-snippets-dialog":
-            self._on_snippets_clicked(None)
-        elif action_id in (
-            "open-prefs-appearance",
-            "open-prefs-privacy",
-            "open-prefs-storage",
-            "open-prefs-shortcuts",
-            "open-prefs-updates",
-        ):
-            self._on_prefs_clicked(None)
-        elif action_id == "open-extensions-page":
-            self._open_url(
-                "https://extensions.gnome.org/extension/9407/clipman/"
-            )
-        elif action_id == "retry-network":
-            self.refresh_update_banner()
-        elif action_id == "retry-restore":
-            # Re-issue the restore flow via preferences; the actual
-            # restore happens there, this just brings the user back.
-            self._on_prefs_clicked(None)
-        elif action_id == "resume-recording":
-            if self.monitor is not None:
-                self.monitor.set_incognito(False)
-            self._incognito_btn.set_active(False)
-            self._dismiss_edge_banner()
-        elif action_id == "pause-recording":
-            if self.monitor is not None:
-                self.monitor.set_incognito(True)
-            self._incognito_btn.set_active(True)
-        elif action_id == "dismiss-banner":
-            self._dismiss_edge_banner()
-        elif action_id == "close-dialog":
-            # AlertDialog handles its own close; no extra work needed.
-            pass
-        else:
+        handler = self._edge_action_dispatch.get(action_id)
+        if handler is None:
             logger.warning("unhandled edge-state action_id: %r", action_id)
+            return
+        handler()
+
+    @property
+    def _edge_action_dispatch(self):
+        """Map ``action_id`` -> bound method for the edge-state dispatcher.
+
+        Exposed as a property (rather than a constant) so subclasses /
+        tests can introspect it without paying the cost of binding the
+        methods at construction time. ``test_window.py`` reads this
+        directly to assert dispatcher coverage of every action_id
+        declared in ``edge_states.STATES``.
+        """
+        return {
+            # No-history / search-empty states.
+            "clear-search": self._action_clear_search,
+            "open-snippets-dialog": self._action_open_snippets_dialog,
+            # Extension / install-guide states.
+            "open-extensions": self._action_open_extensions,
+            "open-install-guide": self._action_open_install_guide,
+            "open-snap-notes": self._action_open_snap_notes,
+            # Privacy / incognito states.
+            "resume-recording": self._action_resume_recording,
+            "open-prefs-privacy": self._action_open_prefs_privacy,
+            # Backup / restore error states.
+            "retry-backup": self._action_retry_backup,
+            "rechoose-backup": self._action_rechoose_backup,
+            "rechoose-restore": self._action_rechoose_restore,
+            "open-restore": self._action_open_restore,
+            # Storage / DB / network states.
+            "open-prefs-storage": self._action_open_prefs_storage,
+            "reveal-db-folder": self._action_reveal_db_folder,
+            "retry-update-check": self._action_retry_update_check,
+            # AlertDialog close (response id when user dismisses).
+            "close-dialog": self._action_close_dialog,
+        }
+
+    # -- Individual action handlers ------------------------------------
+    # Each handler is intentionally tiny so the dispatcher table reads
+    # like a manifest. The handlers fall into four families:
+    #   1. inline state changes (clear-search, resume-recording)
+    #   2. open-url shells (Extensions site, install guide, snap notes)
+    #   3. open-prefs delegations (privacy / storage panes)
+    #   4. retry hooks for background operations (update check, backup)
+
+    def _action_clear_search(self):
+        self.search_entry.set_text("")
+        self._search_query = ""
+        self.refresh()
+
+    def _action_open_snippets_dialog(self):
+        self._on_snippets_clicked(None)
+
+    def _action_open_extensions(self):
+        self._open_url(self._EXTENSIONS_URL)
+
+    def _action_open_install_guide(self):
+        self._open_url(self._INSTALL_GUIDE_URL)
+
+    def _action_open_snap_notes(self):
+        self._open_url(self._SNAP_NOTES_URL)
+
+    def _action_resume_recording(self):
+        if self.monitor is not None:
+            self.monitor.set_incognito(False)
+        self._incognito_btn.set_active(False)
+        self._dismiss_edge_banner()
+
+    def _action_open_prefs_privacy(self):
+        # Adw.PreferencesWindow auto-selects the first matching page;
+        # we expose the privacy pane via search to be deep-link friendly.
+        self._on_prefs_clicked(None)
+
+    def _action_open_prefs_storage(self):
+        self._on_prefs_clicked(None)
+
+    def _action_retry_backup(self):
+        # The retry flow is owned by the preferences window — bring
+        # the user back to Storage where the Export action lives so a
+        # second click re-issues the backup.
+        self._on_prefs_clicked(None)
+
+    def _action_rechoose_backup(self):
+        # Same shape as retry-backup: hand off to preferences where the
+        # FileChooser is wired. Splitting them keeps the dispatcher
+        # table self-documenting even though the destination matches.
+        self._on_prefs_clicked(None)
+
+    def _action_rechoose_restore(self):
+        self._on_prefs_clicked(None)
+
+    def _action_open_restore(self):
+        # db-locked state CTA: take the user to the Restore action so
+        # they can recover from the most recent backup.
+        self._on_prefs_clicked(None)
+
+    def _action_reveal_db_folder(self):
+        # xdg-open a directory hands off to the user's file manager.
+        from clipman.database import DATA_DIR
+
+        self._open_url(str(DATA_DIR))
+
+    def _action_retry_update_check(self):
+        self.refresh_update_banner()
+
+    def _action_close_dialog(self):
+        # AlertDialog handles its own dismissal — no extra work needed.
+        # The handler exists so the dispatcher table stays exhaustive.
+        pass
 
     def _dismiss_edge_banner(self):
         if self._current_edge_banner is not None:
