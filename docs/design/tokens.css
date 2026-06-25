@@ -61,7 +61,7 @@
    Catppuccin Mocha — dark theme (default)
    ========================================================================== */
 
-:root, body.theme-dark {
+body.theme-dark {
     /* Surfaces */
     --bg-crust:    #181825;   /* deepest — window backdrop */
     --bg-base:     #1e1e2e;   /* primary surface */
@@ -117,7 +117,7 @@
    Text is near-black (stone-900) — full WCAG AA contrast for body copy.
    ========================================================================== */
 
-body.theme-light {
+:root, body.theme-light {
     --bg-crust:    #d6d3d1;   /* outer / shadow region — stone-300 */
     --bg-base:     #f5f5f4;   /* window background — stone-100 */
     --bg-mantle:   #e7e5e4;   /* headerbar / footer — stone-200 (recessed) */

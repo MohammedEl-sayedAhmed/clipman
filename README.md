@@ -23,6 +23,7 @@ Like Windows `Win+V` — but for Linux.
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/MohammedEl-sayedAhmed?label=Sponsors&logo=github)](https://github.com/sponsors/MohammedEl-sayedAhmed)
 [![Donate](https://img.shields.io/badge/Donate-PayPal-0070BA?logo=paypal&logoColor=white)](https://www.paypal.com/paypalme/mohammedelsayedammar)
 [![GitHub Discussions](https://img.shields.io/github/discussions/MohammedEl-sayedAhmed/clipman?label=Discussions&logo=github)](https://github.com/MohammedEl-sayedAhmed/clipman/discussions)
+[![Project Page](https://img.shields.io/badge/Project_Page-clipman-cba6f7?logo=googlechrome&logoColor=white)](https://mohammedel-sayedahmed.github.io/clipman/)
 
 ---
 
@@ -31,6 +32,10 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 <br>
 
 <img src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/dark-theme.png" alt="Dark theme" width="320">&nbsp;&nbsp;<img src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/light-theme.png" alt="Light theme" width="320">
+
+<br>
+
+<sub><i>Above: the current GTK3 popup. A redesigned GTK4 + libadwaita UI is in design — <a href="https://mohammedel-sayedahmed.github.io/clipman/#design">browse the mockups</a> or <a href="https://mohammedel-sayedahmed.github.io/clipman/">visit the project page</a>. The redesign is designs, not shipped code yet.</i></sub>
 
 </div>
 
@@ -218,17 +223,6 @@ Or with paru: `paru -S clipman-clipboard`
 
 </details>
 
-<details>
-<summary><strong>Flatpak / Flathub</strong> (not currently published)</summary>
-
-Clipman is **not** currently published on Flathub and there is no
-submission in flight. A reference manifest is kept at
-`flathub/io.github.MohammedEl_sayedAhmed.Clipman.json` so that a future
-submission has somewhere to start, but it should not be treated as a
-released channel.
-
-</details>
-
 ## Usage
 
 | Action | How |
@@ -332,8 +326,6 @@ clipman/
 │   └── light-theme.png            # Screenshot (light theme)
 ├── snap/
 │   └── snapcraft.yaml             # Snap packaging
-├── flathub/
-│   └── io.github.MohammedEl_sayedAhmed.Clipman.json  # Flathub manifest
 ├── aur/
 │   └── PKGBUILD                   # AUR packaging
 ├── scripts/

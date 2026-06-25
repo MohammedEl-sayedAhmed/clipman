@@ -1,0 +1,1307 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clipman — Wayland-native clipboard history for Linux</title>
+<meta name="description" content="Clipman is a fast, GTK-native clipboard history manager for Ubuntu and GNOME on Wayland. Search, pin, snippets, incognito mode, and sensitive-data auto-clear — all local, no telemetry, like Win+V for Linux.">
+<meta name="keywords" content="clipman, clipboard manager, clipboard history, wayland, gnome, linux, ubuntu, super+v, win+v linux, gnome shell extension, gtk, catppuccin, snap, pypi, aur">
+<meta name="author" content="Mohammed El-sayed Ahmed">
+<link rel="canonical" href="https://mohammedel-sayedahmed.github.io/clipman/">
+<link rel="icon" href="logo.svg">
+<link rel="apple-touch-icon" href="logo.svg">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f5f5f4">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Clipman">
+<meta property="og:title" content="Clipman — Wayland-native clipboard history for Linux">
+<meta property="og:description" content="Press Super+V to browse, search, pin and paste your clipboard history. Wayland-native, GNOME-native, local-only — no telemetry, no polling, no Electron.">
+<meta property="og:url" content="https://mohammedel-sayedahmed.github.io/clipman/">
+<meta property="og:image" content="https://mohammedel-sayedahmed.github.io/clipman/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Clipman — Wayland-native clipboard history for Linux. Press Super+V to search, pin, and paste from your local clipboard history.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Clipman — Wayland-native clipboard history for Linux">
+<meta name="twitter:description" content="Press Super+V to browse and paste your clipboard history. Wayland-native, GNOME-native, local-only.">
+<meta name="twitter:image" content="https://mohammedel-sayedahmed.github.io/clipman/og-image.png">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "name": "Clipman",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Linux",
+      "description": "Clipman is an open-source, Wayland-native clipboard history manager for Ubuntu/GNOME and any compositor with wl-clipboard. Press Super+V to browse, search, pin and paste from a local SQLite-backed history. Privacy is built in: incognito mode pauses recording, sensitive data (passwords, tokens, cards) is auto-cleared after 30 seconds, and nothing leaves the machine.",
+      "url": "https://mohammedel-sayedahmed.github.io/clipman/",
+      "downloadUrl": "https://github.com/MohammedEl-sayedAhmed/clipman",
+      "softwareVersion": "1.0.6",
+      "programmingLanguage": "Python",
+      "license": "https://opensource.org/licenses/Apache-2.0",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+      "keywords": "clipboard manager, clipboard history, wayland, gnome, super+v, win+v linux",
+      "author": { "@type": "Person", "name": "Mohammed El-sayed Ahmed" }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        { "@type": "Question", "name": "What is Clipman?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Clipman is a clipboard history manager for Linux desktops on Wayland. Press Super+V and a popup shows everything you've copied recently — text and images, searchable, pinnable, with reusable snippets. It runs as a local Python + GTK daemon and stores history in a per-user SQLite database with restrictive file permissions." } },
+        { "@type": "Question", "name": "How is Clipman different from CopyQ, Klipper, or GPaste?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Three things. First, it's Wayland-native: a GNOME Shell extension watches the clipboard over D-Bus, so there's no polling loop and no subprocesses constantly probing the clipboard. Second, it's quiet — no Electron, no background services beyond a small Python daemon. Third, privacy is built in by default: incognito mode pauses recording entirely, and sensitive-shaped data (passwords, tokens, credit-card-like strings) is auto-cleared on a 30-second timer." } },
+        { "@type": "Question", "name": "Does Clipman work outside GNOME?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. The GNOME Shell extension (ID 9407) is the smoothest path on GNOME — events flow over D-Bus with zero polling. On KDE, Sway, Hyprland, and any other compositor with wl-clipboard installed, Clipman falls back to wl-paste --watch, which is still event-driven (no busy-poll). The popup UI is identical either way." } },
+        { "@type": "Question", "name": "Is my clipboard data ever uploaded anywhere?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. Clipman is fully local. History lives in a SQLite database at ~/.local/share/clipman/clipman.db with restrictive file permissions (0600). There is no telemetry, no sync, no cloud, and no network access in the daemon code path. Backups are explicit, off by default, and write to a local file you choose." } },
+        { "@type": "Question", "name": "How does sensitive-data detection actually work?",
+          "acceptedAnswer": { "@type": "Answer", "text": "When something lands on the clipboard, Clipman checks it against local heuristics — Luhn-valid credit-card patterns, JWT/PEM-shaped strings, GitHub-like tokens, password-mime-typed payloads, and a few others. Matches are stored but masked in the list and queued for auto-clear on a configurable 30–300-second timer (default 30s). Detection runs in-process; no rules are downloaded." } },
+        { "@type": "Question", "name": "Can I use Clipman without the GNOME extension?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. The extension is an optimization, not a requirement. Without it, Clipman uses wl-clipboard's wl-paste --watch to subscribe to clipboard changes — event-driven, no polling. You lose the Super+V keybinding wired through GNOME Shell, but you can bind any shortcut yourself to call `clipman toggle`." } },
+        { "@type": "Question", "name": "What about Wayland's clipboard security restrictions?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Wayland deliberately scopes clipboard access to focused windows, which breaks naive X11-era managers when they're not focused. Clipman doesn't try to fight that — the GNOME Shell extension reads the clipboard from inside the compositor (where it's allowed), and the wl-clipboard fallback uses the protocol's documented data-control or selection paths. Pasting is implemented by simulating a Ctrl+V into the target window, not by writing directly to it." } }
+      ]
+    },
+    {
+      "@type": "HowTo",
+      "name": "Install and use Clipman",
+      "step": [
+        { "@type": "HowToStep", "name": "Install", "text": "Run `sudo snap install clipman` (Ubuntu/GNOME) or `pipx install clipman-clipboard` (any distro)." },
+        { "@type": "HowToStep", "name": "Activate", "text": "Log out and back in once so the GNOME Shell extension registers, then run `./install.sh` from the source checkout if you're not on snap." },
+        { "@type": "HowToStep", "name": "Summon", "text": "Press Super+V from anywhere to open the popup." },
+        { "@type": "HowToStep", "name": "Use", "text": "Click a row to paste it into the focused window. Pin items you want to keep. Save snippets with Ctrl+N. Toggle incognito with the eye icon." }
+      ]
+    }
+  ]
+}
+</script>
+
+<style>
+/* ================================================================
+   COLOR TOKENS — Catppuccin Mocha (dark default) + stone (light)
+   ================================================================ */
+
+:root, html[data-theme="dark"] {
+    --bg:           #181825;
+    --surface:      #1e1e2e;
+    --surface-2:    #252536;
+    --surface-3:    #313244;
+    --code-bg:      #11111b;
+    --text:         #cdd6f4;
+    --muted:        #a6adc8;
+    --faint:        #6c7086;
+    --border:       #313244;
+    --border-strong:#45475a;
+    --ring:         #cba6f7;
+    --accent:       #cba6f7;
+    --accent-2:     #89b4fa;
+    --accent-ink:   #1e1e2e;
+    --link:         #89b4fa;
+    --link-hover:   #b4befe;
+    --success:      #a6e3a1;
+    --warning:      #f9e2af;
+    --error:        #f38ba8;
+    --info:         #74c7ec;
+    --flag:         #f9e2af;
+    --dot-grid:     rgba(205, 214, 244, 0.05);
+    color-scheme: dark;
+}
+
+html[data-theme="light"] {
+    --bg:           #f5f5f4;
+    --surface:      #ffffff;
+    --surface-2:    #fafaf9;
+    --surface-3:    #e7e5e4;
+    --code-bg:      #1c1917;
+    --text:         #1c1917;
+    --muted:        #44403c;
+    --faint:        #78716c;
+    --border:       #e7e5e4;
+    --border-strong:#d6d3d1;
+    --ring:         #9333ea;
+    --accent:       #9333ea;
+    --accent-2:     #2563eb;
+    --accent-ink:   #ffffff;
+    --link:         #2563eb;
+    --link-hover:   #1d4ed8;
+    --success:      #16a34a;
+    --warning:      #b45309;
+    --error:        #dc2626;
+    --info:         #0891b2;
+    --flag:         #b45309;
+    --dot-grid:     rgba(28, 25, 23, 0.06);
+    color-scheme: light;
+}
+
+/* ================================================================
+   BASE
+   ================================================================ */
+
+:root {
+    --sans: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --tight: -0.02em;
+    --label: 0.16em;
+    --r-sm: 6px;
+    --r-md: 10px;
+    --r-lg: 16px;
+    --r-pill: 999px;
+    --dur: 200ms;
+    --ease: cubic-bezier(.2,0,0,1);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.55;
+    background-image: radial-gradient(circle at 1px 1px, var(--dot-grid) 1px, transparent 0);
+    background-size: 30px 30px;
+    transition: background-color var(--dur) var(--ease), color var(--dur) var(--ease);
+    -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--link); text-decoration: none; transition: color var(--dur) var(--ease); }
+a:hover { color: var(--link-hover); }
+
+::selection { background: rgba(203, 166, 247, 0.30); }
+html[data-theme="light"] ::selection { background: rgba(147, 51, 234, 0.20); }
+
+.skip {
+    position: absolute; left: -9999px; top: 0;
+    background: var(--accent); color: var(--accent-ink);
+    padding: 8px 12px;
+}
+.skip:focus { left: 8px; top: 8px; z-index: 1000; }
+
+.wrap {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+.mono { font-family: var(--mono); font-size: 0.92em; }
+
+.eyebrow {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: var(--label);
+    margin: 0 0 16px;
+    font-weight: 500;
+}
+
+.accent { color: var(--accent); }
+.accent-2 { color: var(--accent-2); }
+
+/* ================================================================
+   HEADER
+   ================================================================ */
+
+header.site {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: color-mix(in oklab, var(--bg) 80%, transparent);
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+header.site .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    gap: 16px;
+}
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: var(--tight);
+    color: var(--text);
+}
+.brand img { display: block; }
+.brand:hover { color: var(--accent); }
+
+header.site nav {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+}
+header.site nav a {
+    color: var(--text);
+    font-size: 0.95rem;
+    font-weight: 500;
+    font-family: var(--mono);
+    opacity: 0.78;
+    transition: opacity var(--dur) var(--ease);
+}
+header.site nav a:hover { opacity: 1; color: var(--link); }
+
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px; height: 36px;
+    border-radius: var(--r-pill);
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all var(--dur) var(--ease);
+}
+.theme-toggle:hover { color: var(--text); border-color: var(--accent); }
+/* Icon convention: the icon shows what you'll GET if you click it.
+ * In dark mode, show the sun (click → switch to light).
+ * In light mode, show the moon (click → switch to dark). */
+html[data-theme="dark"]  .theme-toggle .ico-dark  { display: none; }
+html[data-theme="light"] .theme-toggle .ico-light { display: none; }
+
+/* ================================================================
+   BUTTONS
+   ================================================================ */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 0.95rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.btn:hover { border-color: var(--accent); transform: translateY(-1px); color: var(--text); }
+.btn.primary {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: transparent;
+    font-weight: 600;
+}
+.btn.primary:hover { background: var(--link-hover); color: var(--accent-ink); }
+.btn svg { display: block; width: 18px; height: 18px; }
+
+/* ================================================================
+   HERO
+   ================================================================ */
+
+.hero {
+    padding: 80px 0 64px;
+    border-bottom: 1px solid var(--border);
+}
+.hero .grid {
+    display: grid;
+    grid-template-columns: 1.15fr 1fr;
+    gap: 56px;
+    align-items: center;
+}
+@media (max-width: 880px) {
+    .hero .grid { grid-template-columns: 1fr; }
+}
+.hero h1 {
+    font-size: clamp(2.2rem, 5vw, 3.6rem);
+    line-height: 1.05;
+    letter-spacing: var(--tight);
+    margin: 0 0 18px;
+    font-weight: 700;
+}
+.hero .sub {
+    font-size: 1.15rem;
+    color: var(--muted);
+    line-height: 1.55;
+    margin: 0 0 28px;
+    max-width: 50ch;
+}
+.hero .cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 32px;
+}
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.chip {
+    display: inline-flex;
+    flex-direction: column;
+    padding: 10px 14px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    min-width: 0;
+}
+.chip .v { font-family: var(--mono); font-size: 0.9rem; font-weight: 600; color: var(--text); letter-spacing: -0.02em; }
+.chip .l { font-size: 0.75rem; color: var(--faint); margin-top: 2px; }
+
+.hero-visual {
+    position: relative;
+    display: flex;
+    justify-content: center;
+}
+.hero-visual::before {
+    content: "";
+    position: absolute;
+    inset: -40px -20px;
+    background: radial-gradient(60% 60% at 50% 40%, var(--accent) 0%, transparent 70%);
+    opacity: 0.18;
+    z-index: 0;
+}
+.hero-visual img {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 380px;
+    height: auto;
+    border-radius: 14px;
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 24px 48px -16px rgba(0,0,0,0.45), 0 8px 16px -8px rgba(0,0,0,0.25);
+}
+
+/* ================================================================
+   SECTION SHELL
+   ================================================================ */
+
+section {
+    padding: 80px 0;
+    border-bottom: 1px solid var(--border);
+}
+section h2 {
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    line-height: 1.15;
+    letter-spacing: var(--tight);
+    margin: 0 0 16px;
+    font-weight: 700;
+    color: var(--text);
+}
+section h2 .accent { color: var(--accent); }
+.lede {
+    font-size: 1.05rem;
+    color: var(--muted);
+    margin: 0 0 32px;
+    max-width: 60ch;
+    line-height: 1.55;
+}
+
+/* Feature rows — alternating left/right */
+.feature {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    align-items: center;
+    padding: 24px 0;
+}
+.feature.right { direction: rtl; }
+.feature.right > * { direction: ltr; }
+@media (max-width: 880px) {
+    .feature { grid-template-columns: 1fr; gap: 24px; }
+    .feature.right { direction: ltr; }
+}
+.feature-copy h3 {
+    font-size: clamp(1.4rem, 2.4vw, 1.8rem);
+    line-height: 1.2;
+    letter-spacing: var(--tight);
+    margin: 0 0 12px;
+    font-weight: 700;
+}
+.feature-copy p {
+    color: var(--muted);
+    font-size: 1.02rem;
+    line-height: 1.55;
+    margin: 0;
+    max-width: 48ch;
+}
+.feature-visual {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 280px;
+    position: relative;
+    overflow: hidden;
+}
+.feature-visual img {
+    max-width: 100%;
+    max-height: 360px;
+    height: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border-strong);
+    box-shadow: 0 12px 32px -8px rgba(0,0,0,0.35);
+}
+.feature-visual .link-out {
+    position: absolute;
+    bottom: 12px;
+    right: 14px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: var(--faint);
+}
+
+/* ================================================================
+   LIVE DEMO
+   ================================================================ */
+
+.demo-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+}
+.demo-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 20px;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--border);
+}
+.demo-bar .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: var(--label);
+    padding: 4px 10px;
+    border-radius: var(--r-pill);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+}
+.demo-bar .desc { color: var(--muted); font-size: 0.92rem; flex: 1; }
+.demo-states {
+    display: flex;
+    gap: 4px;
+    background: var(--bg);
+    padding: 4px;
+    border-radius: var(--r-pill);
+    border: 1px solid var(--border);
+}
+.demo-states button {
+    padding: 6px 14px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    border-radius: var(--r-pill);
+    cursor: pointer;
+    transition: all var(--dur) var(--ease);
+}
+.demo-states button:hover:not(.active) { color: var(--text); }
+.demo-states button.active {
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 600;
+}
+.demo-stage {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background: transparent;
+}
+.demo-stage {
+    padding: 28px 24px;
+}
+.demo-stage iframe {
+    /* Iframe-as-card: rounded + soft shadow to match the hero screenshot
+       frame and the standalone design-workspace popup. */
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--bg);
+    box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.30),
+                0 4px  10px  -4px rgba(0, 0, 0, 0.12);
+    display: block;
+    width: 100%;
+    max-width: 460px;
+    /* Tall enough to hold the 640px popup + 24px embed padding on both
+       sides without forcing a scrollbar. */
+    height: 700px;
+    aspect-ratio: 460 / 700;
+    overflow: hidden;
+}
+html[data-theme="light"] .demo-stage iframe {
+    box-shadow: 0 12px 32px -12px rgba(28, 25, 23, 0.14),
+                0 4px  10px  -4px rgba(28, 25, 23, 0.06);
+}
+@media (max-width: 540px) {
+    .demo-stage { padding: 12px 0; }
+    .demo-stage iframe { height: auto; min-height: 660px; }
+}
+.demo-foot {
+    padding: 16px 20px;
+    background: var(--surface-2);
+    border-top: 1px solid var(--border);
+    color: var(--faint);
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+.demo-foot a { font-family: var(--mono); }
+
+/* ================================================================
+   BY THE NUMBERS
+   ================================================================ */
+
+.numbers-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-top: 8px;
+}
+@media (max-width: 880px) {
+    .numbers-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 500px) {
+    .numbers-grid { grid-template-columns: 1fr; }
+}
+.num-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 22px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.num-card:hover {
+    border-color: var(--border-strong);
+    transform: translateY(-1px);
+}
+.num-card .num-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+}
+.num-card .num-head svg {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+.num-card .num-value {
+    font-family: var(--mono);
+    font-size: clamp(1.8rem, 3vw, 2.2rem);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+.num-card .num-value[data-loading="true"] {
+    color: var(--faint);
+}
+.num-card .num-label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: var(--label);
+    color: var(--faint);
+    font-weight: 500;
+}
+
+/* ================================================================
+   INSTALL TABS
+   ================================================================ */
+
+.tabs {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+}
+.tabs button {
+    padding: 8px 16px;
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    background: var(--surface-2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    cursor: pointer;
+    transition: all var(--dur) var(--ease);
+}
+.tabs button:hover:not(.active) { color: var(--text); border-color: var(--border-strong); }
+.tabs button.active {
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-color: transparent;
+    font-weight: 600;
+}
+.tab-panel {
+    background: var(--code-bg);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    margin-bottom: 12px;
+}
+html[data-theme="light"] .tab-panel { background: #0f172a; }
+.tab-panel pre {
+    margin: 0;
+    padding: 20px 24px;
+    font-family: var(--mono);
+    font-size: 0.95rem;
+    line-height: 1.55;
+    color: #cdd6f4;
+    overflow-x: auto;
+}
+.tab-panel pre::before { content: "$ "; color: #6c7086; }
+.tab-hint {
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.55;
+    margin: 0;
+}
+.tab-hint a { font-family: var(--mono); font-size: 0.85em; }
+
+/* ================================================================
+   FAQ
+   ================================================================ */
+
+.faq {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: 800px;
+}
+.faq details {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 0;
+    transition: border-color var(--dur) var(--ease);
+}
+.faq details[open] { border-color: var(--accent); }
+.faq summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 16px 20px;
+    font-weight: 600;
+    color: var(--text);
+    font-size: 1rem;
+    position: relative;
+    padding-right: 48px;
+    transition: color var(--dur) var(--ease);
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+    content: "+";
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: var(--mono);
+    font-size: 1.4rem;
+    color: var(--muted);
+    transition: transform var(--dur) var(--ease);
+}
+.faq details[open] summary::after { content: "−"; color: var(--accent); }
+.faq summary:hover { color: var(--accent); }
+.faq .answer {
+    padding: 0 20px 20px;
+    color: var(--muted);
+    line-height: 1.6;
+    font-size: 0.95rem;
+}
+
+/* ================================================================
+   FOOTER
+   ================================================================ */
+
+footer.site {
+    padding: 64px 0 32px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+}
+footer.site .columns {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr 1fr 1fr;
+    gap: 48px;
+    margin-bottom: 48px;
+}
+@media (max-width: 700px) {
+    footer.site .columns { grid-template-columns: 1fr 1fr; gap: 28px; }
+}
+footer.site .col h4 {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: var(--label);
+    color: var(--faint);
+    margin: 0 0 12px;
+    font-weight: 500;
+}
+footer.site .col ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+footer.site .col a {
+    color: var(--text);
+    font-size: 0.92rem;
+    opacity: 0.8;
+}
+footer.site .col a:hover { opacity: 1; color: var(--accent); }
+footer.site .brand-col p {
+    color: var(--muted);
+    font-size: 0.92rem;
+    line-height: 1.55;
+    margin: 12px 0 0;
+    max-width: 32ch;
+}
+footer.site .legal {
+    color: var(--faint);
+    font-size: 0.85rem;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+footer.site .legal .mono { font-size: 0.78rem; }
+
+</style>
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to main content</a>
+
+<header class="site">
+  <div class="wrap">
+    <a class="brand" href="#">
+      <img src="logo.svg" alt="" width="28" height="28">
+      Clipman
+    </a>
+    <nav aria-label="Primary">
+      <a href="#demo">demo</a>
+      <a href="#features">features</a>
+      <a href="#design">design</a>
+      <a href="#install">install</a>
+      <a href="#faq">faq</a>
+      <a href="https://github.com/MohammedEl-sayedAhmed/clipman">source</a>
+      <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Switch between dark and light theme">
+        <svg class="ico-dark" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="ico-light" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg>
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ================= HERO ================= -->
+  <section class="hero" id="hero">
+    <div class="wrap">
+      <div class="grid">
+        <div>
+          <p class="eyebrow">Wayland-native clipboard history</p>
+          <h1>Clip once.<br><span class="accent">Paste forever.</span></h1>
+          <p class="sub">
+            Clipman is a fast, GTK-native clipboard history manager for Ubuntu and GNOME on Wayland —
+            with search, pinning, snippets, and a privacy mode that <em>actually pauses recording</em>.
+          </p>
+          <div class="cta">
+            <a class="btn primary" href="#install">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Get Clipman
+            </a>
+            <a class="btn" href="https://github.com/MohammedEl-sayedAhmed/clipman">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.69-3.87-1.54-3.87-1.54-.52-1.33-1.27-1.69-1.27-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.53-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.18 1.18.92-.26 1.91-.39 2.89-.39.98 0 1.97.13 2.89.39 2.21-1.49 3.18-1.18 3.18-1.18.62 1.58.23 2.75.12 3.04.73.81 1.18 1.84 1.18 3.1 0 4.43-2.7 5.41-5.27 5.69.41.36.78 1.05.78 2.12 0 1.53-.01 2.77-.01 3.14 0 .31.21.67.8.56C20.21 21.39 23.5 17.08 23.5 12c0-6.35-5.15-11.5-11.5-11.5z"/></svg>
+              View on GitHub
+            </a>
+          </div>
+          <ul class="chips" role="list">
+            <li class="chip"><span class="v">Snap Store</span><span class="l">38 territories</span></li>
+            <li class="chip"><span class="v">Ext #9407</span><span class="l">GNOME Shell extension</span></li>
+            <li class="chip"><span class="v">clipman-clipboard</span><span class="l">PyPI · AUR</span></li>
+            <li class="chip"><span class="v">100%</span><span class="l">Wayland-native</span></li>
+          </ul>
+        </div>
+        <div class="hero-visual">
+          <img src="design/screenshots/main-window-dark.png"
+               data-img-dark="design/screenshots/main-window-dark.png"
+               data-img-light="design/screenshots/main-window-light.png" loading="lazy" decoding="async"
+               alt="The Clipman popup window with search field, filter tabs, pinned items and a day-grouped clipboard list">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= INTERACTIVE DEMO ================= -->
+  <section id="demo">
+    <div class="wrap">
+      <p class="eyebrow">Live preview</p>
+      <h2>Clipboard history shouldn't be a <span class="accent">leap of faith</span>.</h2>
+      <p class="lede">
+        This is the redesigned main popup, embedded right here. Flip through real states —
+        full history, empty, no-results, incognito paused — without installing anything.
+      </p>
+
+      <div class="demo-wrap">
+        <div class="demo-bar">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span class="tag">Live mockup</span>
+            <span class="desc">Click a state to swap the popup's contents.</span>
+          </div>
+          <div class="demo-states" role="tablist">
+            <button class="active" data-state="populated" role="tab">populated</button>
+            <button data-state="empty" role="tab">empty</button>
+            <button data-state="no-results" role="tab">no-results</button>
+            <button data-state="incognito-on" role="tab">incognito</button>
+          </div>
+        </div>
+        <div class="demo-stage">
+          <iframe id="demo-frame" title="Clipman popup mockup" src="design/states.html?state=populated&amp;embed=1" referrerpolicy="no-referrer" scrolling="no"></iframe>
+        </div>
+        <div class="demo-foot">
+          <span>Live preview, running right in this page. Click through the states to see how the popup adapts.</span>
+          <a href="design/index.html">Open the full design workspace →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= BY THE NUMBERS ================= -->
+  <section id="numbers">
+    <div class="wrap">
+      <p class="eyebrow">By the numbers</p>
+      <h2>Already running across <span class="accent">38 territories</span>. On every channel that matters.</h2>
+      <p class="lede">
+        Live counts pulled straight from GitHub, the GNOME Extensions registry, and PyPI on page load.
+        No analytics, no dashboards — just the public numbers anyone can verify.
+      </p>
+
+      <div class="numbers-grid">
+        <div class="num-card">
+          <div class="num-head">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.1.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.69-3.87-1.54-3.87-1.54-.52-1.33-1.27-1.69-1.27-1.69-1.04-.71.08-.7.08-.7 1.15.08 1.76 1.18 1.76 1.18 1.02 1.75 2.68 1.24 3.34.95.1-.74.4-1.24.72-1.53-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.18-3.1-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.18 1.18.92-.26 1.91-.39 2.89-.39.98 0 1.97.13 2.89.39 2.21-1.49 3.18-1.18 3.18-1.18.62 1.58.23 2.75.12 3.04.73.81 1.18 1.84 1.18 3.1 0 4.43-2.7 5.41-5.27 5.69.41.36.78 1.05.78 2.12 0 1.53-.01 2.77-.01 3.14 0 .31.21.67.8.56C20.21 21.39 23.5 17.08 23.5 12c0-6.35-5.15-11.5-11.5-11.5z"/></svg>
+            <span class="num-label">GitHub stars</span>
+          </div>
+          <div class="num-value" id="num-stars" data-loading="true">—</div>
+          <div class="num-label">stargazers</div>
+        </div>
+
+        <div class="num-card">
+          <div class="num-head">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="3" r="2"/><circle cx="6" cy="21" r="2"/><circle cx="18" cy="6" r="2"/><path d="M6 5v6a3 3 0 0 0 3 3h6"/><path d="M18 8v3a3 3 0 0 1-3 3h-3v5"/></svg>
+            <span class="num-label">Forks</span>
+          </div>
+          <div class="num-value" id="num-forks" data-loading="true">—</div>
+          <div class="num-label">github forks</div>
+        </div>
+
+        <div class="num-card">
+          <div class="num-head">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span class="num-label">Release downloads</span>
+          </div>
+          <div class="num-value" id="num-releases" data-loading="true">—</div>
+          <div class="num-label">github releases</div>
+        </div>
+
+        <div class="num-card">
+          <div class="num-head">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c-.7 0-1.3.4-1.6 1l-2 4-4 .6c-.7.1-1.3.6-1.5 1.3-.2.7 0 1.4.5 1.9l2.9 2.8-.7 4c-.1.7.2 1.4.8 1.8.6.4 1.3.5 1.9.2L12 17.5l3.6 1.9c.6.3 1.3.2 1.9-.2.6-.4.9-1.1.8-1.8l-.7-4 2.9-2.8c.5-.5.7-1.2.5-1.9-.2-.7-.8-1.2-1.5-1.3l-4-.6-2-4C13.3 2.4 12.7 2 12 2zm0 3.3 1.6 3.3c.3.5.8.9 1.4 1l3.6.5-2.6 2.5c-.4.4-.6 1-.5 1.6l.6 3.6L12.9 16c-.5-.3-1.2-.3-1.7 0l-3.2 1.7.6-3.6c.1-.6-.1-1.2-.5-1.6L5.5 10.1l3.6-.5c.6-.1 1.1-.4 1.4-1L12 5.3z"/></svg>
+            <span class="num-label">GNOME extension</span>
+          </div>
+          <div class="num-value" id="num-gnome" data-loading="true">—</div>
+          <div class="num-label">extension installs</div>
+        </div>
+
+        <div class="num-card">
+          <div class="num-head">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M11.6 2c-2.3 0-4.2 1.6-4.5 3.8-.1.6-.1 1.2 0 1.8h4.5v.7H5.4C3.5 8.3 2 9.9 2 12s1.5 3.7 3.4 3.7H7v-2.4c0-2 1.6-3.6 3.6-3.6h4.6c1.7 0 3.1-1.4 3.1-3.1V5.5c0-1.8-1.5-3.2-3.3-3.4-.4-.1-.9-.1-1.4-.1-.3 0-.6 0-1 0zM9.5 4c.6 0 1 .5 1 1s-.4 1-1 1-1-.5-1-1 .4-1 1-1zm6.5 4.3v2.4c0 2-1.6 3.6-3.6 3.6H7.8c-1.7 0-3.1 1.4-3.1 3.1v2.1c0 1.8 1.5 3.2 3.3 3.4 1.4.2 2.6.2 3.6 0 1.8-.1 3.4-1.5 3.4-3.4v-1.8h-4.5V17h6.8c1.9 0 3.4-1.6 3.4-3.7s-1.5-3.7-3.4-3.7H16zm-1.5 9.4c.6 0 1 .5 1 1s-.4 1-1 1-1-.5-1-1 .4-1 1-1z"/></svg>
+            <span class="num-label">PyPI downloads</span>
+          </div>
+          <div class="num-value" id="num-pypi" data-loading="true">—</div>
+          <div class="num-label">pip · pipx installs</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FEATURES ================= -->
+  <section id="features">
+    <div class="wrap">
+      <p class="eyebrow">What it actually does</p>
+      <h2>Four habits, one keystroke.</h2>
+
+      <div class="feature">
+        <div class="feature-copy">
+          <h3>The thing you copied yesterday is one keystroke away.</h3>
+          <p>Super+V opens the popup. Type to full-text search across text and images. Pin what you reuse. Save snippets with templates. Filter tabs split All, Text, Images, and Snippets.</p>
+        </div>
+        <div class="feature-visual">
+          <img src="design/screenshots/snippets-editing-dark.png"
+               data-img-dark="design/screenshots/snippets-editing-dark.png"
+               data-img-light="design/screenshots/snippets-editing-light.png" loading="lazy" decoding="async"
+               alt="The snippets editor mockup showing a searchable list on the left and an editor form on the right with monospace content and {{date}} variables">
+        </div>
+      </div>
+
+      <div class="feature right">
+        <div class="feature-copy">
+          <h3>Your passwords <span class="accent">leave on their own</span>.</h3>
+          <p>Incognito mode pauses recording entirely. Passwords, tokens, and card-shaped strings auto-clear after 30 seconds. The history file ships with restrictive permissions (0600) by default.</p>
+        </div>
+        <div class="feature-visual">
+          <img src="design/screenshots/states-incognito-on-dark.png"
+               data-img-dark="design/screenshots/states-incognito-on-dark.png"
+               data-img-light="design/screenshots/states-incognito-on-light.png" loading="lazy" decoding="async"
+               alt="The popup in incognito mode showing a banner that recording is paused, with a Resume button">
+        </div>
+      </div>
+
+      <div class="feature" id="privacy">
+        <div class="feature-copy">
+          <h3>No polling. No subprocesses. No flicker.</h3>
+          <p>A GNOME Shell extension forwards clipboard events over D-Bus, so the daemon wakes only when you copy. wl-clipboard handles KDE, Sway, and Hyprland the same way — event-driven, no busy-loop.</p>
+        </div>
+        <div class="feature-visual">
+          <img src="design/screenshots/preferences-privacy-dark.png"
+               data-img-dark="design/screenshots/preferences-privacy-dark.png"
+               data-img-light="design/screenshots/preferences-privacy-light.png" loading="lazy" decoding="async"
+               alt="The Privacy preferences pane showing incognito switch, sensitive-data auto-clear toggle and timeout slider">
+        </div>
+      </div>
+
+      <div class="feature right" id="design">
+        <div class="feature-copy">
+          <h3>Looks like the rest of your desktop, on purpose.</h3>
+          <p>Catppuccin Mocha for dark, stone for light. Six accent presets, opacity 30–100 %, font size 8–20 px. Built on GTK and libadwaita with a single design-token system so the theme behaves identically on every surface.</p>
+          <div style="margin-top: 18px;">
+            <a class="btn" href="design/index.html">Browse the design workspace →</a>
+          </div>
+        </div>
+        <div class="feature-visual">
+          <img src="design/screenshots/preferences-appearance-dark.png"
+               data-img-dark="design/screenshots/preferences-appearance-dark.png"
+               data-img-light="design/screenshots/preferences-appearance-light.png" loading="lazy" decoding="async"
+               alt="The Appearance preferences pane with theme picker, accent swatches, opacity and font-size sliders">
+        </div>
+      </div>
+
+      <div class="feature">
+        <div class="feature-copy">
+          <h3>Fifteen polished states for the moments that matter.</h3>
+          <p>Empty history, no-results, incognito paused, sensitive auto-cleared, first-run, extension missing, backup failed — every edge is intentional and consistent across the app, with a tone that never shouts.</p>
+          <div style="margin-top: 18px;">
+            <a class="btn" href="design/states.html">Browse every state →</a>
+          </div>
+        </div>
+        <div class="feature-visual">
+          <img src="design/screenshots/preferences-storage-dark.png"
+               data-img-dark="design/screenshots/preferences-storage-dark.png"
+               data-img-light="design/screenshots/preferences-storage-light.png" loading="lazy" decoding="async"
+               alt="The Storage preferences pane with the maximum-entries slider, live database stats, and backup/restore actions">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= INSTALL ================= -->
+  <section id="install">
+    <div class="wrap">
+      <p class="eyebrow">Get Clipman</p>
+      <h2>One command. Then Super+V.</h2>
+      <p class="lede">
+        Snap is the easiest on Ubuntu/GNOME. PyPI works on any distro with Python 3.10+. Arch users
+        get a maintained AUR package. The .deb and .rpm builds ride the GitHub Releases page.
+      </p>
+
+      <div class="tabs" role="tablist">
+        <button class="active" data-tab="snap" role="tab">Snap</button>
+        <button data-tab="pypi" role="tab">PyPI</button>
+        <button data-tab="aur" role="tab">Arch (AUR)</button>
+        <button data-tab="deb" role="tab">.deb</button>
+        <button data-tab="rpm" role="tab">.rpm</button>
+        <button data-tab="source" role="tab">From source</button>
+      </div>
+
+      <div class="tab-panel"><pre id="tab-cmd">sudo snap install clipman</pre></div>
+      <p class="tab-hint" id="tab-hint">
+        Log out and back in once to activate the GNOME Shell extension, then press <span class="mono">Super+V</span>.
+        ·
+        <a href="https://snapcraft.io/clipman">snapcraft.io/clipman</a>
+      </p>
+    </div>
+  </section>
+
+  <!-- ================= FAQ ================= -->
+  <section id="faq">
+    <div class="wrap">
+      <p class="eyebrow">FAQ</p>
+      <h2>Questions you'd actually ask before installing.</h2>
+
+      <div class="faq">
+        <details open>
+          <summary>What is Clipman?</summary>
+          <div class="answer">A clipboard history manager for Linux desktops on Wayland. Press <span class="mono">Super+V</span> and a popup shows everything you've copied recently — text and images, searchable, pinnable, with reusable snippets. It runs as a local Python + GTK daemon and stores history in a per-user SQLite database with restrictive file permissions.</div>
+        </details>
+        <details>
+          <summary>How is Clipman different from CopyQ, Klipper, or GPaste?</summary>
+          <div class="answer">Three things. First, it's Wayland-native: a GNOME Shell extension watches the clipboard over D-Bus, so there's no polling loop and no subprocesses constantly probing the clipboard. Second, it's quiet — no Electron, no background services beyond a small Python daemon. Third, privacy is built in by default: incognito mode pauses recording entirely, and sensitive-shaped data (passwords, tokens, credit-card-like strings) is auto-cleared on a 30-second timer.</div>
+        </details>
+        <details>
+          <summary>Does Clipman work outside GNOME?</summary>
+          <div class="answer">Yes. The GNOME Shell extension (ID 9407) is the smoothest path on GNOME — events flow over D-Bus with zero polling. On KDE, Sway, Hyprland, and any other compositor with <span class="mono">wl-clipboard</span> installed, Clipman falls back to <span class="mono">wl-paste --watch</span>, which is still event-driven (no busy-poll). The popup UI is identical either way.</div>
+        </details>
+        <details>
+          <summary>Is my clipboard data ever uploaded anywhere?</summary>
+          <div class="answer">No. Clipman is fully local. History lives in a SQLite database at <span class="mono">~/.local/share/clipman/clipman.db</span> with restrictive file permissions (<span class="mono">0600</span>). There is no telemetry, no sync, no cloud, and no network access in the daemon code path. Backups are explicit, off by default, and write to a local file you choose.</div>
+        </details>
+        <details>
+          <summary>How does sensitive-data detection actually work?</summary>
+          <div class="answer">When something lands on the clipboard, Clipman checks it against local heuristics — Luhn-valid credit-card patterns, JWT/PEM-shaped strings, GitHub-like tokens, password-mime-typed payloads, and a few others. Matches are stored but masked in the list and queued for auto-clear on a configurable 30–300-second timer (default 30 s). Detection runs in-process; no rules are downloaded.</div>
+        </details>
+        <details>
+          <summary>Can I use Clipman without the GNOME extension?</summary>
+          <div class="answer">Yes. The extension is an optimization, not a requirement. Without it, Clipman uses <span class="mono">wl-clipboard</span>'s <span class="mono">wl-paste --watch</span> to subscribe to clipboard changes — event-driven, no polling. You lose the Super+V keybinding wired through GNOME Shell, but you can bind any shortcut yourself to call <span class="mono">clipman toggle</span>.</div>
+        </details>
+        <details>
+          <summary>What about Wayland's clipboard security restrictions?</summary>
+          <div class="answer">Wayland deliberately scopes clipboard access to focused windows, which breaks naive X11-era managers when they're not focused. Clipman doesn't try to fight that — the GNOME Shell extension reads the clipboard from inside the compositor (where it's allowed), and the wl-clipboard fallback uses the protocol's documented data-control or selection paths. Pasting is implemented by simulating a <span class="mono">Ctrl+V</span> into the target window, not by writing directly to it.</div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site">
+  <div class="wrap">
+    <div class="columns">
+      <div class="col brand-col">
+        <a class="brand" href="#"><img src="logo.svg" alt="" width="28" height="28">Clipman</a>
+        <p>Open source. Apache-2.0. Built by one person who got tired of losing what they copied 90 seconds ago.</p>
+      </div>
+      <div class="col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#install">Install</a></li>
+          <li><a href="design/index.html">Design workspace</a></li>
+          <li><a href="#faq">FAQ</a></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h4>Resources</h4>
+        <ul>
+          <li><a href="https://github.com/MohammedEl-sayedAhmed/clipman">Source code</a></li>
+          <li><a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CHANGELOG.md">Changelog</a></li>
+          <li><a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CONTRIBUTING.md">Contributing</a></li>
+          <li><a href="https://github.com/MohammedEl-sayedAhmed/clipman/releases">Releases</a></li>
+        </ul>
+      </div>
+      <div class="col">
+        <h4>Author</h4>
+        <ul>
+          <li><a href="https://github.com/MohammedEl-sayedAhmed">Mohammed El-sayed Ahmed</a></li>
+          <li><a href="https://github.com/sponsors/MohammedEl-sayedAhmed">Sponsor</a> <a href="https://www.paypal.com/paypalme/mohammedelsayedammar" style="font-size:0.78em;opacity:0.7;margin-left:6px;" title="Or via PayPal">· PayPal</a></li>
+          <li><a href="https://github.com/MohammedEl-sayedAhmed/clipman/issues">Report an issue</a></li>
+          <li><a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/LICENSE">License (Apache-2.0)</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="legal">
+      <span>© 2026 Mohammed El-sayed Ahmed · <span class="mono">v1.0.6</span></span>
+      <span class="mono">cmd-K • super+V • <a href="https://github.com/MohammedEl-sayedAhmed/clipman">github</a></span>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+    'use strict';
+
+    // ---- Theme toggle ----
+    const root  = document.documentElement;
+    const btn   = document.getElementById('theme-toggle');
+    const frame = document.getElementById('demo-frame');
+    const saved = localStorage.getItem('clipman-theme');
+    if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
+
+    function currentTheme() {
+        return root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+    }
+    function syncIframeTheme() {
+        if (frame && frame.contentWindow) {
+            try { frame.contentWindow.postMessage({ type: 'clipman-theme', value: currentTheme() }, '*'); }
+            catch (_) { /* iframe not ready yet — load handler covers this */ }
+        }
+    }
+    function swapThemedImages() {
+        const t = currentTheme();
+        document.querySelectorAll('img[data-img-dark][data-img-light]').forEach(img => {
+            const src = img.getAttribute('data-img-' + t);
+            if (src && img.getAttribute('src') !== src) img.setAttribute('src', src);
+        });
+    }
+    // On iframe load (initial AND after src change), sync the theme.
+    frame.addEventListener('load', syncIframeTheme);
+    swapThemedImages();
+
+    btn.addEventListener('click', () => {
+        const next = currentTheme() === 'light' ? 'dark' : 'light';
+        root.setAttribute('data-theme', next);
+        localStorage.setItem('clipman-theme', next);
+        syncIframeTheme();
+        swapThemedImages();
+    });
+
+    // ---- Demo state switcher ----
+    const demoBtns = document.querySelectorAll('.demo-states button');
+    demoBtns.forEach(b => b.addEventListener('click', () => {
+        demoBtns.forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        // Pass theme as a URL param so the iframe's initial render is correct
+        // even before the postMessage lands.
+        frame.src = 'design/states.html?state=' + encodeURIComponent(b.dataset.state)
+                  + '&embed=1&theme=' + encodeURIComponent(currentTheme());
+    }));
+
+    // ---- Install tabs ----
+    const TABS = {
+        snap:   { cmd: 'sudo snap install clipman',
+                  hint: '<a href="https://snapcraft.io/clipman" style="display:inline-block;vertical-align:middle;margin-right:14px;"><img src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" alt="Get it from the Snap Store" height="40"></a>Log out and back in once to activate the GNOME Shell extension, then press <span class="mono">Super+V</span>.' },
+        pypi:   { cmd: 'pipx install clipman-clipboard',
+                  hint: 'After install, run <span class="mono">./install.sh</span> from a source checkout to register the GNOME Shell extension and the keybinding. · <a href="https://pypi.org/project/clipman-clipboard/">pypi.org/project/clipman-clipboard</a>' },
+        aur:    { cmd: 'yay -S clipman-clipboard   # or: paru -S clipman-clipboard',
+                  hint: 'AUR package builds and registers everything for you. · <a href="https://aur.archlinux.org/packages/clipman-clipboard">aur.archlinux.org/packages/clipman-clipboard</a>' },
+        deb:    { cmd: 'sudo apt install ./clipman_1.0.6_amd64.deb',
+                  hint: 'Download the .deb from the GitHub Releases page first. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/releases">releases</a>' },
+        rpm:    { cmd: 'sudo dnf install ./clipman-1.0.6-1.x86_64.rpm',
+                  hint: 'Download the .rpm from the GitHub Releases page first. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/releases">releases</a>' },
+        source: { cmd: 'git clone https://github.com/MohammedEl-sayedAhmed/clipman\ncd clipman && ./install.sh',
+                  hint: 'Requires Python 3.10+, GTK3, and either the GNOME Shell extension or wl-clipboard. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CONTRIBUTING.md">contributing guide</a>' },
+    };
+    const tabBtns = document.querySelectorAll('.tabs button');
+    const tabCmd  = document.getElementById('tab-cmd');
+    const tabHint = document.getElementById('tab-hint');
+    tabBtns.forEach(b => b.addEventListener('click', () => {
+        tabBtns.forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        const cfg = TABS[b.dataset.tab];
+        tabCmd.textContent = cfg.cmd;
+        tabHint.innerHTML  = cfg.hint;
+    }));
+
+    // ---- Live numbers ----
+    // Fetch each public endpoint in parallel, update the matching card on
+    // success, and leave the em-dash placeholder visible on failure so the
+    // grid never looks broken.
+    function fmt(n) {
+        if (typeof n !== 'number' || !isFinite(n)) return null;
+        return n.toLocaleString('en-US');
+    }
+    function setNum(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const s = fmt(value);
+        if (s === null) return;
+        el.textContent = s;
+        el.setAttribute('data-loading', 'false');
+    }
+    async function loadNumbers() {
+        const REPO = 'MohammedEl-sayedAhmed/clipman';
+
+        // 1+2) Repo metadata → stars and forks (single request).
+        (async () => {
+            try {
+                const r = await fetch('https://api.github.com/repos/' + REPO, {
+                    headers: { 'Accept': 'application/vnd.github+json' },
+                });
+                if (!r.ok) return;
+                const j = await r.json();
+                setNum('num-stars', j.stargazers_count);
+                setNum('num-forks', j.forks_count);
+            } catch (_) { /* leave placeholder */ }
+        })();
+
+        // 3) Releases → sum of asset download counts across every release.
+        (async () => {
+            try {
+                const r = await fetch('https://api.github.com/repos/' + REPO + '/releases?per_page=100', {
+                    headers: { 'Accept': 'application/vnd.github+json' },
+                });
+                if (!r.ok) return;
+                const releases = await r.json();
+                if (!Array.isArray(releases)) return;
+                let total = 0;
+                for (const rel of releases) {
+                    if (!rel || !Array.isArray(rel.assets)) continue;
+                    for (const a of rel.assets) {
+                        if (typeof a.download_count === 'number') total += a.download_count;
+                    }
+                }
+                setNum('num-releases', total);
+            } catch (_) { /* leave placeholder */ }
+        })();
+
+        // 4) GNOME Extensions registry → install count for ext #9407.
+        (async () => {
+            try {
+                const r = await fetch('https://extensions.gnome.org/extension-info/?pk=9407');
+                if (!r.ok) return;
+                const j = await r.json();
+                if (typeof j.downloads === 'number') setNum('num-gnome', j.downloads);
+            } catch (_) { /* leave placeholder */ }
+        })();
+
+        // 5) pepy.tech → cumulative PyPI download count.
+        (async () => {
+            try {
+                const r = await fetch('https://api.pepy.tech/api/v2/projects/clipman-clipboard');
+                if (!r.ok) return;
+                const j = await r.json();
+                const n = j && (j.total_downloads ?? j.downloads);
+                if (typeof n === 'number') setNum('num-pypi', n);
+            } catch (_) { /* leave placeholder */ }
+        })();
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', loadNumbers);
+    } else {
+        loadNumbers();
+    }
+})();
+</script>
+
+</body>
+</html>

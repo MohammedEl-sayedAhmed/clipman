@@ -231,10 +231,9 @@ breakdown below.
   every push to main. Resolved to the real commit SHA.
 
 #### Removed
-- **Stray root-level Flathub manifest** (#18): the obsolete
+- **Stray root-level packaging manifest** (#18): the obsolete
   `com.clipman.Clipman.json` at the repo root used the pre-rename
-  app-id and was not referenced anywhere. The current Flathub
-  manifest lives at `flathub/io.github.MohammedEl_sayedAhmed.Clipman.json`.
+  app-id and was not referenced anywhere.
 
 #### Docs
 - Added `docs/adr/` with the first six MADR-format ADRs covering

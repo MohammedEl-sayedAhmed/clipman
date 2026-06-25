@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
-# pre-commit hook: identity denylist + staged-diff footprint scan.
+# pre-commit hook: identity allowlist + staged-diff footprint scan.
 
 # shellcheck source=.githooks/_lib.sh
 . "$(dirname -- "$(readlink -f -- "$0" 2>/dev/null || printf '%s' "$0")")/_lib.sh"
 
 failed=0
 
-# ----- Identity denylist check ---------------------------------------------
+# ----- Identity allowlist check --------------------------------------------
 
 bad_ident_lines=()
 while IFS= read -r ident; do
     [ -z "$ident" ] && continue
-    if contains_denied_identity "$ident"; then
+    if ! contains_allowed_identity "$ident"; then
         bad_ident_lines+=("$ident")
     fi
 done < <(collect_local_identities)
 
 if [ "${#bad_ident_lines[@]}" -gt 0 ]; then
-    hook_error "git identity matches the personal denylist ($(denied_list_for_message))"
+    hook_error "git identity is not in the personal allowlist ($(allowed_list_for_message))"
     for line in "${bad_ident_lines[@]}"; do
         hook_detail "$line"
     done

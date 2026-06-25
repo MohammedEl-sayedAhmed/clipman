@@ -91,8 +91,8 @@ gettext.textdomain("clipman")
 At the moment **no part of the build actually compiles `.po` files
 into `.mo` files or installs them into that `locale/` directory**.
 `install.sh` does not run `msgfmt`; `snap/snapcraft.yaml`,
-`flathub/io.github.MohammedEl_sayedAhmed.Clipman.json`, `aur/PKGBUILD`,
-and `pyproject.toml` likewise have no locale install step. Until that
+`aur/PKGBUILD`, and `pyproject.toml` likewise have no locale install
+step. Until that
 gap is closed, `_()` is effectively a passthrough at runtime — the
 strings are wrapped and the POT is maintained, but end users will see
 English regardless of `LANG`.

@@ -15,8 +15,8 @@ new maintainer knows what they are about to invoke.
 
 - Bump every version-bearing file in lockstep with
   `scripts/bump-version.sh X.Y.Z`. The script rewrites `pyproject.toml`,
-  `snap/snapcraft.yaml`, `flathub/*.json`, `aur/PKGBUILD`, and
-  `clipman/__init__.py` in a single pass so no channel drifts.
+  `snap/snapcraft.yaml`, `aur/PKGBUILD`, and `clipman/__init__.py` in a
+  single pass so no channel drifts.
 - Promote the `[Unreleased]` block in `CHANGELOG.md` to
   `[X.Y.Z] - YYYY-MM-DD` and add a fresh empty `[Unreleased]` block on
   top.
