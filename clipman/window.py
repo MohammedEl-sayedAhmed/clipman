@@ -61,6 +61,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._search_query = ""
         self._active_filter = "all"
         self._css_provider = None
+        self._current_edge_banner = None
 
         self.set_title("Clipman")
         self.set_default_size(380, 540)
@@ -196,6 +197,16 @@ class ClipmanWindow(Adw.ApplicationWindow):
             "button-clicked", self._on_update_banner_clicked
         )
         root.append(self._update_banner)
+
+        # -- Edge-state banner slot ---------------------------------------
+        # Banner-kind edge states (incognito-on, paused, sensitive-shown,
+        # sensitive-cleared, network-error, history-too-large) mount
+        # here rather than into ``_empty_slot`` so the list stays
+        # visible underneath them.
+        self._edge_banner_slot = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=0
+        )
+        root.append(self._edge_banner_slot)
 
         # -- Search entry --------------------------------------------------
         search_box = Gtk.Box(
@@ -351,27 +362,108 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """
         from clipman.edge_states import render_edge_state
 
-        widget = render_edge_state(state_id, parent_window=self)
-        # Clear the previous widget from the slot.
+        widget = render_edge_state(
+            state_id, parent_window=self, on_action=self._on_edge_action
+        )
+        spec = getattr(widget, "state_spec", None)
+        kind = spec.kind if spec is not None else "statuspage"
+
+        # AlertDialog presents itself modally; nothing to mount.
+        if kind == "alertdialog":
+            widget.present(self)
+            self._list_stack.set_visible_child_name("list")
+            return
+
+        # Banner-kind states use the dedicated banner slot above the
+        # list, so they stack alongside (rather than replace) the clip
+        # list. StatusPage states still take over the empty slot.
+        if kind == "banner":
+            self._mount_edge_banner(widget)
+            return
+
+        # Clear any previous statuspage widget from the empty slot.
         if self._current_edge_widget is not None:
             self._empty_slot.remove(self._current_edge_widget)
             self._current_edge_widget = None
-        # Banner / AlertDialog don't compose into the empty slot the same
-        # way a StatusPage does. The current spec set only puts
-        # StatusPages in the empty slot, but if a future state is a
-        # Banner we drop it in directly; AlertDialog presents itself.
-        spec = getattr(widget, "state_spec", None)
-        kind = spec.kind if spec is not None else "statuspage"
-        if kind == "alertdialog":
-            widget.present(self)
-            # Fall back to the populated list view — the dialog is modal
-            # on top of whatever was previously shown.
-            self._list_stack.set_visible_child_name("list")
-            return
         widget.set_vexpand(True)
         self._empty_slot.append(widget)
         self._current_edge_widget = widget
         self._list_stack.set_visible_child_name("empty")
+
+    def _mount_edge_banner(self, banner):
+        """Drop a rendered ``Adw.Banner`` into the dedicated edge slot.
+
+        Replaces any banner already mounted there so two banners never
+        stack (e.g. ``paused`` then ``incognito-on``).
+        """
+        if self._current_edge_banner is not None:
+            self._edge_banner_slot.remove(self._current_edge_banner)
+            self._current_edge_banner = None
+        self._edge_banner_slot.append(banner)
+        self._current_edge_banner = banner
+
+    def _on_edge_action(self, action_id):
+        """Dispatch the ``action_id`` strings declared in ``edge_states.py``.
+
+        Anything unrecognised is logged at warning level so missing
+        wiring is visible during development but the popup keeps
+        running.
+        """
+        if action_id == "clear-search":
+            self.search_entry.set_text("")
+            self._search_query = ""
+            self.refresh()
+        elif action_id == "open-snippets-dialog":
+            self._on_snippets_clicked(None)
+        elif action_id in (
+            "open-prefs-appearance",
+            "open-prefs-privacy",
+            "open-prefs-storage",
+            "open-prefs-shortcuts",
+            "open-prefs-updates",
+        ):
+            self._on_prefs_clicked(None)
+        elif action_id == "open-extensions-page":
+            self._open_url(
+                "https://extensions.gnome.org/extension/9407/clipman/"
+            )
+        elif action_id == "retry-network":
+            self.refresh_update_banner()
+        elif action_id == "retry-restore":
+            # Re-issue the restore flow via preferences; the actual
+            # restore happens there, this just brings the user back.
+            self._on_prefs_clicked(None)
+        elif action_id == "resume-recording":
+            if self.monitor is not None:
+                self.monitor.set_incognito(False)
+            self._incognito_btn.set_active(False)
+            self._dismiss_edge_banner()
+        elif action_id == "pause-recording":
+            if self.monitor is not None:
+                self.monitor.set_incognito(True)
+            self._incognito_btn.set_active(True)
+        elif action_id == "dismiss-banner":
+            self._dismiss_edge_banner()
+        elif action_id == "close-dialog":
+            # AlertDialog handles its own close; no extra work needed.
+            pass
+        else:
+            logger.warning("unhandled edge-state action_id: %r", action_id)
+
+    def _dismiss_edge_banner(self):
+        if self._current_edge_banner is not None:
+            self._edge_banner_slot.remove(self._current_edge_banner)
+            self._current_edge_banner = None
+
+    def _open_url(self, url):
+        try:
+            subprocess.Popen(
+                ["xdg-open", url],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            logger.debug("xdg-open failed for %s", url, exc_info=True)
 
     def _make_entry_row(self, entry):
         ctype = entry.get("content_type") or "text"
@@ -482,20 +574,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def _on_update_banner_clicked(self, _banner):
         latest = updates.latest_known(self.db) or __version__
-        url = (
+        self._open_url(
             f"https://github.com/MohammedEl-sayedAhmed/clipman/"
             f"releases/tag/v{latest}"
         )
-        try:
-            subprocess.Popen(
-                ["xdg-open", url],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        except OSError:
-            # xdg-open isn't installed or the URL handler is broken;
-            # log for diagnostics but don't break the popup.
-            logger.debug("xdg-open failed for %s", url, exc_info=True)
 
     # ------------------------------------------------------------------
     # Paste path — GTK 4 clipboard API with wl-copy + wtype/ydotool fallback
