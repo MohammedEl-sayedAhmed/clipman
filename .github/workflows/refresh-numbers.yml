@@ -122,6 +122,15 @@ jobs:
             echo "Numbers unchanged; nothing to push."
             exit 0
           fi
+          # Supersede any earlier open numbers PR. Check runs on
+          # github-actions[bot] PRs need manual maintainer approval, so the
+          # maintainer approves only the latest pending PR. If they miss a
+          # day, stale auto-refresh PRs would otherwise pile up — close each
+          # prior one (and delete its branch) before opening today's.
+          mapfile -t stale < <(gh pr list --state open --search "chore(numbers) in:title" --json number --jq ".[].number") || stale=()
+          for n in "${stale[@]:-}"; do
+            [ -n "$n" ] && gh pr close "$n" --delete-branch --comment "Superseded by a newer daily numbers refresh ($(date -u +%F)). Approve the most recent chore(numbers) PR instead." || true
+          done
           # Branch protection on main requires status checks to pass
           # before any push lands. Direct ``git push origin HEAD:main``
           # would fail with GH006 "Protected branch update failed". So
@@ -143,5 +152,5 @@ jobs:
             --base main \
             --head "$branch" \
             --title "chore(numbers): refresh marketing counters" \
-            --body "Automated daily refresh of \`docs/_data/numbers.json\` by the [refresh-numbers workflow](../actions/workflows/refresh-numbers.yml). Auto-merges once required checks pass."
+            --body "Automated daily refresh of \`docs/_data/numbers.json\`. This run supersedes any earlier open numbers PR. Approve the workflow run to let checks run; it auto-merges once they pass."
           gh pr merge "$branch" --auto --squash --delete-branch
