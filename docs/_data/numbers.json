@@ -1,6 +1,6 @@
 {
   "_comment": "Refreshed daily by .github/workflows/refresh-numbers.yml. The marketing page (docs/index.html) fetches this file same-origin to bypass the CORS blocks on extensions.gnome.org and the auth requirement on api.pepy.tech/v2. Manual edits will be overwritten on the next scheduled run.",
-  "updated_at": "2026-06-29T11:07:56Z",
+  "updated_at": "2026-06-30T09:45:47Z",
   "pypi": {
     "package": "clipman-clipboard",
     "last_day": 1,
@@ -11,7 +11,7 @@
   "gnome": {
     "extension_id": 9407,
     "uuid": "clipman@clipman.com",
-    "downloads": 2954,
+    "downloads": 2969,
     "source": "https://extensions.gnome.org/extension-info/?pk=9407"
   }
 }
