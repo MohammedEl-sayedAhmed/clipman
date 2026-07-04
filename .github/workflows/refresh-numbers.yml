@@ -75,13 +75,15 @@ jobs:
           gnome = get_json(f"https://extensions.gnome.org/extension-info/?pk={GNOME_EXTENSION_ID}")
 
           # Preserve prior values on partial failure so a transient outage
-          # never wipes the JSON down to zeros.
+          # never wipes the JSON down to zeros. updated_at is carried over
+          # unchanged here and only bumped below when a counter actually
+          # moved: setting it to now() on every run made the file always
+          # differ, so each run opened a no-op PR — and merging one
+          # re-triggered this workflow via the push path filter, chaining
+          # junk PRs.
           new = {
               "_comment": prev.get("_comment"),
-              "updated_at": datetime.datetime.now(tz=datetime.timezone.utc)
-                              .replace(microsecond=0)
-                              .isoformat()
-                              .replace("+00:00", "Z"),
+              "updated_at": prev.get("updated_at"),
               "pypi": dict(prev.get("pypi", {})),
               "gnome": dict(prev.get("gnome", {})),
           }
@@ -101,6 +103,15 @@ jobs:
                   "downloads": int(gnome["downloads"]),
                   "source": f"https://extensions.gnome.org/extension-info/?pk={GNOME_EXTENSION_ID}",
               })
+
+          # Stamp a fresh timestamp only when a counter changed. If the
+          # fetched data matches what's already committed, the file stays
+          # byte-identical and ``git diff --quiet`` below skips the PR.
+          if new["pypi"] != prev.get("pypi", {}) or new["gnome"] != prev.get("gnome", {}):
+              new["updated_at"] = (datetime.datetime.now(tz=datetime.timezone.utc)
+                                   .replace(microsecond=0)
+                                   .isoformat()
+                                   .replace("+00:00", "Z"))
 
           with open(NUMBERS_PATH, "w") as f:
               json.dump(new, f, indent=2)
