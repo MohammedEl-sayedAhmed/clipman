@@ -52,6 +52,13 @@ class ClipmanApp(Adw.Application):
             application=self, db=self.db, monitor=self.monitor
         )
 
+        # Apply the persisted start-in-incognito preference. Driven through
+        # the window so the header toggle, tooltip and privacy banner all
+        # reflect it — previously this setting was saved but never read, so
+        # "start in incognito" silently did nothing and clips were recorded.
+        if self.db.get_setting("incognito_on_launch", "false") == "true":
+            self.window.set_incognito(True)
+
         # Register the D-Bus service BEFORE calling hold() — if another
         # Clipman daemon is already on the bus, we want to log + quit
         # cleanly rather than have a held-but-unreachable second daemon

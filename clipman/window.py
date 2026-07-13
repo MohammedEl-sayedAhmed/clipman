@@ -1090,12 +1090,45 @@ class ClipmanWindow(Adw.ApplicationWindow):
     def _on_incognito_toggled(self, button):
         if self.monitor is None:
             return
-        self.monitor.set_incognito(button.get_active())
+        active = button.get_active()
+        self.monitor.set_incognito(active)
         button.set_tooltip_text(
             _("Incognito mode: ON — clipboard not recorded")
-            if button.get_active()
+            if active
             else _("Incognito mode: OFF")
         )
+        # Surface (or clear) the privacy banner so the state is visible and
+        # the "Resume recording" action is reachable. Without this the
+        # incognito-on banner and its resume action were dead code.
+        if active:
+            self._show_edge_state("incognito-on")
+        else:
+            self._dismiss_edge_banner("incognito-on")
+
+    def set_incognito(self, active):
+        """Public entry point to set incognito state (used at launch).
+
+        Drives the header toggle button so the monitor, tooltip and
+        privacy banner all stay in sync through the one handler.
+        """
+        self._incognito_btn.set_active(bool(active))
+
+    def _dismiss_edge_banner(self, state_id=None):
+        """Remove the mounted edge banner.
+
+        When ``state_id`` is given, only dismiss if the current banner is
+        that state — so turning incognito off doesn't wipe an unrelated
+        banner (e.g. ``paused``).
+        """
+        banner = self._current_edge_banner
+        if banner is None:
+            return
+        if state_id is not None:
+            spec = getattr(banner, "state_spec", None)
+            if spec is not None and spec.id != state_id:
+                return
+        self._edge_banner_slot.remove(banner)
+        self._current_edge_banner = None
 
     def _on_prefs_clicked(self, _button):
         from clipman.preferences import ClipmanPreferences

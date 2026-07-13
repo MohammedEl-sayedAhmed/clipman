@@ -222,6 +222,33 @@ class TestWindowConstruction(unittest.TestCase):
         self.assertTrue(hasattr(window, "refresh"))
         self.assertTrue(hasattr(window, "refresh_update_banner"))
 
+    def test_incognito_toggle_syncs_monitor_and_banner(self):
+        """set_incognito drives the monitor, button and privacy banner.
+
+        Regression for two bugs: the incognito-on banner (and its
+        "Resume recording" action) was never surfaced by the toggle, and
+        set_incognito is the launch-time entry point for the previously
+        ignored incognito_on_launch setting.
+        """
+        from unittest.mock import MagicMock
+
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestIncognito")
+        monitor = MagicMock()
+        window = ClipmanWindow(application=app, db=db, monitor=monitor)
+
+        window.set_incognito(True)
+        self.assertTrue(window._incognito_btn.get_active())
+        monitor.set_incognito.assert_called_with(True)
+        self.assertIsNotNone(window._current_edge_banner)  # banner shown
+
+        window.set_incognito(False)
+        self.assertFalse(window._incognito_btn.get_active())
+        monitor.set_incognito.assert_called_with(False)
+        self.assertIsNone(window._current_edge_banner)  # banner dismissed
+
     def test_preferences_window_constructs(self):
         from clipman.preferences import ClipmanPreferences
         from clipman.window import ClipmanWindow
