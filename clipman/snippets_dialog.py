@@ -261,6 +261,17 @@ class SnippetsDialog(Adw.Dialog):
         row.snippet_id = snippet["id"]
         return row
 
+    def _find_row_by_id(self, snippet_id):
+        """Return the listbox row whose snippet id matches, or None."""
+        index = 0
+        while True:
+            row = self._listbox.get_row_at_index(index)
+            if row is None:
+                return None
+            if getattr(row, "snippet_id", None) == snippet_id:
+                return row
+            index += 1
+
     def _on_row_selected(self, _listbox, row):
         if row is None:
             self._load_into_form(None)
@@ -326,10 +337,22 @@ class SnippetsDialog(Adw.Dialog):
 
     def _on_new_clicked(self, _btn):
         sid = self.db.add_snippet(_("New snippet"), "")
-        self._selected_id = sid
+        # Do NOT pre-set self._selected_id here: _reload_list() would
+        # select the matching row, but _on_row_selected early-returns
+        # when snippet_id == self._selected_id, so _load_into_form would
+        # never run and the editor form would stay blank. Reload first
+        # (with _selected_id still pointing at the previous snippet, or
+        # None) so selecting the new row is a genuine change, then load
+        # the new snippet into the form explicitly.
         self._reload_list()
-        # The new snippet is loaded automatically by _reload_list's
-        # row_selected handler when the matching row reappears.
+        snippet = next(
+            (s for s in self._snippets if s["id"] == sid), None
+        )
+        if snippet is not None:
+            row = self._find_row_by_id(sid)
+            if row is not None:
+                self._listbox.select_row(row)
+            self._load_into_form(snippet)
 
     def _on_save_clicked(self, _btn):
         name = self._name_row.get_text().strip()
