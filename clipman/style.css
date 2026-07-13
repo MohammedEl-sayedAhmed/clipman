@@ -79,12 +79,11 @@
     padding: 0 8px 8px 8px;
 }
 
+/* Rows live inside a single .boxed-list card (one container border +
+   hairline separators, the standard Adwaita grouped list). Do NOT give
+   each row its own border/background/radius/margin — that stacks a card
+   inside the card and reads as heavy, cluttered chips. Keep only sizing. */
 .clipman-list > row {
-    background-color: @card_bg_color;
-    color: @card_fg_color;
-    border: 1px solid alpha(@window_fg_color, 0.06);
-    border-radius: 8px;
-    margin: 3px 0;
     padding: 2px 4px;
     min-height: 44px;
 }
