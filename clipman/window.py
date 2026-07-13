@@ -730,9 +730,16 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
         row = Adw.ActionRow()
         row.set_title(escape(title))
-        row.set_subtitle(
-            f"{ctype.upper()} · {self._format_time(entry['accessed_at'])}"
-        )
+        # Friendlier subtitle: the coloured type bar already conveys the
+        # type, so lead with the relative time instead of a shouty
+        # "TEXT ·" prefix, and add a char count for text entries.
+        ts = self._format_time(entry["accessed_at"])
+        if ctype == "text" and text:
+            n = len(text)
+            subtitle = f"{ts} · {n:,} char{'s' if n != 1 else ''}"
+        else:
+            subtitle = ts
+        row.set_subtitle(escape(subtitle))
         row.set_activatable(True)
         row.add_css_class("clip-row")
         row.entry_data = entry
