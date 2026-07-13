@@ -138,7 +138,15 @@ jobs:
           # maintainer approves only the latest pending PR. If they miss a
           # day, stale auto-refresh PRs would otherwise pile up — close each
           # prior one (and delete its branch) before opening today's.
-          mapfile -t stale < <(gh pr list --state open --search "chore(numbers) in:title" --json number --jq ".[].number") || stale=()
+          #
+          # NB: filter client-side, not with ``--search``. gh pr list
+          # --search hits the code-search index, which is eventually
+          # consistent and returned nothing under GITHUB_TOKEN in this
+          # runner, so no PR was ever closed and refreshes piled up. The
+          # plain REST list (--json) is immediately consistent; match the
+          # title prefix with jq instead.
+          mapfile -t stale < <(gh pr list --state open --limit 100 --json number,title \
+            --jq '.[] | select(.title | startswith("chore(numbers)")) | .number') || stale=()
           for n in "${stale[@]:-}"; do
             [ -n "$n" ] && gh pr close "$n" --delete-branch --comment "Superseded by a newer daily numbers refresh ($(date -u +%F)). Approve the most recent chore(numbers) PR instead." || true
           done
