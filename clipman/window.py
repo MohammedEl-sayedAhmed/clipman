@@ -1178,10 +1178,114 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._show_edge_state("restore-failed")
 
     def _on_key_pressed(self, _controller, keyval, _keycode, _state):
+        """Wire the shortcuts advertised in the footer hints.
+
+        The footer promises ``↵ Paste · ⌫ Delete · P Pin · Esc Close``.
+        Escape/Enter work regardless of focus; Delete and P are gated on
+        the search entry NOT having focus so they stay usable as literal
+        text editing while the user is typing a query.
+
+        Returns ``True`` when the key was handled (stops propagation),
+        ``False`` otherwise so gated/unhandled keys still reach the
+        search entry.
+        """
         if keyval == Gdk.KEY_Escape:
             self.set_visible(False)
             return True
+
+        if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_ISO_Enter):
+            self._activate_selected()
+            return True
+
+        search_focused = self.search_entry.has_focus()
+
+        # Down arrow from the search entry drops focus into the list so
+        # the user can start arrow-navigating rows. Up/Down within the
+        # list itself is native to Gtk.ListBox BROWSE mode.
+        if keyval == Gdk.KEY_Down and search_focused:
+            row = self._selected_or_first_row()
+            if row is not None:
+                self.listbox.select_row(row)
+                row.grab_focus()
+                return True
+            return False
+
+        # Delete and P are literal text editing while typing a query —
+        # only treat them as shortcuts when the search entry is unfocused.
+        if search_focused:
+            return False
+
+        if keyval == Gdk.KEY_Delete:
+            return self._delete_selected()
+
+        if keyval in (Gdk.KEY_p, Gdk.KEY_P):
+            return self._pin_selected()
+
         return False
+
+    # ------------------------------------------------------------------
+    # Keyboard / click shared action helpers
+    # ------------------------------------------------------------------
+
+    def _selected_or_first_row(self):
+        """Return the selected row, or the first row if none is selected.
+
+        Returns ``None`` when the list is empty.
+        """
+        row = self.listbox.get_selected_row()
+        if row is None:
+            row = self.listbox.get_row_at_index(0)
+        return row
+
+    def _activate_selected(self):
+        """Paste the selected row (or the first row if none selected).
+
+        Shared by the Enter shortcut. Returns ``True`` when a row was
+        acted on, ``False`` when the list is empty.
+        """
+        row = self._selected_or_first_row()
+        if row is None:
+            return False
+        kind = getattr(row, "row_kind", None)
+        if kind == "snippet":
+            self._paste_snippet(row.snippet_data)
+        elif kind == "entry":
+            self._paste_entry(row.entry_data)
+        else:
+            return False
+        return True
+
+    def _delete_selected(self):
+        """Delete the selected entry (mirrors its trash button).
+
+        Snippets have no inline delete here, so non-entry rows are
+        ignored. Returns ``True`` when an entry was deleted.
+        """
+        row = self._selected_or_first_row()
+        if row is None or getattr(row, "row_kind", None) != "entry":
+            return False
+        entry_id = row.entry_data.get("id")
+        if not entry_id:
+            return False
+        self.db.delete_entry(entry_id)
+        self.refresh()
+        return True
+
+    def _pin_selected(self):
+        """Toggle pin on the selected entry (mirrors its star button).
+
+        Snippets have no pin, so non-entry rows are ignored. Returns
+        ``True`` when an entry's pin state was toggled.
+        """
+        row = self._selected_or_first_row()
+        if row is None or getattr(row, "row_kind", None) != "entry":
+            return False
+        entry_id = row.entry_data.get("id")
+        if not entry_id:
+            return False
+        self.db.toggle_pin(entry_id)
+        self.refresh()
+        return True
 
     # ------------------------------------------------------------------
     # Helpers

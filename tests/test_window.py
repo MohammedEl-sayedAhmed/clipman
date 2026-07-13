@@ -501,6 +501,166 @@ class TestWindowConstruction(unittest.TestCase):
         self.assertLess(ih, 1200)
 
 
+@unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
+                     "GTK 4 + libadwaita not available")
+class TestKeyboardShortcuts(unittest.TestCase):
+    """The footer advertises ↵ Paste · ⌫ Delete · P Pin · Esc Close.
+
+    Exercises the action helpers directly (far more robust headless than
+    synthesizing real key events): select a row, call the helper, assert
+    the DB / selection state changed.
+    """
+
+    def _make_db(self):
+        from clipman import database
+
+        tmp = tempfile.mkdtemp(prefix="clipman-test-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        data_dir = Path(tmp) / "clipman"
+        images_dir = data_dir / "images"
+        db_path = data_dir / "clipman.db"
+        for target, value in (
+            ("clipman.database.DATA_DIR", data_dir),
+            ("clipman.database.IMAGES_DIR", images_dir),
+            ("clipman.database.DB_PATH", db_path),
+        ):
+            p = patch(target, value)
+            p.start()
+            self.addCleanup(p.stop)
+        db = database.ClipboardDB()
+        self.addCleanup(db.close)
+        return db
+
+    def _seeded_window(self, texts=("old", "mid", "new")):
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        for text in texts:
+            db.add_entry("text", content_text=text)
+        app = Adw.Application(application_id="com.clipman.TestKeys")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        window.refresh()
+        return db, window
+
+    def test_selected_or_first_row_falls_back_to_first(self):
+        _db, window = self._seeded_window()
+        window.listbox.unselect_all()
+        self.assertIsNone(window.listbox.get_selected_row())
+        row = window._selected_or_first_row()
+        self.assertIsNotNone(row)
+        # Falls back to index 0 (most-recent entry) when nothing selected.
+        self.assertIs(row, window.listbox.get_row_at_index(0))
+
+    def test_selected_or_first_row_prefers_selection(self):
+        _db, window = self._seeded_window()
+        target = window.listbox.get_row_at_index(1)
+        window.listbox.select_row(target)
+        self.assertIs(window._selected_or_first_row(), target)
+
+    def test_delete_selected_removes_entry(self):
+        db, window = self._seeded_window()
+        target = window.listbox.get_row_at_index(0)
+        window.listbox.select_row(target)
+        target_id = target.entry_data["id"]
+
+        self.assertTrue(window._delete_selected())
+
+        remaining = {e["id"] for e in db.get_entries(limit=200)}
+        self.assertNotIn(target_id, remaining)
+        self.assertEqual(len(remaining), 2)
+
+    def test_delete_selected_empty_list_is_noop(self):
+        db, window = self._seeded_window(texts=())
+        # Nothing to delete -> returns False, doesn't raise.
+        self.assertFalse(window._delete_selected())
+        self.assertEqual(len(db.get_entries(limit=200)), 0)
+
+    def test_pin_selected_toggles_pin(self):
+        db, window = self._seeded_window()
+        target = window.listbox.get_row_at_index(0)
+        window.listbox.select_row(target)
+        target_id = target.entry_data["id"]
+        self.assertFalse(target.entry_data["pinned"])
+
+        self.assertTrue(window._pin_selected())
+
+        pinned = {e["id"] for e in db.get_entries(limit=200) if e["pinned"]}
+        self.assertIn(target_id, pinned)
+
+        # Toggling again unpins. After refresh the row objects are rebuilt,
+        # and pinned entries sort first, so re-select index 0.
+        again = window.listbox.get_row_at_index(0)
+        window.listbox.select_row(again)
+        self.assertTrue(window._pin_selected())
+        still_pinned = {
+            e["id"] for e in db.get_entries(limit=200) if e["pinned"]
+        }
+        self.assertNotIn(target_id, still_pinned)
+
+    def test_pin_selected_ignores_snippet_rows(self):
+        db, window = self._seeded_window(texts=())
+        db.add_snippet("greeting", "hello ${date}")
+        window._active_filter = "snippets"
+        window.refresh()
+
+        row = window.listbox.get_row_at_index(0)
+        self.assertEqual(row.row_kind, "snippet")
+        window.listbox.select_row(row)
+        # Snippets have no pin — helper must decline, not crash.
+        self.assertFalse(window._pin_selected())
+
+    def test_delete_selected_ignores_snippet_rows(self):
+        db, window = self._seeded_window(texts=())
+        db.add_snippet("greeting", "hello")
+        window._active_filter = "snippets"
+        window.refresh()
+
+        row = window.listbox.get_row_at_index(0)
+        self.assertEqual(row.row_kind, "snippet")
+        window.listbox.select_row(row)
+        self.assertFalse(window._delete_selected())
+        self.assertEqual(len(db.get_snippets()), 1)
+
+    def test_activate_selected_pastes_entry(self):
+        _db, window = self._seeded_window()
+        target = window.listbox.get_row_at_index(1)
+        window.listbox.select_row(target)
+
+        pasted = []
+        window._paste_entry = lambda entry: pasted.append(entry)
+        self.assertTrue(window._activate_selected())
+        self.assertEqual(len(pasted), 1)
+        self.assertEqual(pasted[0]["content_text"], "mid")
+
+    def test_activate_selected_falls_back_to_first_when_none_selected(self):
+        _db, window = self._seeded_window()
+        window.listbox.unselect_all()
+
+        pasted = []
+        window._paste_entry = lambda entry: pasted.append(entry)
+        self.assertTrue(window._activate_selected())
+        # Index 0 is the most-recent entry ("new").
+        self.assertEqual(pasted[0]["content_text"], "new")
+
+    def test_activate_selected_pastes_snippet(self):
+        db, window = self._seeded_window(texts=())
+        db.add_snippet("sig", "regards")
+        window._active_filter = "snippets"
+        window.refresh()
+        row = window.listbox.get_row_at_index(0)
+        window.listbox.select_row(row)
+
+        pasted = []
+        window._paste_snippet = lambda snip: pasted.append(snip)
+        self.assertTrue(window._activate_selected())
+        self.assertEqual(pasted[0]["name"], "sig")
+
+    def test_activate_selected_empty_list_is_noop(self):
+        _db, window = self._seeded_window(texts=())
+        window._paste_entry = lambda entry: self.fail("should not paste")
+        self.assertFalse(window._activate_selected())
+
+
 class TestEdgeStateDeclaration(unittest.TestCase):
     """Module-level invariants of edge_states.py that don't need GTK.
 
