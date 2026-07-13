@@ -377,6 +377,56 @@ class TestWindowConstruction(unittest.TestCase):
             "definitely-not-an-action", warning_messages[0]
         )
 
+    def test_scaled_thumbnail_decodes_at_scale_not_full_res(self):
+        """A large stored image yields a bounded-size thumbnail texture.
+
+        Regression for the perf bug where the image-row thumbnail decoded
+        the FULL-resolution stored screenshot into a GPU texture on every
+        history refresh, then shrank it. The fix decodes-and-scales at
+        load, so the resulting texture must be far smaller than the
+        1600x1200 source — bounded by the requested oversampled box, not
+        the source dimensions.
+        """
+        from gi.repository import GdkPixbuf
+
+        from clipman.window import ClipmanWindow
+
+        # Build a real 1600x1200 PNG in memory (no alpha needed).
+        big = GdkPixbuf.Pixbuf.new(
+            GdkPixbuf.Colorspace.RGB, False, 8, 1600, 1200
+        )
+        big.fill(0x3366FFFF)  # solid blue; RGBA packed
+        ok, png_bytes = big.save_to_bufferv("png", [], [])
+        self.assertTrue(ok, "failed to encode source PNG")
+
+        db = self._make_db()
+        entry_id = db.add_entry("image", image_data=bytes(png_bytes))
+        self.assertIsNotNone(entry_id)
+
+        app = Adw.Application(application_id="com.clipman.TestThumb")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+
+        # Grab the stored path the same way _make_entry_row does.
+        entry = db.get_entries(limit=1)[0]
+        size = 48
+        thumb = window._scaled_thumbnail(entry["image_path"], size=size)
+        self.assertIsNotNone(thumb, "expected a Gtk.Picture thumbnail")
+
+        paintable = thumb.get_paintable()
+        self.assertIsNotNone(paintable)
+        iw = paintable.get_intrinsic_width()
+        ih = paintable.get_intrinsic_height()
+
+        # The oversampled decode box: size * scale_factor * 2 (COVER
+        # headroom). Even at a large HiDPI scale this stays well under
+        # the 1600x1200 source — proving we no longer decode full-res.
+        scale = max(1, window.get_scale_factor())
+        box = size * scale * 2
+        self.assertLessEqual(iw, box)
+        self.assertLessEqual(ih, box)
+        self.assertLess(iw, 1600)
+        self.assertLess(ih, 1200)
+
 
 class TestEdgeStateDeclaration(unittest.TestCase):
     """Module-level invariants of edge_states.py that don't need GTK.
