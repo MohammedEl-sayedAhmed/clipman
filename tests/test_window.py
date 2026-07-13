@@ -500,6 +500,57 @@ class TestWindowConstruction(unittest.TestCase):
         self.assertLess(iw, 1600)
         self.assertLess(ih, 1200)
 
+    def test_search_changed_debounces_refresh(self):
+        """Typing must NOT rebuild the list synchronously per keystroke.
+
+        Regression for the input-lag bug where every ``search-changed``
+        ran a ``LIKE '%q%'`` scan and rebuilt up to ~200 rows. The handler
+        now updates ``_search_query`` immediately but coalesces the refresh
+        behind a one-shot GLib timeout, so a burst of keystrokes schedules
+        a single pending source instead of N synchronous rebuilds.
+
+        Driven without real timing: assert the query updates and a debounce
+        id is armed but ``refresh`` is untouched, then fire the debounce
+        callback directly and assert exactly one refresh + a cleared id.
+        """
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestDebounce")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+
+        # Count refresh() calls without actually rebuilding the list.
+        refresh_calls = []
+        window.refresh = lambda: refresh_calls.append(True)
+
+        class _FakeEntry:
+            def __init__(self, text):
+                self._text = text
+
+            def get_text(self):
+                return self._text
+
+        # Two quick keystrokes: query tracks the latest, refresh stays
+        # untouched, and only ONE debounce source is left armed (the first
+        # is cancelled by the second).
+        window._on_search_changed(_FakeEntry("fo"))
+        first_id = window._search_debounce_id
+        self.assertNotEqual(first_id, 0)
+        window._on_search_changed(_FakeEntry("foo"))
+        self.assertEqual(window._search_query, "foo")
+        self.assertNotEqual(window._search_debounce_id, 0)
+        self.assertNotEqual(window._search_debounce_id, first_id)
+        self.assertEqual(refresh_calls, [])  # NOT called synchronously
+
+        # Remove the still-armed real GLib source so it can't fire into a
+        # later test's main loop, then simulate what the timeout would run.
+        from gi.repository import GLib
+        GLib.source_remove(window._search_debounce_id)
+        result = window._run_search_refresh()
+        self.assertFalse(result)  # one-shot: returns False
+        self.assertEqual(len(refresh_calls), 1)  # coalesced to a single refresh
+        self.assertEqual(window._search_debounce_id, 0)  # id cleared
+
 
 @unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
                      "GTK 4 + libadwaita not available")
