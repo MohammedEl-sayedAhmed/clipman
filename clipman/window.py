@@ -136,6 +136,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self.db = db
         self.monitor = monitor
         self._search_query = ""
+        self._search_debounce_id = 0
         self._active_filter = "all"
         self._css_provider = None
         self._current_edge_banner = None
@@ -189,10 +190,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # gesture. We want the popup to hide rather than destroy so the
         # daemon can re-show it on the next D-Bus Toggle without
         # reconstructing the entire widget tree.
-        self.connect(
-            "close-request",
-            lambda _w: (self.set_visible(False), True)[1],
-        )
+        self.connect("close-request", self._on_close_request)
 
         # Sensitive-entry purge loop — kept identical to the GTK 3 version.
         GLib.timeout_add_seconds(10, self._cleanup_sensitive)
@@ -1075,8 +1073,37 @@ class ClipmanWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _on_search_changed(self, entry):
+        # Update the query synchronously so the newest keystroke wins, but
+        # coalesce the (expensive) refresh: every character otherwise runs a
+        # ``LIKE '%q%'`` scan and rebuilds up to ~200 ListBox rows, which is a
+        # real source of input lag while typing. Debounce so only the last
+        # keystroke in a burst actually rebuilds the list.
         self._search_query = entry.get_text().strip()
+        self._cancel_search_debounce()
+        self._search_debounce_id = GLib.timeout_add(
+            150, self._run_search_refresh
+        )
+
+    def _run_search_refresh(self):
+        # One-shot debounce callback: clear the id first (the source has
+        # fired, so it must not be removed again) then rebuild the list.
+        self._search_debounce_id = 0
         self.refresh()
+        return False
+
+    def _cancel_search_debounce(self):
+        # Remove a still-pending debounce source. Guard against a zero/None id
+        # (nothing scheduled, or the source already fired and cleared itself).
+        if self._search_debounce_id:
+            GLib.source_remove(self._search_debounce_id)
+            self._search_debounce_id = 0
+
+    def _on_close_request(self, _window):
+        # Hide (rather than destroy) so the daemon can re-show the popup on the
+        # next D-Bus Toggle. Drop any in-flight search debounce on the way out.
+        self._cancel_search_debounce()
+        self.set_visible(False)
+        return True
 
     def _on_filter_toggled(self, button, filter_id):
         if not button.get_active():
@@ -1205,6 +1232,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         search entry.
         """
         if keyval == Gdk.KEY_Escape:
+            self._cancel_search_debounce()
             self.set_visible(False)
             return True
 
