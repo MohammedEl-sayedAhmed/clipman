@@ -36,10 +36,7 @@ def _seed(db):
     )
     db.add_entry("text", "short note")
     db.add_entry("text", "another clipboard entry with some length to it")
-    try:
-        db.add_snippet("Signature", "Best regards,\nMohammed")
-    except Exception:
-        pass
+    db.add_snippet("Signature", "Best regards,\nMohammed")
 
 
 def _capture(window, out_path, attempts_left, app):
