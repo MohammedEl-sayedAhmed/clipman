@@ -27,3 +27,12 @@ updates:
     commit-message:
       prefix: "ci"
       include: scope
+    # One grouped PR for all Action bumps. Individually, Dependabot
+    # split github/codeql-action/init and /analyze into separate PRs;
+    # each bumped only one, and CodeQL fails when init and analyze run
+    # at different versions ("Loaded a configuration file for version
+    # X, but running version Y"). Grouping keeps them in lockstep.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
