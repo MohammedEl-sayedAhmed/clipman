@@ -140,9 +140,19 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._active_filter = "all"
         self._css_provider = None
         self._current_edge_banner = None
+        # Reference to the currently-open in-app dialog (preferences /
+        # snippets / edge alert). dismiss-on-focus-loss checks whether it
+        # is still mapped rather than a boolean latch, because hiding the
+        # popup does NOT emit a dialog's "closed" signal.
+        self._child_dialog = None
+        # Pending _move_to_cursor timeout id, so a show->hide within 50ms
+        # can cancel it (a stale timer would re-activate a closed popup).
+        self._cursor_move_id = 0
 
         self.set_title("Clipman")
         self.set_default_size(380, self._clamped_default_height())
+        # Win+V is a fixed overlay panel, not a resizable app window.
+        self.set_resizable(False)
         self.add_css_class("clipman-window")
 
         # Load persisted settings (only the subset Phase 1 actually uses;
@@ -190,6 +200,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         key_ctrl = Gtk.EventControllerKey()
         key_ctrl.connect("key-pressed", self._on_key_pressed)
         self.add_controller(key_ctrl)
+
+        # Win+V parity: dismiss when the popup loses focus (user clicks
+        # another window / elsewhere). GTK 3 had a focus-out->hide handler
+        # that was dropped in the GTK 4 port; restore it via is-active.
+        self.connect("notify::is-active", self._on_active_changed)
 
         # On Wayland the compositor delivers ``close-request`` when the
         # user clicks outside the popup or hits the compositor close
@@ -530,8 +545,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         spec = getattr(widget, "state_spec", None)
         kind = spec.kind if spec is not None else "statuspage"
 
-        # AlertDialog presents itself modally; nothing to mount.
+        # AlertDialog presents itself modally; nothing to mount. Track it
+        # as a child so a focus-losing action (e.g. its button opening a
+        # browser) doesn't trip dismiss-on-focus-loss and hide both.
         if kind == "alertdialog":
+            self._register_child(widget)
             widget.present(self)
             self._list_stack.set_visible_child_name("list")
             return
@@ -907,29 +925,47 @@ class ClipmanWindow(Adw.ApplicationWindow):
     # Paste path — GTK 4 clipboard API with wl-copy + wtype/ydotool fallback
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _is_wayland():
+        return bool(os.environ.get("WAYLAND_DISPLAY"))
+
+    def _wl_copy(self, data, mime=None):
+        """Set the clipboard via wl-copy and return True on success.
+
+        wl-copy owns the selection from a temporary surface it focuses
+        itself, so it works from a background process — unlike GTK's
+        Gdk.Clipboard, whose core wl_data_device.set_selection needs a
+        serial from input focus the daemon doesn't have. It forks a helper
+        that keeps serving the selection until it's replaced.
+        """
+        cmd = ["wl-copy"]
+        if mime:
+            cmd += ["--type", mime]
+        try:
+            proc = subprocess.Popen(
+                cmd, stdin=subprocess.PIPE, stderr=subprocess.DEVNULL
+            )
+            proc.communicate(input=data)
+            return proc.returncode == 0
+        except OSError:
+            logger.debug("wl-copy unavailable", exc_info=True)
+            return False
+
     def _copy_to_clipboard(self, text):
         if self.monitor:
             self.monitor.set_self_copy(True)
+        # On Wayland the daemon is a background process, so Gdk.Clipboard.set()
+        # silently fails to claim the selection (no input-focus serial). Prefer
+        # wl-copy, which is built to set the clipboard from the background; fall
+        # back to GTK on X11 (no focus requirement) or if wl-copy is missing.
+        if self._is_wayland() and self._wl_copy(text.encode("utf-8")):
+            return
         try:
             clipboard = Gdk.Display.get_default().get_clipboard()
             clipboard.set(text)
         except Exception:
-            # GTK clipboard API can fail under Xwayland or before the
-            # display is ready; fall through to the wl-copy CLI which
-            # is more reliable on Wayland sessions.
             logger.debug("GTK clipboard.set failed", exc_info=True)
-            try:
-                proc = subprocess.Popen(
-                    ["wl-copy"],
-                    stdin=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                )
-                proc.communicate(input=text.encode("utf-8"))
-            except OSError:
-                # wl-copy isn't installed either — the user will have
-                # to copy manually. Log so we can diagnose support
-                # requests but don't surface a popup error.
-                logger.debug("wl-copy fallback failed", exc_info=True)
+            self._wl_copy(text.encode("utf-8"))
 
     def _copy_image_to_clipboard(self, image_path):
         """Push an image file at ``image_path`` onto the system clipboard.
@@ -947,27 +983,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
             return False
         if self.monitor:
             self.monitor.set_self_copy(True)
+        # Wayland: prefer wl-copy (works from the background daemon); GTK's
+        # set_texture() has the same input-focus limitation as text.
+        if self._is_wayland():
+            try:
+                with open(image_path, "rb") as fh:
+                    if self._wl_copy(fh.read(), mime="image/png"):
+                        return True
+            except OSError:
+                logger.debug("reading image for wl-copy failed", exc_info=True)
         try:
             texture = Gdk.Texture.new_from_filename(image_path)
             clipboard = Gdk.Display.get_default().get_clipboard()
             clipboard.set_texture(texture)
             return True
         except Exception:
-            logger.debug(
-                "Gdk.Texture clipboard set failed; trying wl-copy fallback",
-                exc_info=True,
-            )
-        try:
-            with open(image_path, "rb") as fh:
-                proc = subprocess.Popen(
-                    ["wl-copy", "--type", "image/png"],
-                    stdin=fh,
-                    stderr=subprocess.DEVNULL,
-                )
-                proc.communicate()
-            return proc.returncode == 0
-        except OSError:
-            logger.debug("wl-copy image fallback failed", exc_info=True)
+            logger.debug("Gdk.Texture clipboard set failed", exc_info=True)
             return False
 
     # Per-mode command tables. ``wtype`` and ``ydotool`` use different
@@ -1025,9 +1056,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 continue
         if not any_binary_available:
             # Neither wtype nor ydotool is installed. Show the popup
-            # again with the dedicated edge state so the user has a
-            # clear next step.
-            self.set_visible(True)
+            # again (focused) with the dedicated edge state so the user
+            # has a clear next step.
+            self._present_focused()
             self._show_edge_state("paste-target-missing")
         return False
 
@@ -1047,7 +1078,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         if entry.get("id"):
             self.db.update_accessed(entry["id"])
         self.set_visible(False)
-        GLib.timeout_add(80, self._simulate_paste)
+        self._dispatch_paste()
 
     def _paste_snippet(self, snippet):
         text = snippet.get("content_text") or ""
@@ -1056,7 +1087,74 @@ class ClipmanWindow(Adw.ApplicationWindow):
         text = self._expand_snippet_tokens(text)
         self._copy_to_clipboard(text)
         self.set_visible(False)
+        self._dispatch_paste()
+
+    def _dispatch_paste(self):
+        """Restore focus to the user's window, then synthesise the paste.
+
+        On GNOME Wayland a naive paste fails twice over: the popup stole
+        input focus (the Shell activated it so its buttons/keys work), and
+        wtype can't inject at all — Mutter exposes no virtual-keyboard
+        protocol, so ``wtype`` exits with "compositor does not support the
+        virtual keyboard protocol". We therefore drive both steps through the
+        Shell extension: ``RestorePreviousFocus`` hands focus back to the
+        window the user came from, then ``SimulatePaste`` synthesises the
+        keystroke with a Clutter virtual device (which runs inside the
+        compositor and does work). Fall back to wtype/ydotool only when the
+        extension is absent — other compositors, where wtype works and the
+        popup never stole focus.
+        """
+        mode = self.db.get_setting("paste_mode", "auto") or "auto"
+        if self._paste_via_shell(mode):
+            return
         GLib.timeout_add(80, self._simulate_paste)
+
+    def _paste_via_shell(self, mode):
+        """Best-effort paste via the GNOME Shell extension: restore focus,
+        then inject the keystroke through Clutter. Returns True once the
+        requests are dispatched, False if the extension isn't reachable (so
+        the caller can fall back to wtype/ydotool)."""
+        iface = self._shell_extension_iface()
+        if iface is None:
+            return False
+        try:
+            iface.RestorePreviousFocus()
+        except Exception as exc:
+            logger.debug("Shell focus-restore failed: %s", exc, exc_info=True)
+            return False
+
+        # Give the compositor a frame to move focus onto the restored window
+        # before the keys land, then inject via the Shell (not wtype).
+        def _fire_keystroke():
+            try:
+                iface.SimulatePaste(mode)
+            except Exception as exc:
+                logger.debug(
+                    "Shell SimulatePaste failed: %s", exc, exc_info=True
+                )
+            return False
+
+        # ~120ms: comfortably longer than a compositor focus cycle so the
+        # keys land on the restored window, still imperceptible to the user.
+        GLib.timeout_add(120, _fire_keystroke)
+        return True
+
+    def _shell_extension_iface(self):
+        """Return the GNOME Shell extension's D-Bus interface, or None if it
+        isn't available (non-GNOME session, extension disabled, no bus)."""
+        try:
+            import dbus
+            bus = dbus.SessionBus()
+            proxy = bus.get_object(
+                "org.gnome.Shell.Extensions.clipman",
+                "/org/gnome/Shell/Extensions/clipman",
+            )
+            return dbus.Interface(
+                proxy, "org.gnome.Shell.Extensions.clipman"
+            )
+        except Exception as exc:
+            logger.debug("Shell extension unavailable: %s", exc, exc_info=True)
+            return None
 
     def _expand_snippet_tokens(self, text):
         """Substitute ``${date}``, ``${time}``, ``${clipboard}`` tokens.
@@ -1110,10 +1208,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._search_debounce_id = 0
 
     def _on_close_request(self, _window):
-        # Hide (rather than destroy) so the daemon can re-show the popup on the
-        # next D-Bus Toggle. Drop any in-flight search debounce on the way out.
-        self._cancel_search_debounce()
-        self.set_visible(False)
+        # Hide (rather than destroy) so the daemon can re-show the popup on
+        # the next D-Bus Toggle. _hide() tears down transient state.
+        self._hide()
         return True
 
     def _on_filter_toggled(self, button, filter_id):
@@ -1133,7 +1230,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         from clipman.snippets_dialog import SnippetsDialog
 
         dialog = SnippetsDialog(self.db)
-        dialog.connect("closed", lambda _d: self.refresh())
+        self._register_child(dialog, on_closed=lambda _d: self.refresh())
         dialog.present(self)
 
     def _on_row_activated(self, _listbox, row):
@@ -1184,7 +1281,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
         prefs = ClipmanPreferences(
             self.db, self, on_setting_changed=self._on_setting_changed
         )
-        prefs.present()
+        # In-surface dialog anchored to the popup so it can't open behind
+        # it on Wayland; tracked so dismiss-on-focus-loss is guarded.
+        self._register_child(prefs)
+        prefs.present(self)
 
     def _on_setting_changed(self, key, value):
         """Hot-reload settings the popup cares about.
@@ -1247,8 +1347,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         search entry.
         """
         if keyval == Gdk.KEY_Escape:
-            self._cancel_search_debounce()
-            self.set_visible(False)
+            self._hide()
             return True
 
         if keyval in (Gdk.KEY_Return, Gdk.KEY_KP_Enter, Gdk.KEY_ISO_Enter):
@@ -1399,6 +1498,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         Best-effort — if the extension isn't installed the window stays
         wherever the compositor placed it, which is acceptable for Phase 1.
         """
+        self._cursor_move_id = 0
+        # A stale timer must never re-position/re-activate a hidden popup
+        # (the extension now also focuses the window on move).
+        if not self.get_visible():
+            return False
         try:
             import dbus
             bus = dbus.SessionBus()
@@ -1427,12 +1531,71 @@ class ClipmanWindow(Adw.ApplicationWindow):
     # Toggle (public — dbus_service.Toggle() routes here)
     # ------------------------------------------------------------------
 
-    def toggle(self):
-        if self.get_visible():
-            self.set_visible(False)
-            return
-        self.refresh()
+    def _child_is_open(self):
+        d = self._child_dialog
+        return d is not None and d.get_mapped()
+
+    def _register_child(self, dialog, on_closed=None):
+        """Track an in-app dialog so dismiss-on-focus-loss doesn't hide the
+        popup from under it, and so hiding the popup can force-close it."""
+        self._child_dialog = dialog
+
+        def _closed(d):
+            if self._child_dialog is d:
+                self._child_dialog = None
+            if on_closed is not None:
+                on_closed(d)
+            # A focus-loss suppressed while the dialog was up is now
+            # actionable — re-evaluate so the popup can dismiss.
+            self._on_active_changed()
+
+        dialog.connect("closed", _closed)
+
+    def _present_focused(self):
+        """Show + focus the popup and (re)arm cursor positioning.
+
+        Centralises the Wayland show path so toggle(), dbus Show() and the
+        paste-target re-show all grab focus the same way.
+        """
         self.set_visible(True)
         self.present()
-        self.search_entry.grab_focus()
-        GLib.timeout_add(50, self._move_to_cursor)
+        # grab_focus no-ops on a not-yet-focused Wayland toplevel; defer.
+        GLib.idle_add(self.search_entry.grab_focus)
+        if self._cursor_move_id:
+            GLib.source_remove(self._cursor_move_id)
+        self._cursor_move_id = GLib.timeout_add(50, self._move_to_cursor)
+
+    def _hide(self):
+        """Hide the popup and tear down transient state (cursor timer, search
+        debounce, any open child dialog) so nothing resurfaces or latches."""
+        if self._cursor_move_id:
+            GLib.source_remove(self._cursor_move_id)
+            self._cursor_move_id = 0
+        self._cancel_search_debounce()
+        if self._child_dialog is not None:
+            try:
+                self._child_dialog.force_close()
+            except Exception:
+                logger.debug("force_close child dialog failed", exc_info=True)
+            self._child_dialog = None
+        self.set_visible(False)
+
+    def _on_active_changed(self, *_args):
+        """Hide the popup when it loses focus (Win+V click-outside dismiss).
+
+        Skipped while an in-app dialog is still mapped so opening
+        preferences / snippets doesn't hide the popup from under them.
+        """
+        if (
+            not self.get_property("is-active")
+            and self.get_visible()
+            and not self._child_is_open()
+        ):
+            self._hide()
+
+    def toggle(self):
+        if self.get_visible():
+            self._hide()
+            return
+        self.refresh()
+        self._present_focused()

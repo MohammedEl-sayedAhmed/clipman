@@ -25,9 +25,10 @@ class ClipmanDBusService(dbus.service.Object):
         # visible by default, so ``set_visible(True/False)`` is the
         # canonical API.
         self.window.refresh()
-        self.window.set_visible(True)
-        self.window.search_entry.grab_focus()
-        self.window.present()
+        # Shared show path: present + idle grab_focus + extension activate
+        # (matches ClipmanWindow.toggle()), so Show() also gets real input
+        # focus on GNOME Wayland instead of a visible-but-dead popup.
+        self.window._present_focused()
 
     @dbus.service.method(IFACE, in_signature="", out_signature="")
     def Hide(self):

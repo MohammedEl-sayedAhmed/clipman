@@ -18,7 +18,7 @@ import shutil
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 # Force off-screen behaviour so the test runner doesn't need a real
 # display server. Adw still needs to initialise but it's happy to do
@@ -287,6 +287,213 @@ class TestWindowConstruction(unittest.TestCase):
         theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
         for name in TYPE_ICONS.values():
             self.assertTrue(theme.has_icon(name), name)
+    def test_preferences_is_in_surface_dialog(self):
+        """Preferences must be an Adw.Dialog (in-surface), not a top-level.
+
+        Regression guard: as a top-level Adw.PreferencesWindow it opened
+        behind the popup on Wayland and looked unresponsive.
+        """
+        from clipman.preferences import ClipmanPreferences
+
+        db = self._make_db()
+        prefs = ClipmanPreferences(db, None, on_setting_changed=None)
+        self.assertIsInstance(prefs, Adw.PreferencesDialog)
+        self.assertIsInstance(prefs, Adw.Dialog)
+
+    def test_dismiss_on_focus_loss(self):
+        """notify::is-active handler hides the popup when it loses focus,
+        unless an in-app child dialog is open (Win+V click-outside dismiss)."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestDismiss")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        # Headless: the window is never compositor-active, so is-active is
+        # False — exactly the "lost focus" condition.
+        self.assertFalse(window.get_property("is-active"))
+
+        window.set_visible(True)
+        window._child_dialog = None
+        window._on_active_changed()
+        self.assertFalse(window.get_visible())  # dismissed on focus loss
+
+        # A mapped child dialog suppresses the dismiss.
+        window.set_visible(True)
+        child = MagicMock()
+        child.get_mapped.return_value = True
+        window._child_dialog = child
+        window._on_active_changed()
+        self.assertTrue(window.get_visible())  # child open -> stay put
+
+    def test_hide_cancels_timer_and_closes_child(self):
+        """_hide() must reset the cursor timer and force-close any child so
+        the dismiss guard can't latch (hiding never fires a dialog 'closed')."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestHide")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        window.set_visible(True)
+        window._cursor_move_id = 0
+        child = MagicMock()
+        child.get_mapped.return_value = True
+        window._child_dialog = child
+        window._hide()
+        self.assertFalse(window.get_visible())
+        self.assertIsNone(window._child_dialog)     # ref cleared (no latch)
+        child.force_close.assert_called_once()      # stale dialog closed
+        self.assertFalse(window._child_is_open())
+
+    def test_move_to_cursor_guarded_when_hidden(self):
+        """A stale _move_to_cursor timer must not re-activate a hidden popup."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestCursor")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        window.set_visible(False)
+        # Returns False (removes source) and no-ops because it's hidden.
+        self.assertFalse(window._move_to_cursor())
+        self.assertEqual(window._cursor_move_id, 0)
+
+    def test_paste_prefers_shell_injection(self):
+        """On GNOME the Shell injects the keystroke (wtype can't on Mutter),
+        so _dispatch_paste routes through the extension and must NOT also
+        fire the wtype fallback when the Shell path succeeds."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestPasteShell")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        window._paste_via_shell = lambda mode: True  # extension present
+
+        with patch("clipman.window.GLib.timeout_add") as timeout_add:
+            window._dispatch_paste()
+
+        self.assertFalse(timeout_add.called)  # no wtype fallback scheduled
+
+    def test_paste_falls_back_to_wtype_without_shell(self):
+        """With no extension reachable, _dispatch_paste falls back to the
+        wtype/ydotool keystroke (works on non-GNOME compositors)."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestPasteWtype")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        window._paste_via_shell = lambda mode: False  # no extension
+
+        with patch("clipman.window.GLib.timeout_add") as timeout_add:
+            window._dispatch_paste()
+
+        self.assertTrue(timeout_add.called)
+        _delay, callback = timeout_add.call_args[0][:2]
+        self.assertEqual(callback, window._simulate_paste)
+
+    def test_paste_via_shell_restores_focus_then_injects(self):
+        """The Shell path must restore focus FIRST, then inject the keystroke
+        (deferred so focus can settle) — order matters or Ctrl+V misses."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestPasteOrder")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        calls = []
+        fake_iface = MagicMock()
+        fake_iface.RestorePreviousFocus.side_effect = (
+            lambda: calls.append("focus")
+        )
+        fake_iface.SimulatePaste.side_effect = (
+            lambda m: calls.append(("paste", m))
+        )
+        window._shell_extension_iface = lambda: fake_iface
+
+        with patch("clipman.window.GLib.timeout_add") as timeout_add:
+            result = window._paste_via_shell("auto")
+
+        self.assertTrue(result)
+        self.assertEqual(calls, ["focus"])  # focus restored synchronously
+        # The keystroke is deferred via a timer; firing it injects via Shell.
+        self.assertTrue(timeout_add.called)
+        _delay, callback = timeout_add.call_args[0][:2]
+        callback()
+        self.assertEqual(calls, ["focus", ("paste", "auto")])
+
+    def test_paste_via_shell_returns_false_without_extension(self):
+        """No extension -> _paste_via_shell reports failure (so paste can
+        fall back to wtype) and never raises."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestNoExt")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        window._shell_extension_iface = lambda: None
+        self.assertFalse(window._paste_via_shell("auto"))
+
+    def test_copy_prefers_wl_copy_on_wayland(self):
+        """On Wayland the background daemon must set the clipboard via wl-copy
+        — Gdk.Clipboard.set() silently fails without input focus, so the
+        stale clipboard would get pasted instead of the chosen entry."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestCopyWayland")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        calls = []
+        window._is_wayland = lambda: True
+        window._wl_copy = lambda data, mime=None: (
+            calls.append((data, mime)) or True
+        )
+
+        window._copy_to_clipboard("hello world")
+
+        self.assertEqual(calls, [(b"hello world", None)])
+
+    def test_copy_uses_gtk_off_wayland(self):
+        """Off Wayland (X11) selections don't need focus, so the daemon uses
+        GTK's clipboard and must not shell out to wl-copy."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestCopyX11")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        wl_called = []
+        window._is_wayland = lambda: False
+        window._wl_copy = lambda data, mime=None: wl_called.append(1) or True
+
+        window._copy_to_clipboard("x")  # GTK path; no wl-copy on X11
+
+        self.assertEqual(wl_called, [])
+
+    def test_backup_restore_use_toplevel_parent(self):
+        """FileChooserNative needs a Gtk.Window parent; the dialog isn't one.
+
+        Regression guard for the PreferencesWindow->PreferencesDialog port
+        that crashed Export/Restore with a TypeError.
+        """
+        from gi.repository import Gtk
+
+        from clipman.preferences import ClipmanPreferences
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestBackup")
+        parent = ClipmanWindow(application=app, db=db, monitor=None)
+        prefs = ClipmanPreferences(db, parent, on_setting_changed=None)
+        self.assertIsInstance(prefs._parent_window, Gtk.Window)
+        # The parent must be accepted by FileChooserNative (no TypeError).
+        chooser = Gtk.FileChooserNative.new(
+            "t", prefs._parent_window, Gtk.FileChooserAction.SAVE, "s", "c"
+        )
+        self.assertIsNotNone(chooser)
+
+    def test_window_is_not_resizable(self):
+        """Win+V parity: the popup is a fixed panel, not a resizable window."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestResize")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        self.assertFalse(window.get_resizable())
 
     def test_snippets_dialog_constructs(self):
         from clipman.snippets_dialog import SnippetsDialog
