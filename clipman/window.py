@@ -297,12 +297,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _build_ui(self):
+        # Idiomatic libadwaita layout: an Adw.ToolbarView owns the header
+        # (top bar), the footer hints (bottom bar), and the scrolling
+        # body (content) — mirroring snippets_dialog.py. The header is
+        # attached via add_top_bar rather than set_titlebar; an
+        # Adw.ApplicationWindow uses set_content and has no titlebar slot.
+        toolbarview = Adw.ToolbarView()
+        self.set_content(toolbarview)
+
+        # The scrolling body is a plain vertical box parented into the
+        # ToolbarView content; every existing child keeps its order and
+        # wiring so search / filter / edge-state logic is untouched.
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        self.set_content(root)
 
         # -- Header bar (incognito start, prefs end) -----------------------
         header = Adw.HeaderBar()
-        header.set_title_widget(Gtk.Label(label="Clipman"))
+        header.set_title_widget(Adw.WindowTitle(title="Clipman", subtitle=""))
         # The popup is its own GtkApplicationWindow but doubles as a
         # transient overlay — title-bar controls (close / minimise /
         # maximise) clash with the close-on-Escape interaction model.
@@ -333,7 +343,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._new_snippet_btn.connect("clicked", self._on_snippets_clicked)
         header.pack_end(self._new_snippet_btn)
 
-        root.append(header)
+        toolbarview.add_top_bar(header)
 
         # -- Update banner (libadwaita native) -----------------------------
         self._update_banner = Adw.Banner()
@@ -442,7 +452,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
             lbl = Gtk.Label(label=text)
             lbl.add_css_class("clipman-footer-hint")
             footer.append(lbl)
-        root.append(footer)
+
+        # -- Assemble the ToolbarView -------------------------------------
+        # Body (search + filters + list/banner stack) becomes the
+        # ToolbarView content; the footer hints become its bottom bar.
+        toolbarview.set_content(root)
+        toolbarview.add_bottom_bar(footer)
 
     # ------------------------------------------------------------------
     # Refresh
