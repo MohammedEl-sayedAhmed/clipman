@@ -704,10 +704,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # The handler exists so the dispatcher table stays exhaustive.
         pass
 
-    def _dismiss_edge_banner(self):
-        if self._current_edge_banner is not None:
-            self._edge_banner_slot.remove(self._current_edge_banner)
-            self._current_edge_banner = None
+    def _dismiss_edge_banner(self, state_id=None):
+        """Remove the mounted edge banner.
+
+        When ``state_id`` is given, only dismiss if the current banner is
+        that state — so turning incognito off doesn't wipe an unrelated
+        banner (e.g. ``paused``).
+        """
+        banner = self._current_edge_banner
+        if banner is None:
+            return
+        if state_id is not None:
+            spec = getattr(banner, "state_spec", None)
+            if spec is not None and spec.id != state_id:
+                return
+        self._edge_banner_slot.remove(banner)
+        self._current_edge_banner = None
 
     def _open_url(self, url):
         try:
@@ -1112,23 +1124,6 @@ class ClipmanWindow(Adw.ApplicationWindow):
         privacy banner all stay in sync through the one handler.
         """
         self._incognito_btn.set_active(bool(active))
-
-    def _dismiss_edge_banner(self, state_id=None):
-        """Remove the mounted edge banner.
-
-        When ``state_id`` is given, only dismiss if the current banner is
-        that state — so turning incognito off doesn't wipe an unrelated
-        banner (e.g. ``paused``).
-        """
-        banner = self._current_edge_banner
-        if banner is None:
-            return
-        if state_id is not None:
-            spec = getattr(banner, "state_spec", None)
-            if spec is not None and spec.id != state_id:
-                return
-        self._edge_banner_slot.remove(banner)
-        self._current_edge_banner = None
 
     def _on_prefs_clicked(self, _button):
         from clipman.preferences import ClipmanPreferences
