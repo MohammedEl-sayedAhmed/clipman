@@ -266,6 +266,52 @@ class TestWindowConstruction(unittest.TestCase):
         dialog = SnippetsDialog(db)
         self.assertIsNotNone(dialog)
 
+    def test_new_snippet_loads_into_editor_form(self):
+        """Creating a new snippet must populate the editor, not blank it.
+
+        Regression: _on_new_clicked used to set self._selected_id
+        BEFORE _reload_list(), so when the reload re-selected the row,
+        _on_row_selected early-returned (snippet_id == _selected_id) and
+        _load_into_form never ran — the form stayed blank. Assert the
+        selection AND the observable form state (name entry + content
+        buffer + title) reflect the freshly created snippet.
+        """
+        from clipman.snippets_dialog import SnippetsDialog
+
+        db = self._make_db()
+        dialog = SnippetsDialog(db)
+
+        # Sanity: nothing selected, form blank before the new action.
+        self.assertIsNone(dialog._selected_id)
+        self.assertEqual(dialog._name_row.get_text(), "")
+
+        dialog._on_new_clicked(None)
+
+        # The new row's id is now the selection target.
+        self.assertIsNotNone(dialog._selected_id)
+        new_id = dialog._selected_id
+
+        # The DB persisted exactly the snippet we expect.
+        snippet = next(
+            (s for s in db.get_snippets() if s["id"] == new_id), None
+        )
+        self.assertIsNotNone(snippet)
+
+        # Observable editor state must mirror the new snippet, not be blank.
+        self.assertEqual(dialog._name_row.get_text(), snippet["name"])
+        buf = dialog._textview.get_buffer()
+        buffer_text = buf.get_text(
+            buf.get_start_iter(), buf.get_end_iter(), True
+        )
+        self.assertEqual(buffer_text, snippet.get("content_text") or "")
+        self.assertEqual(dialog._title_label.get_text(), snippet["name"])
+        self.assertTrue(dialog._delete_btn.get_sensitive())
+
+        # And the sidebar row for the new snippet is the selected one.
+        selected = dialog._listbox.get_selected_row()
+        self.assertIsNotNone(selected)
+        self.assertEqual(getattr(selected, "snippet_id", None), new_id)
+
     def test_refresh_with_seeded_entries(self):
         """Three seeded entries -> three ActionRows with their titles."""
         from clipman.window import ClipmanWindow
