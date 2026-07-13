@@ -34,7 +34,7 @@ try:
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
     gi.require_version("Gdk", "4.0")
-    from gi.repository import Adw, Gdk, GLib, Gtk
+    from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk
 except (AttributeError, ValueError, ImportError) as e:
     raise RuntimeError(
         "GTK 4 + libadwaita not available: %s" % e
@@ -719,6 +719,49 @@ class ClipmanWindow(Adw.ApplicationWindow):
         except OSError:
             logger.debug("xdg-open failed for %s", url, exc_info=True)
 
+    def _scaled_thumbnail(self, image_path, size=48):
+        """Build a small, HiDPI-crisp thumbnail for an image entry.
+
+        Decodes-and-scales the stored PNG at load time via
+        ``GdkPixbuf.new_from_file_at_scale`` instead of decoding the
+        full-resolution screenshot into a GPU texture and then shrinking
+        it. A history refresh re-runs this for every image row, so paying
+        the full-res decode cost per refresh was a major source of the
+        popup feeling heavy.
+
+        The decode target is oversized by the widget scale factor (for
+        HiDPI sharpness) and by 2x (COVER-crop headroom so a non-square
+        image still fills a crisp ``size``x``size`` slot). Returns a
+        configured ``Gtk.Picture`` or ``None`` when the path is unsafe,
+        missing, or undecodable.
+        """
+        from clipman.database import _safe_image_path
+
+        if not image_path or not _safe_image_path(image_path):
+            return None
+
+        # Oversample: logical px * device scale * COVER-crop headroom.
+        scale = max(1, self.get_scale_factor())
+        box = size * scale * 2
+        try:
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                image_path, box, box, True
+            )
+            texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+        except Exception:
+            # Corrupt file or unsupported format — fall back to the bare
+            # ``[Image]`` label rather than crashing.
+            logger.debug("thumbnail failed for %r", image_path, exc_info=True)
+            return None
+
+        thumb = Gtk.Picture.new_for_paintable(texture)
+        thumb.set_can_shrink(True)
+        thumb.set_content_fit(Gtk.ContentFit.COVER)
+        thumb.set_size_request(size, size)
+        thumb.set_valign(Gtk.Align.CENTER)
+        thumb.add_css_class("clip-thumb")
+        return thumb
+
     def _make_entry_row(self, entry):
         ctype = entry.get("content_type") or "text"
         text = entry.get("content_text") or ""
@@ -753,28 +796,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
         bar.set_valign(Gtk.Align.FILL)
         row.add_prefix(bar)
 
-        # Image entries get a 32x32 thumbnail so users can scan the list
+        # Image entries get a 48x48 thumbnail so users can scan the list
         # visually instead of relying on the literal ``[Image]`` title.
         if ctype == "image":
-            image_path = entry.get("image_path")
-            from clipman.database import _safe_image_path
-
-            if image_path and _safe_image_path(image_path):
-                try:
-                    texture = Gdk.Texture.new_from_filename(image_path)
-                    thumb = Gtk.Picture.new_for_paintable(texture)
-                    thumb.set_can_shrink(True)
-                    thumb.set_content_fit(Gtk.ContentFit.COVER)
-                    thumb.set_size_request(32, 32)
-                    thumb.set_valign(Gtk.Align.CENTER)
-                    thumb.add_css_class("clip-thumb")
-                    row.add_prefix(thumb)
-                except Exception:
-                    # Corrupt file or unsupported format — fall back to
-                    # the bare ``[Image]`` label rather than crashing.
-                    logger.debug(
-                        "thumbnail failed for %r", image_path, exc_info=True
-                    )
+            thumb = self._scaled_thumbnail(entry.get("image_path"))
+            if thumb is not None:
+                row.add_prefix(thumb)
 
         pin_btn = Gtk.Button.new_from_icon_name(
             "starred-symbolic" if entry["pinned"]
