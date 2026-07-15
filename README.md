@@ -41,6 +41,10 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 
 </div>
 
+> [!IMPORTANT]
+> **For a stable experience right now, install [v1.0.6](https://github.com/MohammedEl-sayedAhmed/clipman/releases/tag/v1.0.6).**
+> The current latest release (**v1.1.0**) is a GTK 4 + libadwaita rewrite that is **still being stabilized**. On some setups — notably GNOME on Wayland — the popup may not take keyboard focus (buttons/search unresponsive), may not dismiss when you click outside it, and shows up in the dash/alt‑tab. Until v1.1.x is stabilized, the last GTK 3 release **[v1.0.6](https://github.com/MohammedEl-sayedAhmed/clipman/releases/tag/v1.0.6)** is recommended. Progress is tracked in [#132](https://github.com/MohammedEl-sayedAhmed/clipman/issues/132).
+
 ---
 
 Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extension — no polling, no subprocesses, no screen flicker. It detects clipboard changes through `Meta.Selection` signals and communicates over D-Bus, making it fundamentally different from tools that rely on `wl-paste --watch` or timer-based polling. Privacy is built in: incognito mode, automatic sensitive data detection with 30-second auto-clear, and restrictive file permissions. The entire app is Python + GTK 4 + libadwaita — no Electron, no heavy frameworks.
