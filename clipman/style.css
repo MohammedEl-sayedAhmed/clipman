@@ -115,13 +115,33 @@
     font-size: 0.85em;
 }
 
-/* Per-type symbolic icon in each row's prefix. Symbolic icons inherit
-   the foreground colour, so they adapt to light/dark and the user's
-   system theme; dim slightly so they read as a quiet type hint. */
+/* Colour-coded type icon: the symbolic icon is tinted per clip type as a
+   quiet, scannable hint (no heavy background chip). Colours come from the
+   @type_* tokens injected by window._type_color_block(). */
 
-.clip-type-icon {
-    color: alpha(@window_fg_color, 0.55);
-    margin: 0 6px 0 2px;
+.clip-tile {
+    min-width: 24px;
+    margin: 0 4px 0 2px;
+}
+
+.clip-tile > image {
+    -gtk-icon-size: 16px;
+}
+
+.clip-tile.type-text  > image { color: @type_text; }
+.clip-tile.type-link  > image { color: @type_link; }
+.clip-tile.type-code  > image { color: @type_code; }
+.clip-tile.type-image > image { color: @type_image; }
+.clip-tile.type-snip  > image { color: @type_snip; }
+
+/* Row actions (pin / delete) fade in on hover; pinned rows keep them on. */
+.clip-actions {
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+.clipman-list row:hover .clip-actions,
+.clip-row.pinned .clip-actions {
+    opacity: 1;
 }
 
 /* Footer hints ------------------------------------------------------- */

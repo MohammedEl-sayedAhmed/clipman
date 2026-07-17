@@ -10,6 +10,7 @@ module without changes.
 
 import logging
 import os
+import re
 import subprocess
 import time
 from string import Template
@@ -120,22 +121,64 @@ DEFAULT_FONT_COLOR = "default"
 # Keeps the .clip-row .title colour aligned with libadwaita's card fg.
 _DEFAULT_FONT_COLOR_TOKEN = "@card_fg_color"
 
-# Per-type symbolic icon shown in each row's prefix so the list is
-# scannable by type. Symbolic icons inherit the foreground colour, so
-# they adapt to light/dark and the user's system theme — unlike the old
-# hard-coded 3px colour bar. (content_type is only text/image; snippets
-# use the "snip" key.)
-TYPE_ICONS = {
-    "text": "text-x-generic-symbolic",
-    "image": "image-x-generic-symbolic",
-    "snip": "emblem-documents-symbolic",
-}
-
 # Incremental list fill (see ClipmanWindow.refresh): paint this many rows
 # immediately, then stream the remaining history in idle batches of this
 # size so a large history never freezes the popup on open / filter switch.
 _FILL_FIRST = 30
 _FILL_BATCH = 60
+
+# Per-row visual type -> symbolic icon + coloured tile (mockup parity,
+# docs/design/main-window.html). Text entries are further classified into
+# link / code so the tile colour is a quick scannable type hint.
+ROW_TYPE_ICONS = {
+    "text": "text-x-generic-symbolic",
+    "link": "insert-link-symbolic",
+    "code": "utilities-terminal-symbolic",
+    "image": "image-x-generic-symbolic",
+    "snip": "emblem-documents-symbolic",
+}
+_TILE_TYPE_CLASSES = ("type-text", "type-link", "type-code",
+                      "type-image", "type-snip")
+
+# Tile colours, keyed to the @define-color tokens emitted by
+# _type_color_block(); values mirror docs/design/tokens.css (Catppuccin
+# Mocha for dark, the mockup's high-contrast set for light).
+_TYPE_COLORS_DARK = {
+    "type_text": "#89b4fa",
+    "type_link": "#74c7ec",
+    "type_code": "#94e2d5",
+    "type_image": "#cba6f7",
+    "type_snip": "#f9e2af",
+}
+_TYPE_COLORS_LIGHT = {
+    "type_text": "#2563eb",
+    "type_link": "#0891b2",
+    "type_code": "#0d9488",
+    "type_image": "#9333ea",
+    "type_snip": "#b45309",
+}
+
+_URL_RE = re.compile(r"^(https?://|www\.)\S+$", re.IGNORECASE)
+# Conservative code detection: only strong, code-specific signals so plain
+# notes ("cd cabinet", "from the shop") don't get mislabeled as code.
+_CODE_HINT_RE = re.compile(
+    r"^\s*(def |class |function |import |#!/|\$ )"   # code-y line starts
+    r"|[{};]\s*$"                                     # line ends in ; { }
+    r"|=>|</[a-zA-Z]",                               # arrows, closing tags
+    re.MULTILINE,
+)
+
+
+def _classify_text(text):
+    """Classify a text entry into 'link', 'code', or 'text' for its tile."""
+    stripped = (text or "").strip()
+    if not stripped:
+        return "text"
+    if "\n" not in stripped and _URL_RE.match(stripped):
+        return "link"
+    if _CODE_HINT_RE.search(stripped):
+        return "code"
+    return "text"
 
 
 class ClipItem(GObject.Object):
@@ -306,6 +349,28 @@ class ClipmanWindow(Adw.ApplicationWindow):
             for name, hex_value in palette.items()
         )
 
+    def _type_color_block(self):
+        """@define-color tokens for the per-type row tiles.
+
+        Emitted independently of the Catppuccin toggle so the coloured
+        tiles always resolve (falling back to system theme just means the
+        surrounding chrome isn't Catppuccin — the tile hues still apply).
+        """
+        if self._theme == "light":
+            colors = _TYPE_COLORS_LIGHT
+        elif self._theme == "dark":
+            colors = _TYPE_COLORS_DARK
+        else:  # auto — follow system, default dark
+            try:
+                is_dark = Adw.StyleManager.get_default().get_dark()
+            except Exception:
+                is_dark = True
+            colors = _TYPE_COLORS_DARK if is_dark else _TYPE_COLORS_LIGHT
+        return "\n".join(
+            f"@define-color {name} {value};"
+            for name, value in colors.items()
+        )
+
     def _apply_css(self):
         """Inject ``style.css`` with Python ``string.Template`` substitutions.
 
@@ -334,7 +399,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
             if self._use_catppuccin
             else ""
         )
-        css_string = palette + template_body
+        # Type-tile colours are always defined (independent of the
+        # Catppuccin toggle) so row tiles never reference an undefined @color.
+        css_string = self._type_color_block() + "\n" + palette + template_body
 
         display = Gdk.Display.get_default()
         if self._css_provider is not None:
@@ -913,10 +980,18 @@ class ClipmanWindow(Adw.ApplicationWindow):
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         row.add_css_class("clip-row")
 
+        # Colour-coded type tile: a rounded square whose tint + icon convey
+        # the clip type at a glance (docs/design mockup). Images swap the
+        # tile for a thumbnail (below).
         icon = Gtk.Image()
-        icon.add_css_class("clip-type-icon")
+        icon.set_halign(Gtk.Align.CENTER)
         icon.set_valign(Gtk.Align.CENTER)
-        row.append(icon)
+        tile = Gtk.Box()
+        tile.add_css_class("clip-tile")
+        tile.set_halign(Gtk.Align.CENTER)
+        tile.set_valign(Gtk.Align.CENTER)
+        tile.append(icon)
+        row.append(tile)
 
         thumb = Gtk.Picture()
         thumb.set_can_shrink(True)
@@ -940,25 +1015,34 @@ class ClipmanWindow(Adw.ApplicationWindow):
         text_box.append(subtitle)
         row.append(text_box)
 
+        # Actions sit in a box that fades in on row hover (always shown for
+        # pinned rows) — docs/design mockup. See .clip-actions in style.css.
+        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        actions.add_css_class("clip-actions")
+        actions.set_valign(Gtk.Align.CENTER)
+
         pin_btn = Gtk.Button()
         pin_btn.add_css_class("flat")
         pin_btn.set_valign(Gtk.Align.CENTER)
         pin_btn.connect("clicked", self._lv_pin_clicked, row)
-        row.append(pin_btn)
+        actions.append(pin_btn)
 
         del_btn = Gtk.Button.new_from_icon_name("user-trash-symbolic")
         del_btn.add_css_class("flat")
         del_btn.set_valign(Gtk.Align.CENTER)
         del_btn.set_tooltip_text(_("Delete"))
         del_btn.connect("clicked", self._lv_delete_clicked, row)
-        row.append(del_btn)
+        actions.append(del_btn)
+        row.append(actions)
 
         row._clip_icon = icon
+        row._clip_tile = tile
         row._clip_thumb = thumb
         row._clip_title = title
         row._clip_subtitle = subtitle
         row._clip_pin = pin_btn
         row._clip_del = del_btn
+        row._clip_actions = actions
         row._clip_item = None
         list_item.set_child(row)
 
@@ -991,7 +1075,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
             subtitle = ts
         row._clip_subtitle.set_text(subtitle)
 
-        # Image rows show a thumbnail; everything else shows the type icon.
+        # Image rows show a thumbnail; everything else shows a coloured tile.
         texture = (
             self._thumbnail_texture(entry.get("image_path"))
             if ctype == "image" else None
@@ -999,22 +1083,24 @@ class ClipmanWindow(Adw.ApplicationWindow):
         if texture is not None:
             row._clip_thumb.set_paintable(texture)
             row._clip_thumb.set_visible(True)
-            row._clip_icon.set_visible(False)
+            row._clip_tile.set_visible(False)
         else:
             row._clip_thumb.set_paintable(None)
             row._clip_thumb.set_visible(False)
-            row._clip_icon.set_from_icon_name(
-                TYPE_ICONS.get(ctype, "text-x-generic-symbolic")
-            )
-            row._clip_icon.set_visible(True)
+            rtype = "image" if ctype == "image" else _classify_text(text)
+            self._set_tile(row, rtype)
 
         pinned = entry.get("pinned")
         row._clip_pin.set_icon_name(
             "starred-symbolic" if pinned else "non-starred-symbolic"
         )
         row._clip_pin.set_tooltip_text(_("Unpin") if pinned else _("Pin"))
-        row._clip_pin.set_visible(True)
-        row._clip_del.set_visible(True)
+        row._clip_actions.set_visible(True)
+        # Pinned rows keep their actions visible; others fade in on hover.
+        if pinned:
+            row.add_css_class("pinned")
+        else:
+            row.remove_css_class("pinned")
 
     def _bind_snippet_row(self, row, snippet):
         row._clip_title.set_text(snippet["name"])
@@ -1022,11 +1108,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
         row._clip_subtitle.set_text(preview[:120])
         row._clip_thumb.set_paintable(None)
         row._clip_thumb.set_visible(False)
-        row._clip_icon.set_from_icon_name(TYPE_ICONS["snip"])
-        row._clip_icon.set_visible(True)
+        self._set_tile(row, "snip")
         # Snippets are managed in the Snippets dialog — no inline pin/delete.
-        row._clip_pin.set_visible(False)
-        row._clip_del.set_visible(False)
+        row._clip_actions.set_visible(False)
+        row.remove_css_class("pinned")
+
+    def _set_tile(self, row, rtype):
+        """Show the coloured type tile for ``rtype`` (text/link/code/image/
+        snip): swap its type CSS class and icon."""
+        tile = row._clip_tile
+        for cls in _TILE_TYPE_CLASSES:
+            tile.remove_css_class(cls)
+        tile.add_css_class(f"type-{rtype}")
+        row._clip_icon.set_from_icon_name(
+            ROW_TYPE_ICONS.get(rtype, "text-x-generic-symbolic")
+        )
+        tile.set_visible(True)
 
     def _lv_pin_clicked(self, button, row):
         item = row._clip_item
