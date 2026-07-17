@@ -161,6 +161,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
             else DEFAULT_THEME
         )
 
+        # When off, don't force the Catppuccin @-token overrides so the app
+        # follows the user's system GNOME/Adwaita theme + accent. Default on.
+        self._use_catppuccin = (
+            self.db.get_setting("use_catppuccin", "true") != "false"
+        )
+
         self._font_color = self.db.get_setting(
             "font_color", DEFAULT_FONT_COLOR
         ) or DEFAULT_FONT_COLOR
@@ -265,7 +271,14 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 font_size=str(self._font_size),
                 font_color=self._resolve_font_color(),
             )
-        css_string = self._catppuccin_palette_block() + "\n" + template_body
+        # Only force the Catppuccin palette when enabled; otherwise emit
+        # just the template so libadwaita keeps the system theme/accent.
+        palette = (
+            self._catppuccin_palette_block() + "\n"
+            if self._use_catppuccin
+            else ""
+        )
+        css_string = palette + template_body
 
         display = Gdk.Display.get_default()
         if self._css_provider is not None:
@@ -1187,6 +1200,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 value if value in ("auto", "dark", "light") else DEFAULT_THEME
             )
             self._apply_theme()
+            self._apply_css()  # palette block depends on the theme
+        elif key == "use_catppuccin":
+            self._use_catppuccin = str(value).lower() not in ("false", "0", "")
+            self._apply_css()
         elif key == "font_size":
             try:
                 self._font_size = max(8, min(20, int(value)))

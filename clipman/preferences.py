@@ -227,6 +227,22 @@ class ClipmanPreferences(Adw.PreferencesWindow):
             ),
         )
         theme_group.add(theme_row)
+
+        catppuccin_row = Adw.SwitchRow()
+        catppuccin_row.set_title(_("Catppuccin theme"))
+        catppuccin_row.set_subtitle(
+            _("Off: follow your system GNOME theme and accent color.")
+        )
+        catppuccin_row.set_active(
+            self.db.get_setting("use_catppuccin", "true") != "false"
+        )
+        catppuccin_row.connect(
+            "notify::active",
+            lambda row, _pspec: self._save(
+                "use_catppuccin", "true" if row.get_active() else "false"
+            ),
+        )
+        theme_group.add(catppuccin_row)
         page.add(theme_group)
 
         # --- Accent / font color group ------------------------------------
