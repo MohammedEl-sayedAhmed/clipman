@@ -581,21 +581,38 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._list_stack.add_named(self._empty_slot, "empty")
         root.append(self._list_stack)
 
-        # -- Footer hints --------------------------------------------------
-        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        # -- Footer: item count · recording status · clear all ------------
+        # (docs/design mockup). Shortcuts still work (↵ paste, P pin,
+        # ⌫ delete, Esc close); the footer now carries state + a bulk action.
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         footer.add_css_class("clipman-footer")
-        footer.set_halign(Gtk.Align.CENTER)
-        footer.set_margin_top(4)
-        footer.set_margin_bottom(6)
-        for text in [
-            "↵ " + _("Paste"),
-            "⌫ " + _("Delete"),
-            "P " + _("Pin"),
-            "Esc " + _("Close"),
-        ]:
-            lbl = Gtk.Label(label=text)
-            lbl.add_css_class("clipman-footer-hint")
-            footer.append(lbl)
+
+        self._count_label = Gtk.Label(label="")
+        self._count_label.add_css_class("clipman-count")
+        self._count_label.set_halign(Gtk.Align.START)
+        self._count_label.set_hexpand(True)
+        footer.append(self._count_label)
+
+        # Recording / incognito status pill (reflects the header toggle).
+        self._recording_pill = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=4
+        )
+        self._recording_pill.add_css_class("recording-pill")
+        self._recording_pill.set_valign(Gtk.Align.CENTER)
+        self._recording_icon = Gtk.Image.new_from_icon_name(
+            "media-record-symbolic"
+        )
+        self._recording_label = Gtk.Label(label=_("Recording"))
+        self._recording_pill.append(self._recording_icon)
+        self._recording_pill.append(self._recording_label)
+        footer.append(self._recording_pill)
+
+        clear_btn = Gtk.Button(label=_("Clear all"))
+        clear_btn.add_css_class("flat")
+        clear_btn.add_css_class("clipman-clear")
+        clear_btn.set_valign(Gtk.Align.CENTER)
+        clear_btn.connect("clicked", self._on_clear_all)
+        footer.append(clear_btn)
 
         # -- Assemble the ToolbarView -------------------------------------
         # Body (search + filters + list/banner stack) becomes the
@@ -629,6 +646,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
         # Cancel any in-flight incremental fill from a previous refresh.
         self._cancel_fill()
+        self._update_count(len(items))
 
         if not items:
             self._store.remove_all()
@@ -665,6 +683,42 @@ class ClipmanWindow(Adw.ApplicationWindow):
             return True
         self._fill_id = 0
         return False
+
+    def _update_count(self, n):
+        """Set the footer item/snippet count for the current view."""
+        if not hasattr(self, "_count_label"):
+            return
+        if self._active_filter == "snippets":
+            label = _("{n} snippet").format(n=n) if n == 1 \
+                else _("{n} snippets").format(n=n)
+        else:
+            label = _("{n} item").format(n=n) if n == 1 \
+                else _("{n} items").format(n=n)
+        self._count_label.set_text(label)
+
+    def _on_clear_all(self, _button):
+        """Clear unpinned history after confirmation (pinned entries stay)."""
+        dialog = Adw.AlertDialog(
+            heading=_("Clear clipboard history?"),
+            body=_("This removes all unpinned entries. Pinned entries and "
+                   "snippets are kept. This can't be undone."),
+        )
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("clear", _("Clear"))
+        dialog.set_response_appearance(
+            "clear", Adw.ResponseAppearance.DESTRUCTIVE
+        )
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+
+        def _on_response(_dlg, response):
+            if response == "clear":
+                self.db.clear_unpinned()
+                self.refresh()
+
+        self._register_child(dialog)
+        dialog.connect("response", _on_response)
+        dialog.present(self)
 
     def _cancel_fill(self):
         """Drop any pending incremental-fill idle source and its backlog."""
@@ -1492,10 +1546,24 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self.db.delete_entry(entry_id)
         self.refresh()
 
+    def _update_recording_pill(self, incognito):
+        """Reflect incognito state in the footer status pill."""
+        if not hasattr(self, "_recording_pill"):
+            return
+        if incognito:
+            self._recording_icon.set_from_icon_name("view-conceal-symbolic")
+            self._recording_label.set_text(_("Paused"))
+            self._recording_pill.add_css_class("paused")
+        else:
+            self._recording_icon.set_from_icon_name("media-record-symbolic")
+            self._recording_label.set_text(_("Recording"))
+            self._recording_pill.remove_css_class("paused")
+
     def _on_incognito_toggled(self, button):
+        active = button.get_active()
+        self._update_recording_pill(active)
         if self.monitor is None:
             return
-        active = button.get_active()
         self.monitor.set_incognito(active)
         button.set_tooltip_text(
             _("Incognito mode: ON — clipboard not recorded")

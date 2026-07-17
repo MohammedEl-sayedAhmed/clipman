@@ -144,18 +144,50 @@
     opacity: 1;
 }
 
-/* Footer hints ------------------------------------------------------- */
+/* Footer: item count · recording pill · clear all -------------------- */
 
 .clipman-footer {
-    padding: 4px 8px;
-    border-top: 1px solid alpha(@window_fg_color, 0.06);
+    padding: 4px 10px;
+    border-top: 1px solid alpha(@window_fg_color, 0.08);
     background-color: alpha(@window_fg_color, 0.02);
 }
 
-.clipman-footer-hint {
-    color: alpha(@window_fg_color, 0.55);
-    font-size: 0.8em;
-    letter-spacing: 0.02em;
+.clipman-count {
+    color: alpha(@window_fg_color, 0.5);
+    font-size: 0.82em;
+}
+
+.recording-pill {
+    padding: 2px 8px;
+    border-radius: 9999px;
+    background-color: alpha(@accent_color, 0.14);
+}
+.recording-pill label {
+    color: @accent_color;
+    font-size: 0.78em;
+    font-weight: 500;
+}
+.recording-pill image {
+    -gtk-icon-size: 11px;
+    color: @accent_color;
+}
+.recording-pill.paused {
+    background-color: alpha(@warning_color, 0.16);
+}
+.recording-pill.paused label,
+.recording-pill.paused image {
+    color: @warning_color;
+}
+
+.clipman-clear {
+    color: alpha(@window_fg_color, 0.6);
+    font-size: 0.82em;
+    padding: 2px 8px;
+    min-height: 0;
+}
+.clipman-clear:hover {
+    color: @error_color;
+    background-color: alpha(@error_color, 0.12);
 }
 
 /* Status page (empty / no-results) ----------------------------------- */
