@@ -12,7 +12,6 @@ import logging
 import os
 import subprocess
 import time
-from html import escape
 from string import Template
 
 import gi
@@ -34,7 +33,16 @@ try:
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
     gi.require_version("Gdk", "4.0")
-    from gi.repository import Adw, Gdk, GdkPixbuf, GLib, Gtk
+    from gi.repository import (
+        Adw,
+        Gdk,
+        GdkPixbuf,
+        Gio,
+        GLib,
+        GObject,
+        Gtk,
+        Pango,
+    )
 except (AttributeError, ValueError, ImportError) as e:
     raise RuntimeError(
         "GTK 4 + libadwaita not available: %s" % e
@@ -123,6 +131,30 @@ TYPE_ICONS = {
     "snip": "emblem-documents-symbolic",
 }
 
+# Incremental list fill (see ClipmanWindow.refresh): paint this many rows
+# immediately, then stream the remaining history in idle batches of this
+# size so a large history never freezes the popup on open / filter switch.
+_FILL_FIRST = 30
+_FILL_BATCH = 60
+
+
+class ClipItem(GObject.Object):
+    """A GObject wrapper around one history entry or snippet dict so it can
+    live in a ``Gio.ListStore`` and feed ``Gtk.ListView``.
+
+    The virtualized list only builds widgets for the ~dozen visible rows, so
+    switching filters / opening the popup no longer rebuilds hundreds of
+    ``Adw.ActionRow``s up front. ``data`` is the raw row dict; ``kind`` is
+    ``"entry"`` or ``"snippet"``.
+    """
+
+    __gtype_name__ = "ClipmanClipItem"
+
+    def __init__(self, data, kind):
+        super().__init__()
+        self.data = data
+        self.kind = kind
+
 
 class ClipmanWindow(Adw.ApplicationWindow):
     """Phase 1 libadwaita popup.
@@ -148,6 +180,15 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # Pending _move_to_cursor timeout id, so a show->hide within 50ms
         # can cancel it (a stale timer would re-activate a closed popup).
         self._cursor_move_id = 0
+        # Incremental list fill: refresh() shows the first screenful
+        # immediately, then appends the rest on idle so the popup paints
+        # fast and stays responsive instead of freezing to build every row.
+        self._fill_id = 0
+        self._fill_rest = []
+        # Decoded image thumbnails, keyed by their content-addressed path
+        # (hash.png, immutable). Without this every refresh re-decoded every
+        # image thumbnail — brutal for an image-heavy history.
+        self._thumb_cache = {}
 
         self.set_title("Clipman")
         self.set_default_size(380, self._clamped_default_height())
@@ -442,13 +483,23 @@ class ClipmanWindow(Adw.ApplicationWindow):
         scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
         scrolled.set_vexpand(True)
 
-        self.listbox = Gtk.ListBox()
-        self.listbox.set_selection_mode(Gtk.SelectionMode.BROWSE)
-        self.listbox.set_activate_on_single_click(True)
-        self.listbox.add_css_class("clipman-list")
-        self.listbox.add_css_class("boxed-list")
-        self.listbox.connect("row-activated", self._on_row_activated)
-        scrolled.set_child(self.listbox)
+        # Virtualized list: Gio.ListStore feeds a Gtk.ListView through a
+        # recycling factory, so only the visible rows (~a dozen) are ever
+        # built — opening the popup and switching filters no longer rebuilds
+        # every row. SingleSelection keeps a keyboard cursor for arrow-nav
+        # and the P / Delete / Enter shortcuts.
+        self._store = Gio.ListStore(item_type=ClipItem)
+        self._selection = Gtk.SingleSelection(model=self._store)
+        self._selection.set_autoselect(False)
+        self._selection.set_can_unselect(True)
+        factory = Gtk.SignalListItemFactory()
+        factory.connect("setup", self._row_setup)
+        factory.connect("bind", self._row_bind)
+        self.listview = Gtk.ListView(model=self._selection, factory=factory)
+        self.listview.set_single_click_activate(True)
+        self.listview.add_css_class("clipman-list")
+        self.listview.connect("activate", self._on_list_activate)
+        scrolled.set_child(self.listview)
 
         # Empty / no-results state — Adw.StatusPage swaps in for the list.
         # The actual visual is produced by ``render_edge_state(state_id)``
@@ -490,13 +541,6 @@ class ClipmanWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def refresh(self):
-        # GTK 4 ListBox row clearing.
-        while True:
-            row = self.listbox.get_row_at_index(0)
-            if row is None:
-                break
-            self.listbox.remove(row)
-
         is_snippets = self._active_filter == "snippets"
         is_pinned_only = self._active_filter == "pinned"
 
@@ -506,7 +550,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 if self._search_query
                 else self.db.get_snippets()
             )
-            rows = [self._make_snippet_row(e) for e in entries]
+            items = [ClipItem(e, "snippet") for e in entries]
         else:
             if self._search_query:
                 entries = self.db.search(self._search_query)
@@ -514,9 +558,13 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 entries = self.db.get_entries(limit=200)
             if is_pinned_only:
                 entries = [e for e in entries if e["pinned"]]
-            rows = [self._make_entry_row(e) for e in entries]
+            items = [ClipItem(e, "entry") for e in entries]
 
-        if not rows:
+        # Cancel any in-flight incremental fill from a previous refresh.
+        self._cancel_fill()
+
+        if not items:
+            self._store.remove_all()
             if self._search_query:
                 state_id = "no-results"
             elif is_snippets:
@@ -527,8 +575,36 @@ class ClipmanWindow(Adw.ApplicationWindow):
             return
 
         self._list_stack.set_visible_child_name("list")
-        for row in rows:
-            self.listbox.append(row)
+        # Show the first screenful immediately, then append the rest on idle.
+        # Building a couple hundred rows in one go froze the popup for ~0.5s
+        # ("switching to All is slow"); splitting the work keeps first paint
+        # fast and the UI responsive while the tail streams in.
+        first = items[:_FILL_FIRST]
+        self._store.splice(0, self._store.get_n_items(), first)
+        if len(items) > _FILL_FIRST:
+            self._fill_rest = items[_FILL_FIRST:]
+            self._fill_id = GLib.idle_add(self._fill_more)
+
+    def _fill_more(self):
+        """Append the next batch of queued rows (idle callback). Returns True
+        to keep going, False when the queue is drained."""
+        if not self._fill_rest:
+            self._fill_id = 0
+            return False
+        chunk = self._fill_rest[:_FILL_BATCH]
+        self._fill_rest = self._fill_rest[_FILL_BATCH:]
+        self._store.splice(self._store.get_n_items(), 0, chunk)
+        if self._fill_rest:
+            return True
+        self._fill_id = 0
+        return False
+
+    def _cancel_fill(self):
+        """Drop any pending incremental-fill idle source and its backlog."""
+        if self._fill_id:
+            GLib.source_remove(self._fill_id)
+            self._fill_id = 0
+        self._fill_rest = []
 
     def _show_edge_state(self, state_id):
         """Swap the rendered edge-state widget into the empty slot.
@@ -775,26 +851,27 @@ class ClipmanWindow(Adw.ApplicationWindow):
         except OSError:
             logger.debug("xdg-open failed for %s", url, exc_info=True)
 
-    def _scaled_thumbnail(self, image_path, size=48):
-        """Build a small, HiDPI-crisp thumbnail for an image entry.
+    def _thumbnail_texture(self, image_path, size=48):
+        """Decode a stored image to a small, HiDPI-crisp ``Gdk.Texture``.
 
-        Decodes-and-scales the stored PNG at load time via
-        ``GdkPixbuf.new_from_file_at_scale`` instead of decoding the
-        full-resolution screenshot into a GPU texture and then shrinking
-        it. A history refresh re-runs this for every image row, so paying
-        the full-res decode cost per refresh was a major source of the
-        popup feeling heavy.
-
-        The decode target is oversized by the widget scale factor (for
-        HiDPI sharpness) and by 2x (COVER-crop headroom so a non-square
-        image still fills a crisp ``size``x``size`` slot). Returns a
-        configured ``Gtk.Picture`` or ``None`` when the path is unsafe,
-        missing, or undecodable.
+        Decodes-and-scales the PNG at load time via
+        ``GdkPixbuf.new_from_file_at_scale`` (not a full-res decode then
+        shrink). The decode target is oversized by the widget scale factor
+        (HiDPI sharpness) and by 2x (COVER-crop headroom). Returns a
+        ``Gdk.Texture``, or ``None`` when the path is unsafe, missing, or
+        undecodable.
         """
         from clipman.database import _safe_image_path
 
         if not image_path or not _safe_image_path(image_path):
             return None
+
+        # Content-addressed path -> immutable image, so cache the decoded
+        # texture and never decode the same thumbnail twice.
+        cache_key = (image_path, size)
+        cached = self._thumb_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
         # Oversample: logical px * device scale * COVER-crop headroom.
         scale = max(1, self.get_scale_factor())
@@ -805,20 +882,96 @@ class ClipmanWindow(Adw.ApplicationWindow):
             )
             texture = Gdk.Texture.new_for_pixbuf(pixbuf)
         except Exception:
-            # Corrupt file or unsupported format — fall back to the bare
-            # ``[Image]`` label rather than crashing.
+            # Corrupt file or unsupported format — fall back to the type
+            # icon rather than crashing.
             logger.debug("thumbnail failed for %r", image_path, exc_info=True)
             return None
 
-        thumb = Gtk.Picture.new_for_paintable(texture)
+        # Bound the cache so a long session can't grow it without limit
+        # (history itself is capped at MAX_ENTRIES). Simple FIFO eviction.
+        if len(self._thumb_cache) >= 256:
+            self._thumb_cache.pop(next(iter(self._thumb_cache)), None)
+        self._thumb_cache[cache_key] = texture
+        return texture
+
+    # ------------------------------------------------------------------
+    # ListView factory: build each visible row once, rebind on recycle
+    # ------------------------------------------------------------------
+
+    def _row_setup(self, _factory, list_item):
+        """Build one reusable row widget. The factory recycles these across
+        scroll positions, so nothing here is per-item — ``_row_bind`` fills
+        in the data. Buttons read the row's *current* item, so they connect
+        once here and stay valid across rebinds.
+
+        The row is a plain ``Gtk.Box`` rather than ``Adw.ActionRow``:
+        ActionRow is ~5x more expensive to realize, and building a couple
+        hundred of them was the whole "popup feels heavy / switching to All
+        is slow" problem. This composite is cheap and gives the same
+        icon · title/subtitle · pin/delete layout.
+        """
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        row.add_css_class("clip-row")
+
+        icon = Gtk.Image()
+        icon.add_css_class("clip-type-icon")
+        icon.set_valign(Gtk.Align.CENTER)
+        row.append(icon)
+
+        thumb = Gtk.Picture()
         thumb.set_can_shrink(True)
         thumb.set_content_fit(Gtk.ContentFit.COVER)
-        thumb.set_size_request(size, size)
+        thumb.set_size_request(48, 48)
         thumb.set_valign(Gtk.Align.CENTER)
         thumb.add_css_class("clip-thumb")
-        return thumb
+        thumb.set_visible(False)
+        row.append(thumb)
 
-    def _make_entry_row(self, entry):
+        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        text_box.set_valign(Gtk.Align.CENTER)
+        text_box.set_hexpand(True)
+        title = Gtk.Label(xalign=0)
+        title.set_ellipsize(Pango.EllipsizeMode.END)
+        title.add_css_class("title")
+        subtitle = Gtk.Label(xalign=0)
+        subtitle.set_ellipsize(Pango.EllipsizeMode.END)
+        subtitle.add_css_class("subtitle")
+        text_box.append(title)
+        text_box.append(subtitle)
+        row.append(text_box)
+
+        pin_btn = Gtk.Button()
+        pin_btn.add_css_class("flat")
+        pin_btn.set_valign(Gtk.Align.CENTER)
+        pin_btn.connect("clicked", self._lv_pin_clicked, row)
+        row.append(pin_btn)
+
+        del_btn = Gtk.Button.new_from_icon_name("user-trash-symbolic")
+        del_btn.add_css_class("flat")
+        del_btn.set_valign(Gtk.Align.CENTER)
+        del_btn.set_tooltip_text(_("Delete"))
+        del_btn.connect("clicked", self._lv_delete_clicked, row)
+        row.append(del_btn)
+
+        row._clip_icon = icon
+        row._clip_thumb = thumb
+        row._clip_title = title
+        row._clip_subtitle = subtitle
+        row._clip_pin = pin_btn
+        row._clip_del = del_btn
+        row._clip_item = None
+        list_item.set_child(row)
+
+    def _row_bind(self, _factory, list_item):
+        row = list_item.get_child()
+        item = list_item.get_item()
+        row._clip_item = item
+        if item.kind == "snippet":
+            self._bind_snippet_row(row, item.data)
+        else:
+            self._bind_entry_row(row, item.data)
+
+    def _bind_entry_row(self, row, entry):
         ctype = entry.get("content_type") or "text"
         text = entry.get("content_text") or ""
         first_line = text.split("\n", 1)[0].strip() if text else ""
@@ -826,76 +979,68 @@ class ClipmanWindow(Adw.ApplicationWindow):
             title = "[Image]"
         else:
             title = first_line[:120] or _("(empty)")
-
-        row = Adw.ActionRow()
-        row.set_title(escape(title))
-        # Friendlier subtitle: the coloured type bar already conveys the
-        # type, so lead with the relative time instead of a shouty
-        # "TEXT ·" prefix, and add a char count for text entries.
+        # Gtk.Label.set_text renders literally, so no markup-escaping needed.
+        row._clip_title.set_text(title)
+        # Lead with the relative time (the type icon already conveys type),
+        # plus a char count for text entries.
         ts = self._format_time(entry["accessed_at"])
         if ctype == "text" and text:
             n = len(text)
             subtitle = f"{ts} · {n:,} char{'s' if n != 1 else ''}"
         else:
             subtitle = ts
-        row.set_subtitle(escape(subtitle))
-        row.set_activatable(True)
-        row.add_css_class("clip-row")
-        row.entry_data = entry
-        row.row_kind = "entry"
+        row._clip_subtitle.set_text(subtitle)
 
-        # Per-type symbolic icon (scannable, theme-adaptive).
-        icon = Gtk.Image.new_from_icon_name(
-            TYPE_ICONS.get(ctype, "text-x-generic-symbolic")
+        # Image rows show a thumbnail; everything else shows the type icon.
+        texture = (
+            self._thumbnail_texture(entry.get("image_path"))
+            if ctype == "image" else None
         )
-        icon.add_css_class("clip-type-icon")
-        icon.set_valign(Gtk.Align.CENTER)
-        row.add_prefix(icon)
+        if texture is not None:
+            row._clip_thumb.set_paintable(texture)
+            row._clip_thumb.set_visible(True)
+            row._clip_icon.set_visible(False)
+        else:
+            row._clip_thumb.set_paintable(None)
+            row._clip_thumb.set_visible(False)
+            row._clip_icon.set_from_icon_name(
+                TYPE_ICONS.get(ctype, "text-x-generic-symbolic")
+            )
+            row._clip_icon.set_visible(True)
 
-        # Image entries get a 48x48 thumbnail so users can scan the list
-        # visually instead of relying on the literal ``[Image]`` title.
-        if ctype == "image":
-            thumb = self._scaled_thumbnail(entry.get("image_path"))
-            if thumb is not None:
-                row.add_prefix(thumb)
-
-        pin_btn = Gtk.Button.new_from_icon_name(
-            "starred-symbolic" if entry["pinned"]
-            else "non-starred-symbolic"
+        pinned = entry.get("pinned")
+        row._clip_pin.set_icon_name(
+            "starred-symbolic" if pinned else "non-starred-symbolic"
         )
-        pin_btn.add_css_class("flat")
-        pin_btn.set_valign(Gtk.Align.CENTER)
-        pin_btn.set_tooltip_text(
-            _("Unpin") if entry["pinned"] else _("Pin")
-        )
-        pin_btn.connect("clicked", self._on_pin_clicked, entry["id"])
-        row.add_suffix(pin_btn)
+        row._clip_pin.set_tooltip_text(_("Unpin") if pinned else _("Pin"))
+        row._clip_pin.set_visible(True)
+        row._clip_del.set_visible(True)
 
-        del_btn = Gtk.Button.new_from_icon_name("user-trash-symbolic")
-        del_btn.add_css_class("flat")
-        del_btn.set_valign(Gtk.Align.CENTER)
-        del_btn.set_tooltip_text(_("Delete"))
-        del_btn.connect("clicked", self._on_delete_clicked, entry["id"])
-        row.add_suffix(del_btn)
-
-        return row
-
-    def _make_snippet_row(self, snippet):
-        row = Adw.ActionRow()
-        row.set_title(escape(snippet["name"]))
+    def _bind_snippet_row(self, row, snippet):
+        row._clip_title.set_text(snippet["name"])
         preview = (snippet.get("content_text") or "").split("\n", 1)[0]
-        row.set_subtitle(escape(preview[:120]))
-        row.set_activatable(True)
-        row.add_css_class("clip-row")
-        row.snippet_data = snippet
-        row.row_kind = "snippet"
+        row._clip_subtitle.set_text(preview[:120])
+        row._clip_thumb.set_paintable(None)
+        row._clip_thumb.set_visible(False)
+        row._clip_icon.set_from_icon_name(TYPE_ICONS["snip"])
+        row._clip_icon.set_visible(True)
+        # Snippets are managed in the Snippets dialog — no inline pin/delete.
+        row._clip_pin.set_visible(False)
+        row._clip_del.set_visible(False)
 
-        icon = Gtk.Image.new_from_icon_name(TYPE_ICONS["snip"])
-        icon.add_css_class("clip-type-icon")
-        icon.set_valign(Gtk.Align.CENTER)
-        row.add_prefix(icon)
+    def _lv_pin_clicked(self, button, row):
+        item = row._clip_item
+        if item is not None and item.kind == "entry":
+            entry_id = item.data.get("id")
+            if entry_id:
+                self._on_pin_clicked(button, entry_id)
 
-        return row
+    def _lv_delete_clicked(self, button, row):
+        item = row._clip_item
+        if item is not None and item.kind == "entry":
+            entry_id = item.data.get("id")
+            if entry_id:
+                self._on_delete_clicked(button, entry_id)
 
     # ------------------------------------------------------------------
     # Update banner
@@ -1233,13 +1378,14 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._register_child(dialog, on_closed=lambda _d: self.refresh())
         dialog.present(self)
 
-    def _on_row_activated(self, _listbox, row):
-        if row is None:
+    def _on_list_activate(self, _listview, position):
+        item = self._store.get_item(position)
+        if item is None:
             return
-        if getattr(row, "row_kind", None) == "snippet":
-            self._paste_snippet(row.snippet_data)
-        elif getattr(row, "row_kind", None) == "entry":
-            self._paste_entry(row.entry_data)
+        if item.kind == "snippet":
+            self._paste_snippet(item.data)
+        elif item.kind == "entry":
+            self._paste_entry(item.data)
 
     def _on_pin_clicked(self, _button, entry_id):
         self.db.toggle_pin(entry_id)
@@ -1358,12 +1504,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
         # Down arrow from the search entry drops focus into the list so
         # the user can start arrow-navigating rows. Up/Down within the
-        # list itself is native to Gtk.ListBox BROWSE mode.
+        # list itself is native to Gtk.ListView.
         if keyval == Gdk.KEY_Down and search_focused:
-            row = self._selected_or_first_row()
-            if row is not None:
-                self.listbox.select_row(row)
-                row.grab_focus()
+            if self._store.get_n_items() > 0:
+                if self._selection.get_selected() == Gtk.INVALID_LIST_POSITION:
+                    self._selection.set_selected(0)
+                self.listview.grab_focus()
                 return True
             return False
 
@@ -1384,30 +1530,30 @@ class ClipmanWindow(Adw.ApplicationWindow):
     # Keyboard / click shared action helpers
     # ------------------------------------------------------------------
 
-    def _selected_or_first_row(self):
-        """Return the selected row, or the first row if none is selected.
-
-        Returns ``None`` when the list is empty.
+    def _selected_item(self):
+        """Return the selected ``ClipItem``, or the first item if none is
+        selected. Returns ``None`` when the list is empty.
         """
-        row = self.listbox.get_selected_row()
-        if row is None:
-            row = self.listbox.get_row_at_index(0)
-        return row
+        if self._store.get_n_items() == 0:
+            return None
+        pos = self._selection.get_selected()
+        if pos == Gtk.INVALID_LIST_POSITION:
+            return self._store.get_item(0)
+        return self._store.get_item(pos)
 
     def _activate_selected(self):
-        """Paste the selected row (or the first row if none selected).
+        """Paste the selected item (or the first item if none selected).
 
-        Shared by the Enter shortcut. Returns ``True`` when a row was
+        Shared by the Enter shortcut. Returns ``True`` when an item was
         acted on, ``False`` when the list is empty.
         """
-        row = self._selected_or_first_row()
-        if row is None:
+        item = self._selected_item()
+        if item is None:
             return False
-        kind = getattr(row, "row_kind", None)
-        if kind == "snippet":
-            self._paste_snippet(row.snippet_data)
-        elif kind == "entry":
-            self._paste_entry(row.entry_data)
+        if item.kind == "snippet":
+            self._paste_snippet(item.data)
+        elif item.kind == "entry":
+            self._paste_entry(item.data)
         else:
             return False
         return True
@@ -1415,13 +1561,13 @@ class ClipmanWindow(Adw.ApplicationWindow):
     def _delete_selected(self):
         """Delete the selected entry (mirrors its trash button).
 
-        Snippets have no inline delete here, so non-entry rows are
+        Snippets have no inline delete here, so non-entry items are
         ignored. Returns ``True`` when an entry was deleted.
         """
-        row = self._selected_or_first_row()
-        if row is None or getattr(row, "row_kind", None) != "entry":
+        item = self._selected_item()
+        if item is None or item.kind != "entry":
             return False
-        entry_id = row.entry_data.get("id")
+        entry_id = item.data.get("id")
         if not entry_id:
             return False
         self.db.delete_entry(entry_id)
@@ -1431,13 +1577,13 @@ class ClipmanWindow(Adw.ApplicationWindow):
     def _pin_selected(self):
         """Toggle pin on the selected entry (mirrors its star button).
 
-        Snippets have no pin, so non-entry rows are ignored. Returns
+        Snippets have no pin, so non-entry items are ignored. Returns
         ``True`` when an entry's pin state was toggled.
         """
-        row = self._selected_or_first_row()
-        if row is None or getattr(row, "row_kind", None) != "entry":
+        item = self._selected_item()
+        if item is None or item.kind != "entry":
             return False
-        entry_id = row.entry_data.get("id")
+        entry_id = item.data.get("id")
         if not entry_id:
             return False
         self.db.toggle_pin(entry_id)
@@ -1572,6 +1718,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
             GLib.source_remove(self._cursor_move_id)
             self._cursor_move_id = 0
         self._cancel_search_debounce()
+        self._cancel_fill()
         if self._child_dialog is not None:
             try:
                 self._child_dialog.force_close()
