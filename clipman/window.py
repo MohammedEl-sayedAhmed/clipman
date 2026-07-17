@@ -260,6 +260,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._use_catppuccin = (
             self.db.get_setting("use_catppuccin", "true") != "false"
         )
+        self._show_count_badges = (
+            self.db.get_setting("show_count_badges", "true") != "false"
+        )
 
         self._font_color = self.db.get_setting(
             "font_color", DEFAULT_FONT_COLOR
@@ -703,8 +706,13 @@ class ClipmanWindow(Adw.ApplicationWindow):
         return False
 
     def _update_filter_counts(self):
-        """Refresh the count badge on each switcher tab."""
+        """Refresh the count badge on each switcher tab (honours the
+        ``show_count_badges`` preference)."""
         if not hasattr(self, "_filter_count_labels"):
+            return
+        if not self._show_count_badges:
+            for label in self._filter_count_labels.values():
+                label.set_visible(False)
             return
         try:
             counts = {
@@ -718,6 +726,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
             return
         for fid, label in self._filter_count_labels.items():
             label.set_text(str(counts.get(fid, 0)))
+            label.set_visible(True)
 
     def _update_count(self, n):
         """Set the footer item/snippet count for the current view."""
@@ -1648,6 +1657,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         elif key == "use_catppuccin":
             self._use_catppuccin = str(value).lower() not in ("false", "0", "")
             self._apply_css()
+        elif key == "show_count_badges":
+            self._show_count_badges = str(value).lower() not in (
+                "false", "0", ""
+            )
+            self._update_filter_counts()
         elif key == "font_size":
             try:
                 self._font_size = max(8, min(20, int(value)))
