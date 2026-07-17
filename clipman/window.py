@@ -10,8 +10,10 @@ module without changes.
 
 import logging
 import os
+import re
 import subprocess
 import time
+from datetime import date, datetime, timedelta
 from string import Template
 
 import gi
@@ -120,22 +122,71 @@ DEFAULT_FONT_COLOR = "default"
 # Keeps the .clip-row .title colour aligned with libadwaita's card fg.
 _DEFAULT_FONT_COLOR_TOKEN = "@card_fg_color"
 
-# Per-type symbolic icon shown in each row's prefix so the list is
-# scannable by type. Symbolic icons inherit the foreground colour, so
-# they adapt to light/dark and the user's system theme — unlike the old
-# hard-coded 3px colour bar. (content_type is only text/image; snippets
-# use the "snip" key.)
-TYPE_ICONS = {
-    "text": "text-x-generic-symbolic",
-    "image": "image-x-generic-symbolic",
-    "snip": "emblem-documents-symbolic",
-}
-
 # Incremental list fill (see ClipmanWindow.refresh): paint this many rows
 # immediately, then stream the remaining history in idle batches of this
 # size so a large history never freezes the popup on open / filter switch.
 _FILL_FIRST = 30
 _FILL_BATCH = 60
+
+# Per-row visual type -> symbolic icon + coloured tile (mockup parity,
+# docs/design/main-window.html). Text entries are further classified into
+# link / code so the tile colour is a quick scannable type hint.
+ROW_TYPE_ICONS = {
+    "text": "text-x-generic-symbolic",
+    "link": "insert-link-symbolic",
+    "code": "utilities-terminal-symbolic",
+    "image": "image-x-generic-symbolic",
+    "snip": "emblem-documents-symbolic",
+}
+_TILE_TYPE_CLASSES = ("type-text", "type-link", "type-code",
+                      "type-image", "type-snip")
+
+# Tile colours, keyed to the @define-color tokens emitted by
+# _type_color_block(); values mirror docs/design/tokens.css (Catppuccin
+# Mocha for dark, the mockup's high-contrast set for light).
+_TYPE_COLORS_DARK = {
+    "type_text": "#89b4fa",
+    "type_link": "#74c7ec",
+    "type_code": "#94e2d5",
+    "type_image": "#cba6f7",
+    "type_snip": "#f9e2af",
+}
+_TYPE_COLORS_LIGHT = {
+    "type_text": "#1d4ed8",
+    "type_link": "#155e75",
+    "type_code": "#115e59",
+    "type_image": "#7e22ce",
+    "type_snip": "#92400e",
+}
+
+# Secondary ("dim") text colour, per effective theme. Catppuccin subtext
+# tones that clear WCAG AA on each background — the alpha-of-fg approach
+# failed in light mode because Latte's muted #4c4f69 text can't hold
+# contrast once faded. #a6adc8 = 7.4:1 on dark, #5c5f77 = 5.5:1 on light.
+_DIM_TEXT_DARK = "#a6adc8"
+_DIM_TEXT_LIGHT = "#5c5f77"
+
+_URL_RE = re.compile(r"^(https?://|www\.)\S+$", re.IGNORECASE)
+# Conservative code detection: only strong, code-specific signals so plain
+# notes ("cd cabinet", "from the shop") don't get mislabeled as code.
+_CODE_HINT_RE = re.compile(
+    r"^\s*(def |class |function |import |#!/|\$ )"   # code-y line starts
+    r"|[{};]\s*$"                                     # line ends in ; { }
+    r"|=>|</[a-zA-Z]",                               # arrows, closing tags
+    re.MULTILINE,
+)
+
+
+def _classify_text(text):
+    """Classify a text entry into 'link', 'code', or 'text' for its tile."""
+    stripped = (text or "").strip()
+    if not stripped:
+        return "text"
+    if "\n" not in stripped and _URL_RE.match(stripped):
+        return "link"
+    if _CODE_HINT_RE.search(stripped):
+        return "code"
+    return "text"
 
 
 class ClipItem(GObject.Object):
@@ -217,6 +268,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._use_catppuccin = (
             self.db.get_setting("use_catppuccin", "true") != "false"
         )
+        self._show_count_badges = (
+            self.db.get_setting("show_count_badges", "true") != "false"
+        )
+        self._accent_color = (
+            self.db.get_setting("accent_color", "default") or "default"
+        )
 
         self._font_color = self.db.get_setting(
             "font_color", DEFAULT_FONT_COLOR
@@ -270,16 +327,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
         Adw.StyleManager.get_default().set_color_scheme(scheme)
 
     def _resolve_font_color(self):
-        """Translate the ``font_color`` preset id to a CSS colour value.
+        """Translate the ``font_color`` setting to a CSS colour value.
 
-        ``FONT_COLOR_PRESETS`` lives in ``preferences.py``; we import it
-        lazily because ``preferences`` pulls in Adw at module scope and
-        we want ``window.py`` importable for headless tests.
+        Accepts a raw ``#rrggbb`` (the generic colour picker) or a legacy
+        preset id (``FONT_COLOR_PRESETS``, imported lazily since
+        ``preferences`` pulls in Adw at module scope and we want
+        ``window.py`` importable for headless tests). Falls back to the
+        theme default.
         """
+        val = self._font_color or "default"
+        if isinstance(val, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", val):
+            return val
+
         from clipman.preferences import FONT_COLOR_PRESETS
 
         for preset_id, hex_value, _tooltip in FONT_COLOR_PRESETS:
-            if preset_id == self._font_color and hex_value:
+            if preset_id == val and hex_value:
                 return hex_value
         return _DEFAULT_FONT_COLOR_TOKEN
 
@@ -305,6 +368,62 @@ class ClipmanWindow(Adw.ApplicationWindow):
             f"@define-color {name} {hex_value};"
             for name, hex_value in palette.items()
         )
+
+    def _type_color_block(self):
+        """@define-color tokens for the per-type row tiles.
+
+        Emitted independently of the Catppuccin toggle so the coloured
+        tiles always resolve (falling back to system theme just means the
+        surrounding chrome isn't Catppuccin — the tile hues still apply).
+        """
+        if self._theme == "light":
+            colors = _TYPE_COLORS_LIGHT
+        elif self._theme == "dark":
+            colors = _TYPE_COLORS_DARK
+        else:  # auto — follow system, default dark
+            try:
+                is_dark = Adw.StyleManager.get_default().get_dark()
+            except Exception:
+                is_dark = True
+            colors = _TYPE_COLORS_DARK if is_dark else _TYPE_COLORS_LIGHT
+        return "\n".join(
+            f"@define-color {name} {value};"
+            for name, value in colors.items()
+        )
+
+    def _dim_color_block(self):
+        """@clip_dim — the secondary-text colour for the effective theme.
+        Always emitted (independent of the Catppuccin toggle) so CSS never
+        references an undefined @clip_dim."""
+        if self._theme == "light":
+            dim = _DIM_TEXT_LIGHT
+        elif self._theme == "dark":
+            dim = _DIM_TEXT_DARK
+        else:
+            try:
+                is_dark = Adw.StyleManager.get_default().get_dark()
+            except Exception:
+                is_dark = True
+            dim = _DIM_TEXT_DARK if is_dark else _DIM_TEXT_LIGHT
+        return f"@define-color clip_dim {dim};\n"
+
+    def _accent_override_block(self):
+        """Override libadwaita's accent @-tokens with the user's chosen
+        accent (or nothing when 'default'). Picks a contrasting foreground
+        by luminance so switch knobs / active-tab text stay readable — the
+        pale default mauve was the low-contrast case the user hit.
+        """
+        val = self._accent_color
+        if not (isinstance(val, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", val)):
+            return ""
+        r, g, b = (int(val[1:3], 16), int(val[3:5], 16), int(val[5:7], 16))
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        fg = "#1e1e2e" if luminance > 0.6 else "#ffffff"
+        return "\n".join([
+            f"@define-color accent_bg_color {val};",
+            f"@define-color accent_color {val};",
+            f"@define-color accent_fg_color {fg};",
+        ]) + "\n"
 
     def _apply_css(self):
         """Inject ``style.css`` with Python ``string.Template`` substitutions.
@@ -334,7 +453,16 @@ class ClipmanWindow(Adw.ApplicationWindow):
             if self._use_catppuccin
             else ""
         )
-        css_string = palette + template_body
+        # Type-tile colours are always defined (independent of the
+        # Catppuccin toggle) so row tiles never reference an undefined @color.
+        # The accent override comes after the palette so it wins.
+        css_string = (
+            self._type_color_block() + "\n"
+            + self._dim_color_block()
+            + palette
+            + self._accent_override_block()
+            + template_body
+        )
 
         display = Gdk.Display.get_default()
         if self._css_provider is not None:
@@ -458,14 +586,24 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._filter_box.set_halign(Gtk.Align.CENTER)
 
         self._filter_buttons = {}
+        self._filter_count_labels = {}
         first = None
         for fid, label in [
             ("all", _("All")),
-            ("pinned", _("Pinned")),
+            ("text", _("Text")),
+            ("images", _("Images")),
             ("snippets", _("Snippets")),
         ]:
-            btn = Gtk.ToggleButton(label=label)
+            btn = Gtk.ToggleButton()
             btn.add_css_class("filter-tab")
+            content = Gtk.Box(
+                orientation=Gtk.Orientation.HORIZONTAL, spacing=6
+            )
+            content.append(Gtk.Label(label=label))
+            count_lbl = Gtk.Label(label="")
+            count_lbl.add_css_class("filter-count")
+            content.append(count_lbl)
+            btn.set_child(content)
             if fid == "all":
                 btn.set_active(True)
                 btn.add_css_class("filter-tab-active")
@@ -476,6 +614,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
             btn.connect("toggled", self._on_filter_toggled, fid)
             self._filter_box.append(btn)
             self._filter_buttons[fid] = btn
+            self._filter_count_labels[fid] = count_lbl
         root.append(self._filter_box)
 
         # -- Scrollable list + empty status page --------------------------
@@ -486,16 +625,28 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # Virtualized list: Gio.ListStore feeds a Gtk.ListView through a
         # recycling factory, so only the visible rows (~a dozen) are ever
         # built — opening the popup and switching filters no longer rebuilds
-        # every row. SingleSelection keeps a keyboard cursor for arrow-nav
-        # and the P / Delete / Enter shortcuts.
+        # every row. A Gtk.SortListModel groups entries into dated sections
+        # (★ Pinned / Today / Yesterday / Earlier), rendered as list
+        # headers. SingleSelection keeps a keyboard cursor for arrow-nav and
+        # the P / Delete / Enter shortcuts.
         self._store = Gio.ListStore(item_type=ClipItem)
-        self._selection = Gtk.SingleSelection(model=self._store)
+        self._sort_sorter = Gtk.CustomSorter.new(self._sort_cmp)
+        self._section_sorter = Gtk.CustomSorter.new(self._section_cmp)
+        self._sortmodel = Gtk.SortListModel(
+            model=self._store, sorter=self._sort_sorter
+        )
+        self._sortmodel.set_section_sorter(self._section_sorter)
+        self._selection = Gtk.SingleSelection(model=self._sortmodel)
         self._selection.set_autoselect(False)
         self._selection.set_can_unselect(True)
         factory = Gtk.SignalListItemFactory()
         factory.connect("setup", self._row_setup)
         factory.connect("bind", self._row_bind)
+        header_factory = Gtk.SignalListItemFactory()
+        header_factory.connect("setup", self._header_setup)
+        header_factory.connect("bind", self._header_bind)
         self.listview = Gtk.ListView(model=self._selection, factory=factory)
+        self.listview.set_header_factory(header_factory)
         self.listview.set_single_click_activate(True)
         self.listview.add_css_class("clipman-list")
         self.listview.connect("activate", self._on_list_activate)
@@ -514,21 +665,38 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._list_stack.add_named(self._empty_slot, "empty")
         root.append(self._list_stack)
 
-        # -- Footer hints --------------------------------------------------
-        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        # -- Footer: item count · recording status · clear all ------------
+        # (docs/design mockup). Shortcuts still work (↵ paste, P pin,
+        # ⌫ delete, Esc close); the footer now carries state + a bulk action.
+        footer = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         footer.add_css_class("clipman-footer")
-        footer.set_halign(Gtk.Align.CENTER)
-        footer.set_margin_top(4)
-        footer.set_margin_bottom(6)
-        for text in [
-            "↵ " + _("Paste"),
-            "⌫ " + _("Delete"),
-            "P " + _("Pin"),
-            "Esc " + _("Close"),
-        ]:
-            lbl = Gtk.Label(label=text)
-            lbl.add_css_class("clipman-footer-hint")
-            footer.append(lbl)
+
+        self._count_label = Gtk.Label(label="")
+        self._count_label.add_css_class("clipman-count")
+        self._count_label.set_halign(Gtk.Align.START)
+        self._count_label.set_hexpand(True)
+        footer.append(self._count_label)
+
+        # Recording / incognito status pill (reflects the header toggle).
+        self._recording_pill = Gtk.Box(
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=4
+        )
+        self._recording_pill.add_css_class("recording-pill")
+        self._recording_pill.set_valign(Gtk.Align.CENTER)
+        self._recording_icon = Gtk.Image.new_from_icon_name(
+            "media-record-symbolic"
+        )
+        self._recording_label = Gtk.Label(label=_("Recording"))
+        self._recording_pill.append(self._recording_icon)
+        self._recording_pill.append(self._recording_label)
+        footer.append(self._recording_pill)
+
+        clear_btn = Gtk.Button(label=_("Clear all"))
+        clear_btn.add_css_class("flat")
+        clear_btn.add_css_class("clipman-clear")
+        clear_btn.set_valign(Gtk.Align.CENTER)
+        clear_btn.connect("clicked", self._on_clear_all)
+        footer.append(clear_btn)
 
         # -- Assemble the ToolbarView -------------------------------------
         # Body (search + filters + list/banner stack) becomes the
@@ -542,7 +710,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def refresh(self):
         is_snippets = self._active_filter == "snippets"
-        is_pinned_only = self._active_filter == "pinned"
+        # Dated sections apply to clipboard history, not the flat snippet list.
+        self._sortmodel.set_section_sorter(
+            None if is_snippets else self._section_sorter
+        )
 
         if is_snippets:
             entries = (
@@ -556,12 +727,21 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 entries = self.db.search(self._search_query)
             else:
                 entries = self.db.get_entries(limit=200)
-            if is_pinned_only:
-                entries = [e for e in entries if e["pinned"]]
+            if self._active_filter == "text":
+                entries = [
+                    e for e in entries
+                    if (e.get("content_type") or "text") == "text"
+                ]
+            elif self._active_filter == "images":
+                entries = [
+                    e for e in entries if e.get("content_type") == "image"
+                ]
             items = [ClipItem(e, "entry") for e in entries]
 
         # Cancel any in-flight incremental fill from a previous refresh.
         self._cancel_fill()
+        self._update_count(len(items))
+        self._update_filter_counts()
 
         if not items:
             self._store.remove_all()
@@ -598,6 +778,65 @@ class ClipmanWindow(Adw.ApplicationWindow):
             return True
         self._fill_id = 0
         return False
+
+    def _update_filter_counts(self):
+        """Refresh the count badge on each switcher tab (honours the
+        ``show_count_badges`` preference)."""
+        if not hasattr(self, "_filter_count_labels"):
+            return
+        if not self._show_count_badges:
+            for label in self._filter_count_labels.values():
+                label.set_visible(False)
+            return
+        try:
+            counts = {
+                "all": self.db.count_entries(),
+                "text": self.db.count_entries("text"),
+                "images": self.db.count_entries("image"),
+                "snippets": len(self.db.get_snippets()),
+            }
+        except Exception:
+            logger.debug("filter count query failed", exc_info=True)
+            return
+        for fid, label in self._filter_count_labels.items():
+            label.set_text(str(counts.get(fid, 0)))
+            label.set_visible(True)
+
+    def _update_count(self, n):
+        """Set the footer item/snippet count for the current view."""
+        if not hasattr(self, "_count_label"):
+            return
+        if self._active_filter == "snippets":
+            label = _("{n} snippet").format(n=n) if n == 1 \
+                else _("{n} snippets").format(n=n)
+        else:
+            label = _("{n} item").format(n=n) if n == 1 \
+                else _("{n} items").format(n=n)
+        self._count_label.set_text(label)
+
+    def _on_clear_all(self, _button):
+        """Clear unpinned history after confirmation (pinned entries stay)."""
+        dialog = Adw.AlertDialog(
+            heading=_("Clear clipboard history?"),
+            body=_("This removes all unpinned entries. Pinned entries and "
+                   "snippets are kept. This can't be undone."),
+        )
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("clear", _("Clear"))
+        dialog.set_response_appearance(
+            "clear", Adw.ResponseAppearance.DESTRUCTIVE
+        )
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+
+        def _on_response(_dlg, response):
+            if response == "clear":
+                self.db.clear_unpinned()
+                self.refresh()
+
+        self._register_child(dialog)
+        dialog.connect("response", _on_response)
+        dialog.present(self)
 
     def _cancel_fill(self):
         """Drop any pending incremental-fill idle source and its backlog."""
@@ -913,10 +1152,18 @@ class ClipmanWindow(Adw.ApplicationWindow):
         row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         row.add_css_class("clip-row")
 
+        # Colour-coded type tile: a rounded square whose tint + icon convey
+        # the clip type at a glance (docs/design mockup). Images swap the
+        # tile for a thumbnail (below).
         icon = Gtk.Image()
-        icon.add_css_class("clip-type-icon")
+        icon.set_halign(Gtk.Align.CENTER)
         icon.set_valign(Gtk.Align.CENTER)
-        row.append(icon)
+        tile = Gtk.Box()
+        tile.add_css_class("clip-tile")
+        tile.set_halign(Gtk.Align.CENTER)
+        tile.set_valign(Gtk.Align.CENTER)
+        tile.append(icon)
+        row.append(tile)
 
         thumb = Gtk.Picture()
         thumb.set_can_shrink(True)
@@ -940,25 +1187,34 @@ class ClipmanWindow(Adw.ApplicationWindow):
         text_box.append(subtitle)
         row.append(text_box)
 
+        # Actions sit in a box that fades in on row hover (always shown for
+        # pinned rows) — docs/design mockup. See .clip-actions in style.css.
+        actions = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=2)
+        actions.add_css_class("clip-actions")
+        actions.set_valign(Gtk.Align.CENTER)
+
         pin_btn = Gtk.Button()
         pin_btn.add_css_class("flat")
         pin_btn.set_valign(Gtk.Align.CENTER)
         pin_btn.connect("clicked", self._lv_pin_clicked, row)
-        row.append(pin_btn)
+        actions.append(pin_btn)
 
         del_btn = Gtk.Button.new_from_icon_name("user-trash-symbolic")
         del_btn.add_css_class("flat")
         del_btn.set_valign(Gtk.Align.CENTER)
         del_btn.set_tooltip_text(_("Delete"))
         del_btn.connect("clicked", self._lv_delete_clicked, row)
-        row.append(del_btn)
+        actions.append(del_btn)
+        row.append(actions)
 
         row._clip_icon = icon
+        row._clip_tile = tile
         row._clip_thumb = thumb
         row._clip_title = title
         row._clip_subtitle = subtitle
         row._clip_pin = pin_btn
         row._clip_del = del_btn
+        row._clip_actions = actions
         row._clip_item = None
         list_item.set_child(row)
 
@@ -970,6 +1226,67 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._bind_snippet_row(row, item.data)
         else:
             self._bind_entry_row(row, item.data)
+
+    # ------------------------------------------------------------------
+    # Section grouping: ★ Pinned / Today / Yesterday / Earlier
+    # ------------------------------------------------------------------
+
+    def _compute_bucket(self, item):
+        """Return (order, label) for the item's dated section."""
+        if item.kind != "entry":
+            return (0, "")
+        entry = item.data
+        if entry.get("pinned"):
+            return (0, _("★ Pinned"))
+        try:
+            d = datetime.fromtimestamp(entry.get("accessed_at") or 0).date()
+        except (OSError, OverflowError, ValueError):
+            return (4, _("Older"))
+        today = date.today()
+        if d >= today:
+            return (1, _("Today"))
+        if d == today - timedelta(days=1):
+            return (2, _("Yesterday"))
+        if d > today - timedelta(days=7):
+            return (3, _("Earlier this week"))
+        return (4, _("Older"))
+
+    def _bucket(self, item):
+        """Cached section (order, label) for ``item`` — recomputed per
+        refresh since ClipItems are rebuilt each time."""
+        b = getattr(item, "_bucket", None)
+        if b is None:
+            b = self._compute_bucket(item)
+            item._bucket = b
+        return b
+
+    @staticmethod
+    def _sort_ts(item):
+        if item.kind == "entry":
+            return item.data.get("accessed_at") or 0
+        return 0
+
+    def _sort_cmp(self, a, b, _u):
+        oa, ob = self._bucket(a)[0], self._bucket(b)[0]
+        if oa != ob:
+            return -1 if oa < ob else 1
+        ta, tb = self._sort_ts(a), self._sort_ts(b)  # newest first in-section
+        if ta != tb:
+            return -1 if ta > tb else 1
+        return 0
+
+    def _section_cmp(self, a, b, _u):
+        oa, ob = self._bucket(a)[0], self._bucket(b)[0]
+        return -1 if oa < ob else (1 if oa > ob else 0)
+
+    def _header_setup(self, _factory, header):
+        label = Gtk.Label(xalign=0)
+        label.add_css_class("clip-section-header")
+        header.set_child(label)
+
+    def _header_bind(self, _factory, header):
+        item = header.get_item()
+        header.get_child().set_text(self._bucket(item)[1] if item else "")
 
     def _bind_entry_row(self, row, entry):
         ctype = entry.get("content_type") or "text"
@@ -991,7 +1308,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
             subtitle = ts
         row._clip_subtitle.set_text(subtitle)
 
-        # Image rows show a thumbnail; everything else shows the type icon.
+        # Image rows show a thumbnail; everything else shows a coloured tile.
         texture = (
             self._thumbnail_texture(entry.get("image_path"))
             if ctype == "image" else None
@@ -999,22 +1316,24 @@ class ClipmanWindow(Adw.ApplicationWindow):
         if texture is not None:
             row._clip_thumb.set_paintable(texture)
             row._clip_thumb.set_visible(True)
-            row._clip_icon.set_visible(False)
+            row._clip_tile.set_visible(False)
         else:
             row._clip_thumb.set_paintable(None)
             row._clip_thumb.set_visible(False)
-            row._clip_icon.set_from_icon_name(
-                TYPE_ICONS.get(ctype, "text-x-generic-symbolic")
-            )
-            row._clip_icon.set_visible(True)
+            rtype = "image" if ctype == "image" else _classify_text(text)
+            self._set_tile(row, rtype)
 
         pinned = entry.get("pinned")
         row._clip_pin.set_icon_name(
             "starred-symbolic" if pinned else "non-starred-symbolic"
         )
         row._clip_pin.set_tooltip_text(_("Unpin") if pinned else _("Pin"))
-        row._clip_pin.set_visible(True)
-        row._clip_del.set_visible(True)
+        row._clip_actions.set_visible(True)
+        # Pinned rows keep their actions visible; others fade in on hover.
+        if pinned:
+            row.add_css_class("pinned")
+        else:
+            row.remove_css_class("pinned")
 
     def _bind_snippet_row(self, row, snippet):
         row._clip_title.set_text(snippet["name"])
@@ -1022,11 +1341,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
         row._clip_subtitle.set_text(preview[:120])
         row._clip_thumb.set_paintable(None)
         row._clip_thumb.set_visible(False)
-        row._clip_icon.set_from_icon_name(TYPE_ICONS["snip"])
-        row._clip_icon.set_visible(True)
+        self._set_tile(row, "snip")
         # Snippets are managed in the Snippets dialog — no inline pin/delete.
-        row._clip_pin.set_visible(False)
-        row._clip_del.set_visible(False)
+        row._clip_actions.set_visible(False)
+        row.remove_css_class("pinned")
+
+    def _set_tile(self, row, rtype):
+        """Show the coloured type tile for ``rtype`` (text/link/code/image/
+        snip): swap its type CSS class and icon."""
+        tile = row._clip_tile
+        for cls in _TILE_TYPE_CLASSES:
+            tile.remove_css_class(cls)
+        tile.add_css_class(f"type-{rtype}")
+        row._clip_icon.set_from_icon_name(
+            ROW_TYPE_ICONS.get(rtype, "text-x-generic-symbolic")
+        )
+        tile.set_visible(True)
 
     def _lv_pin_clicked(self, button, row):
         item = row._clip_item
@@ -1379,7 +1709,8 @@ class ClipmanWindow(Adw.ApplicationWindow):
         dialog.present(self)
 
     def _on_list_activate(self, _listview, position):
-        item = self._store.get_item(position)
+        # Position indexes the sorted/section model the ListView shows.
+        item = self._selection.get_item(position)
         if item is None:
             return
         if item.kind == "snippet":
@@ -1395,10 +1726,24 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self.db.delete_entry(entry_id)
         self.refresh()
 
+    def _update_recording_pill(self, incognito):
+        """Reflect incognito state in the footer status pill."""
+        if not hasattr(self, "_recording_pill"):
+            return
+        if incognito:
+            self._recording_icon.set_from_icon_name("view-conceal-symbolic")
+            self._recording_label.set_text(_("Paused"))
+            self._recording_pill.add_css_class("paused")
+        else:
+            self._recording_icon.set_from_icon_name("media-record-symbolic")
+            self._recording_label.set_text(_("Recording"))
+            self._recording_pill.remove_css_class("paused")
+
     def _on_incognito_toggled(self, button):
+        active = button.get_active()
+        self._update_recording_pill(active)
         if self.monitor is None:
             return
-        active = button.get_active()
         self.monitor.set_incognito(active)
         button.set_tooltip_text(
             _("Incognito mode: ON — clipboard not recorded")
@@ -1447,6 +1792,14 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._apply_css()  # palette block depends on the theme
         elif key == "use_catppuccin":
             self._use_catppuccin = str(value).lower() not in ("false", "0", "")
+            self._apply_css()
+        elif key == "show_count_badges":
+            self._show_count_badges = str(value).lower() not in (
+                "false", "0", ""
+            )
+            self._update_filter_counts()
+        elif key == "accent_color":
+            self._accent_color = value or "default"
             self._apply_css()
         elif key == "font_size":
             try:
@@ -1506,7 +1859,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # the user can start arrow-navigating rows. Up/Down within the
         # list itself is native to Gtk.ListView.
         if keyval == Gdk.KEY_Down and search_focused:
-            if self._store.get_n_items() > 0:
+            if self._selection.get_n_items() > 0:
                 if self._selection.get_selected() == Gtk.INVALID_LIST_POSITION:
                     self._selection.set_selected(0)
                 self.listview.grab_focus()
@@ -1534,12 +1887,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """Return the selected ``ClipItem``, or the first item if none is
         selected. Returns ``None`` when the list is empty.
         """
-        if self._store.get_n_items() == 0:
+        if self._selection.get_n_items() == 0:
             return None
         pos = self._selection.get_selected()
         if pos == Gtk.INVALID_LIST_POSITION:
-            return self._store.get_item(0)
-        return self._store.get_item(pos)
+            return self._selection.get_item(0)
+        return self._selection.get_item(pos)
 
     def _activate_selected(self):
         """Paste the selected item (or the first item if none selected).

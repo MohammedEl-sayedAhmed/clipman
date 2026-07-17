@@ -282,10 +282,10 @@ class TestWindowConstruction(unittest.TestCase):
         """Every row type icon must exist so no broken-icon placeholder shows."""
         from gi.repository import Gdk, Gtk
 
-        from clipman.window import TYPE_ICONS
+        from clipman.window import ROW_TYPE_ICONS
 
         theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
-        for name in TYPE_ICONS.values():
+        for name in ROW_TYPE_ICONS.values():
             self.assertTrue(theme.has_icon(name), name)
     def test_preferences_is_in_surface_dialog(self):
         """Preferences must be an Adw.Dialog (in-surface), not a top-level.
