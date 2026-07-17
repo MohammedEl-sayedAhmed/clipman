@@ -98,6 +98,13 @@
     color: @card_fg_color;
 }
 
+/* Lightweight box row (replaces the heavier Adw.ActionRow — see
+   window._row_setup). Give it the internal padding ActionRow used to
+   provide so rows aren't cramped. */
+.clip-row {
+    padding: 5px 4px;
+}
+
 .clip-row .title {
     font-weight: 500;
     color: ${font_color};

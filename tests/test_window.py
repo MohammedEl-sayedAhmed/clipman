@@ -549,13 +549,13 @@ class TestWindowConstruction(unittest.TestCase):
         self.assertEqual(getattr(selected, "snippet_id", None), new_id)
 
     def test_refresh_with_seeded_entries(self):
-        """Three seeded entries -> three ActionRows with their titles."""
+        """Three seeded entries -> three model items, newest first."""
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
         # Seed in reverse chronological order — get_entries returns most
         # recent first, so we insert "old" then "mid" then "new" and
-        # expect the listbox to show them in (new, mid, old) order.
+        # expect the model to hold them in (new, mid, old) order.
         for text in ("old entry", "mid entry", "new entry"):
             db.add_entry("text", content_text=text)
 
@@ -563,22 +563,12 @@ class TestWindowConstruction(unittest.TestCase):
         window = ClipmanWindow(application=app, db=db, monitor=None)
         window.refresh()
 
-        # The listbox should now contain three Adw.ActionRow widgets.
-        rows = []
-        i = 0
-        while True:
-            row = window.listbox.get_row_at_index(i)
-            if row is None:
-                break
-            rows.append(row)
-            i += 1
-        self.assertEqual(len(rows), 3)
-
-        titles = [r.get_title() for r in rows]
-        # Order: get_entries returns most-recent first.
-        self.assertEqual(titles[0], "new entry")
-        self.assertEqual(titles[1], "mid entry")
-        self.assertEqual(titles[2], "old entry")
+        # The virtualized model should now hold three ClipItems.
+        store = window._store
+        self.assertEqual(store.get_n_items(), 3)
+        texts = [store.get_item(i).data["content_text"] for i in range(3)]
+        # get_entries returns most-recent first.
+        self.assertEqual(texts, ["new entry", "mid entry", "old entry"])
 
     def test_on_setting_changed_fan_out(self):
         """ClipmanPreferences._save fans out (key, value) to the callback."""
@@ -686,7 +676,7 @@ class TestWindowConstruction(unittest.TestCase):
             "definitely-not-an-action", warning_messages[0]
         )
 
-    def test_scaled_thumbnail_decodes_at_scale_not_full_res(self):
+    def test_thumbnail_texture_decodes_at_scale_not_full_res(self):
         """A large stored image yields a bounded-size thumbnail texture.
 
         Regression for the perf bug where the image-row thumbnail decoded
@@ -715,16 +705,14 @@ class TestWindowConstruction(unittest.TestCase):
         app = Adw.Application(application_id="com.clipman.TestThumb")
         window = ClipmanWindow(application=app, db=db, monitor=None)
 
-        # Grab the stored path the same way _make_entry_row does.
+        # Grab the stored path the same way _bind_entry_row does.
         entry = db.get_entries(limit=1)[0]
         size = 48
-        thumb = window._scaled_thumbnail(entry["image_path"], size=size)
-        self.assertIsNotNone(thumb, "expected a Gtk.Picture thumbnail")
+        texture = window._thumbnail_texture(entry["image_path"], size=size)
+        self.assertIsNotNone(texture, "expected a Gdk.Texture thumbnail")
 
-        paintable = thumb.get_paintable()
-        self.assertIsNotNone(paintable)
-        iw = paintable.get_intrinsic_width()
-        ih = paintable.get_intrinsic_height()
+        iw = texture.get_width()
+        ih = texture.get_height()
 
         # The oversampled decode box: size * scale_factor * 2 (COVER
         # headroom). Even at a large HiDPI scale this stays well under
@@ -829,26 +817,23 @@ class TestKeyboardShortcuts(unittest.TestCase):
         window.refresh()
         return db, window
 
-    def test_selected_or_first_row_falls_back_to_first(self):
+    def test_selected_item_falls_back_to_first(self):
         _db, window = self._seeded_window()
-        window.listbox.unselect_all()
-        self.assertIsNone(window.listbox.get_selected_row())
-        row = window._selected_or_first_row()
-        self.assertIsNotNone(row)
+        window._selection.unselect_all()
+        item = window._selected_item()
+        self.assertIsNotNone(item)
         # Falls back to index 0 (most-recent entry) when nothing selected.
-        self.assertIs(row, window.listbox.get_row_at_index(0))
+        self.assertIs(item, window._store.get_item(0))
 
-    def test_selected_or_first_row_prefers_selection(self):
+    def test_selected_item_prefers_selection(self):
         _db, window = self._seeded_window()
-        target = window.listbox.get_row_at_index(1)
-        window.listbox.select_row(target)
-        self.assertIs(window._selected_or_first_row(), target)
+        window._selection.set_selected(1)
+        self.assertIs(window._selected_item(), window._store.get_item(1))
 
     def test_delete_selected_removes_entry(self):
         db, window = self._seeded_window()
-        target = window.listbox.get_row_at_index(0)
-        window.listbox.select_row(target)
-        target_id = target.entry_data["id"]
+        window._selection.set_selected(0)
+        target_id = window._store.get_item(0).data["id"]
 
         self.assertTrue(window._delete_selected())
 
@@ -864,20 +849,18 @@ class TestKeyboardShortcuts(unittest.TestCase):
 
     def test_pin_selected_toggles_pin(self):
         db, window = self._seeded_window()
-        target = window.listbox.get_row_at_index(0)
-        window.listbox.select_row(target)
-        target_id = target.entry_data["id"]
-        self.assertFalse(target.entry_data["pinned"])
+        window._selection.set_selected(0)
+        target_id = window._store.get_item(0).data["id"]
+        self.assertFalse(window._store.get_item(0).data["pinned"])
 
         self.assertTrue(window._pin_selected())
 
         pinned = {e["id"] for e in db.get_entries(limit=200) if e["pinned"]}
         self.assertIn(target_id, pinned)
 
-        # Toggling again unpins. After refresh the row objects are rebuilt,
-        # and pinned entries sort first, so re-select index 0.
-        again = window.listbox.get_row_at_index(0)
-        window.listbox.select_row(again)
+        # Toggling again unpins. After refresh the model is rebuilt, and
+        # pinned entries sort first, so re-select index 0.
+        window._selection.set_selected(0)
         self.assertTrue(window._pin_selected())
         still_pinned = {
             e["id"] for e in db.get_entries(limit=200) if e["pinned"]
@@ -890,9 +873,9 @@ class TestKeyboardShortcuts(unittest.TestCase):
         window._active_filter = "snippets"
         window.refresh()
 
-        row = window.listbox.get_row_at_index(0)
-        self.assertEqual(row.row_kind, "snippet")
-        window.listbox.select_row(row)
+        item = window._store.get_item(0)
+        self.assertEqual(item.kind, "snippet")
+        window._selection.set_selected(0)
         # Snippets have no pin — helper must decline, not crash.
         self.assertFalse(window._pin_selected())
 
@@ -902,16 +885,15 @@ class TestKeyboardShortcuts(unittest.TestCase):
         window._active_filter = "snippets"
         window.refresh()
 
-        row = window.listbox.get_row_at_index(0)
-        self.assertEqual(row.row_kind, "snippet")
-        window.listbox.select_row(row)
+        item = window._store.get_item(0)
+        self.assertEqual(item.kind, "snippet")
+        window._selection.set_selected(0)
         self.assertFalse(window._delete_selected())
         self.assertEqual(len(db.get_snippets()), 1)
 
     def test_activate_selected_pastes_entry(self):
         _db, window = self._seeded_window()
-        target = window.listbox.get_row_at_index(1)
-        window.listbox.select_row(target)
+        window._selection.set_selected(1)
 
         pasted = []
         window._paste_entry = lambda entry: pasted.append(entry)
@@ -921,7 +903,7 @@ class TestKeyboardShortcuts(unittest.TestCase):
 
     def test_activate_selected_falls_back_to_first_when_none_selected(self):
         _db, window = self._seeded_window()
-        window.listbox.unselect_all()
+        window._selection.unselect_all()
 
         pasted = []
         window._paste_entry = lambda entry: pasted.append(entry)
@@ -934,8 +916,7 @@ class TestKeyboardShortcuts(unittest.TestCase):
         db.add_snippet("sig", "regards")
         window._active_filter = "snippets"
         window.refresh()
-        row = window.listbox.get_row_at_index(0)
-        window.listbox.select_row(row)
+        window._selection.set_selected(0)
 
         pasted = []
         window._paste_snippet = lambda snip: pasted.append(snip)
