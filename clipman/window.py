@@ -525,14 +525,24 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._filter_box.set_halign(Gtk.Align.CENTER)
 
         self._filter_buttons = {}
+        self._filter_count_labels = {}
         first = None
         for fid, label in [
             ("all", _("All")),
-            ("pinned", _("Pinned")),
+            ("text", _("Text")),
+            ("images", _("Images")),
             ("snippets", _("Snippets")),
         ]:
-            btn = Gtk.ToggleButton(label=label)
+            btn = Gtk.ToggleButton()
             btn.add_css_class("filter-tab")
+            content = Gtk.Box(
+                orientation=Gtk.Orientation.HORIZONTAL, spacing=6
+            )
+            content.append(Gtk.Label(label=label))
+            count_lbl = Gtk.Label(label="")
+            count_lbl.add_css_class("filter-count")
+            content.append(count_lbl)
+            btn.set_child(content)
             if fid == "all":
                 btn.set_active(True)
                 btn.add_css_class("filter-tab-active")
@@ -543,6 +553,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
             btn.connect("toggled", self._on_filter_toggled, fid)
             self._filter_box.append(btn)
             self._filter_buttons[fid] = btn
+            self._filter_count_labels[fid] = count_lbl
         root.append(self._filter_box)
 
         # -- Scrollable list + empty status page --------------------------
@@ -626,7 +637,6 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def refresh(self):
         is_snippets = self._active_filter == "snippets"
-        is_pinned_only = self._active_filter == "pinned"
 
         if is_snippets:
             entries = (
@@ -640,13 +650,21 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 entries = self.db.search(self._search_query)
             else:
                 entries = self.db.get_entries(limit=200)
-            if is_pinned_only:
-                entries = [e for e in entries if e["pinned"]]
+            if self._active_filter == "text":
+                entries = [
+                    e for e in entries
+                    if (e.get("content_type") or "text") == "text"
+                ]
+            elif self._active_filter == "images":
+                entries = [
+                    e for e in entries if e.get("content_type") == "image"
+                ]
             items = [ClipItem(e, "entry") for e in entries]
 
         # Cancel any in-flight incremental fill from a previous refresh.
         self._cancel_fill()
         self._update_count(len(items))
+        self._update_filter_counts()
 
         if not items:
             self._store.remove_all()
@@ -683,6 +701,23 @@ class ClipmanWindow(Adw.ApplicationWindow):
             return True
         self._fill_id = 0
         return False
+
+    def _update_filter_counts(self):
+        """Refresh the count badge on each switcher tab."""
+        if not hasattr(self, "_filter_count_labels"):
+            return
+        try:
+            counts = {
+                "all": self.db.count_entries(),
+                "text": self.db.count_entries("text"),
+                "images": self.db.count_entries("image"),
+                "snippets": len(self.db.get_snippets()),
+            }
+        except Exception:
+            logger.debug("filter count query failed", exc_info=True)
+            return
+        for fid, label in self._filter_count_labels.items():
+            label.set_text(str(counts.get(fid, 0)))
 
     def _update_count(self, n):
         """Set the footer item/snippet count for the current view."""
