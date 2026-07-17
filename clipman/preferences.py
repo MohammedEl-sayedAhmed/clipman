@@ -35,6 +35,7 @@ categories of message:
 
 import logging
 import os
+import re
 import subprocess
 import time
 
@@ -263,37 +264,30 @@ class ClipmanPreferences(Adw.PreferencesDialog):
 
         accent_row = Adw.ActionRow()
         accent_row.set_title(_("Font color"))
-        accent_row.set_subtitle(_("Pick a preset or fall back to default."))
-
-        swatches = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=6
+        accent_row.set_subtitle(
+            _("Pick any colour, or reset to the theme default.")
         )
-        swatches.set_valign(Gtk.Align.CENTER)
+
         current_font_color = self.db.get_setting("font_color", "default")
-        for preset_id, hex_value, tooltip in FONT_COLOR_PRESETS:
-            btn = Gtk.Button()
-            btn.set_tooltip_text(tooltip)
-            btn.add_css_class("circular")
-            btn.set_size_request(28, 28)
-            if hex_value:
-                # Inline CSS provider so the swatch fills with the preset.
-                provider = Gtk.CssProvider()
-                provider.load_from_data(
-                    f"button {{ background: {hex_value}; }}".encode(), -1
-                )
-                btn.get_style_context().add_provider(
-                    provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-                )
-            else:
-                btn.set_label("A")
-            if preset_id == current_font_color:
-                btn.add_css_class("suggested-action")
-            btn.connect(
-                "clicked",
-                lambda _b, pid=preset_id: self._on_font_color_picked(pid),
-            )
-            swatches.append(btn)
-        accent_row.add_suffix(swatches)
+        color_dialog = Gtk.ColorDialog()
+        color_dialog.set_with_alpha(False)
+        self._font_color_btn = Gtk.ColorDialogButton(dialog=color_dialog)
+        self._font_color_btn.set_valign(Gtk.Align.CENTER)
+        rgba = Gdk.RGBA()
+        rgba.parse(self._font_color_display_hex(current_font_color))
+        self._font_color_btn.set_rgba(rgba)
+        self._font_color_btn.connect(
+            "notify::rgba", self._on_font_color_rgba
+        )
+
+        reset_btn = Gtk.Button.new_from_icon_name("edit-undo-symbolic")
+        reset_btn.set_tooltip_text(_("Reset to theme default"))
+        reset_btn.add_css_class("flat")
+        reset_btn.set_valign(Gtk.Align.CENTER)
+        reset_btn.connect("clicked", self._on_font_color_reset)
+
+        accent_row.add_suffix(self._font_color_btn)
+        accent_row.add_suffix(reset_btn)
         accent_group.add(accent_row)
         page.add(accent_group)
 
@@ -342,10 +336,28 @@ class ClipmanPreferences(Adw.PreferencesDialog):
 
         return page
 
-    def _on_font_color_picked(self, preset_id):
-        self._save("font_color", preset_id)
-        # Caller refreshes; we don't redraw the swatch row here because
-        # the user will see the new color in the popup itself.
+    def _font_color_display_hex(self, value):
+        """Resolve a stored font_color (hex, legacy preset id, or
+        'default') to a hex the colour button can display."""
+        if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            return value
+        for preset_id, hex_value, _tip in FONT_COLOR_PRESETS:
+            if preset_id == value and hex_value:
+                return hex_value
+        # 'default' — show a neutral so the button isn't misleading.
+        return "#9e9e9e"
+
+    def _on_font_color_rgba(self, button, _pspec):
+        rgba = button.get_rgba()
+        hex_value = "#{:02x}{:02x}{:02x}".format(
+            round(rgba.red * 255),
+            round(rgba.green * 255),
+            round(rgba.blue * 255),
+        )
+        self._save("font_color", hex_value)
+
+    def _on_font_color_reset(self, _button):
+        self._save("font_color", "default")
 
     # ------------------------------------------------------------------
     # Pane 2: Privacy

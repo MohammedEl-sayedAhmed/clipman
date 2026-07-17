@@ -317,16 +317,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
         Adw.StyleManager.get_default().set_color_scheme(scheme)
 
     def _resolve_font_color(self):
-        """Translate the ``font_color`` preset id to a CSS colour value.
+        """Translate the ``font_color`` setting to a CSS colour value.
 
-        ``FONT_COLOR_PRESETS`` lives in ``preferences.py``; we import it
-        lazily because ``preferences`` pulls in Adw at module scope and
-        we want ``window.py`` importable for headless tests.
+        Accepts a raw ``#rrggbb`` (the generic colour picker) or a legacy
+        preset id (``FONT_COLOR_PRESETS``, imported lazily since
+        ``preferences`` pulls in Adw at module scope and we want
+        ``window.py`` importable for headless tests). Falls back to the
+        theme default.
         """
+        val = self._font_color or "default"
+        if isinstance(val, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", val):
+            return val
+
         from clipman.preferences import FONT_COLOR_PRESETS
 
         for preset_id, hex_value, _tooltip in FONT_COLOR_PRESETS:
-            if preset_id == self._font_color and hex_value:
+            if preset_id == val and hex_value:
                 return hex_value
         return _DEFAULT_FONT_COLOR_TOKEN
 
