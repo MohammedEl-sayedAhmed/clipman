@@ -112,15 +112,15 @@ DEFAULT_FONT_COLOR = "default"
 # Keeps the .clip-row .title colour aligned with libadwaita's card fg.
 _DEFAULT_FONT_COLOR_TOKEN = "@card_fg_color"
 
-# Hard-coded per-type accent tints — matched to docs/design/tokens.css.
-# Used to colour the 3px prefix bar on each Adw.ActionRow so users can
-# scan the list by type without reading the subtitle.
-TYPE_CLASSES = {
-    "text": "clip-type-text",
-    "image": "clip-type-image",
-    "link": "clip-type-link",
-    "code": "clip-type-code",
-    "snip": "clip-type-snip",
+# Per-type symbolic icon shown in each row's prefix so the list is
+# scannable by type. Symbolic icons inherit the foreground colour, so
+# they adapt to light/dark and the user's system theme — unlike the old
+# hard-coded 3px colour bar. (content_type is only text/image; snippets
+# use the "snip" key.)
+TYPE_ICONS = {
+    "text": "text-x-generic-symbolic",
+    "image": "image-x-generic-symbolic",
+    "snip": "emblem-documents-symbolic",
 }
 
 
@@ -826,13 +826,13 @@ class ClipmanWindow(Adw.ApplicationWindow):
         row.entry_data = entry
         row.row_kind = "entry"
 
-        # 3px coloured prefix bar (per-type tint).
-        bar = Gtk.Box()
-        bar.add_css_class("clip-type-bar")
-        bar.add_css_class(TYPE_CLASSES.get(ctype, "clip-type-text"))
-        bar.set_size_request(3, -1)
-        bar.set_valign(Gtk.Align.FILL)
-        row.add_prefix(bar)
+        # Per-type symbolic icon (scannable, theme-adaptive).
+        icon = Gtk.Image.new_from_icon_name(
+            TYPE_ICONS.get(ctype, "text-x-generic-symbolic")
+        )
+        icon.add_css_class("clip-type-icon")
+        icon.set_valign(Gtk.Align.CENTER)
+        row.add_prefix(icon)
 
         # Image entries get a 48x48 thumbnail so users can scan the list
         # visually instead of relying on the literal ``[Image]`` title.
@@ -872,12 +872,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
         row.snippet_data = snippet
         row.row_kind = "snippet"
 
-        bar = Gtk.Box()
-        bar.add_css_class("clip-type-bar")
-        bar.add_css_class(TYPE_CLASSES["snip"])
-        bar.set_size_request(3, -1)
-        bar.set_valign(Gtk.Align.FILL)
-        row.add_prefix(bar)
+        icon = Gtk.Image.new_from_icon_name(TYPE_ICONS["snip"])
+        icon.add_css_class("clip-type-icon")
+        icon.set_valign(Gtk.Align.CENTER)
+        row.add_prefix(icon)
 
         return row
 
