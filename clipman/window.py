@@ -264,6 +264,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._show_count_badges = (
             self.db.get_setting("show_count_badges", "true") != "false"
         )
+        self._accent_color = (
+            self.db.get_setting("accent_color", "default") or "default"
+        )
 
         self._font_color = self.db.get_setting(
             "font_color", DEFAULT_FONT_COLOR
@@ -381,6 +384,24 @@ class ClipmanWindow(Adw.ApplicationWindow):
             for name, value in colors.items()
         )
 
+    def _accent_override_block(self):
+        """Override libadwaita's accent @-tokens with the user's chosen
+        accent (or nothing when 'default'). Picks a contrasting foreground
+        by luminance so switch knobs / active-tab text stay readable — the
+        pale default mauve was the low-contrast case the user hit.
+        """
+        val = self._accent_color
+        if not (isinstance(val, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", val)):
+            return ""
+        r, g, b = (int(val[1:3], 16), int(val[3:5], 16), int(val[5:7], 16))
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        fg = "#1e1e2e" if luminance > 0.6 else "#ffffff"
+        return "\n".join([
+            f"@define-color accent_bg_color {val};",
+            f"@define-color accent_color {val};",
+            f"@define-color accent_fg_color {fg};",
+        ]) + "\n"
+
     def _apply_css(self):
         """Inject ``style.css`` with Python ``string.Template`` substitutions.
 
@@ -411,7 +432,13 @@ class ClipmanWindow(Adw.ApplicationWindow):
         )
         # Type-tile colours are always defined (independent of the
         # Catppuccin toggle) so row tiles never reference an undefined @color.
-        css_string = self._type_color_block() + "\n" + palette + template_body
+        # The accent override comes after the palette so it wins.
+        css_string = (
+            self._type_color_block() + "\n"
+            + palette
+            + self._accent_override_block()
+            + template_body
+        )
 
         display = Gdk.Display.get_default()
         if self._css_provider is not None:
@@ -1747,6 +1774,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 "false", "0", ""
             )
             self._update_filter_counts()
+        elif key == "accent_color":
+            self._accent_color = value or "default"
+            self._apply_css()
         elif key == "font_size":
             try:
                 self._font_size = max(8, min(20, int(value)))
