@@ -259,6 +259,25 @@ class TestWindowConstruction(unittest.TestCase):
         prefs = ClipmanPreferences(db, parent, on_setting_changed=None)
         self.assertIsNotNone(prefs)
 
+    def test_catppuccin_palette_is_optional(self):
+        """use_catppuccin gates whether the forced @-token palette is applied
+        (off = follow the system GNOME theme/accent)."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestCatppuccin")
+
+        w_on = ClipmanWindow(application=app, db=db, monitor=None)
+        self.assertTrue(w_on._use_catppuccin)  # default on
+        self.assertIn("@define-color", w_on._catppuccin_palette_block())
+
+        db.set_setting("use_catppuccin", "false")
+        w_off = ClipmanWindow(application=app, db=db, monitor=None)
+        self.assertFalse(w_off._use_catppuccin)
+        # hot-reload back on without raising
+        w_off._on_setting_changed("use_catppuccin", "true")
+        self.assertTrue(w_off._use_catppuccin)
+
     def test_snippets_dialog_constructs(self):
         from clipman.snippets_dialog import SnippetsDialog
 
