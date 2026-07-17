@@ -48,8 +48,8 @@
 
 .filter-tab {
     background-color: transparent;
-    color: alpha(@window_fg_color, 0.8);
-    border: 1px solid alpha(@window_fg_color, 0.12);
+    color: @clip_dim;
+    border: 1px solid alpha(@window_fg_color, 0.14);
     border-radius: 999px;
     padding: 3px 12px;
     min-height: 22px;
@@ -76,8 +76,8 @@
 .filter-count {
     font-size: 0.76em;
     font-weight: 600;
-    color: alpha(@window_fg_color, 0.75);
-    background-color: alpha(@window_fg_color, 0.14);
+    color: @clip_dim;
+    background-color: alpha(@window_fg_color, 0.12);
     border-radius: 999px;
     padding: 0 6px;
 }
@@ -128,7 +128,7 @@
 }
 
 .clip-row .subtitle {
-    color: alpha(@card_fg_color, 0.85);
+    color: @clip_dim;
     font-size: 0.85em;
 }
 
@@ -155,7 +155,7 @@
 .clip-section-header {
     font-size: 0.72em;
     font-weight: 700;
-    color: alpha(@window_fg_color, 0.55);
+    color: @clip_dim;
     margin: 8px 4px 2px 6px;
 }
 
@@ -178,7 +178,7 @@
 }
 
 .clipman-count {
-    color: alpha(@window_fg_color, 0.68);
+    color: @clip_dim;
     font-size: 0.82em;
 }
 
@@ -205,7 +205,7 @@
 }
 
 .clipman-clear {
-    color: alpha(@window_fg_color, 0.72);
+    color: @clip_dim;
     font-size: 0.82em;
     padding: 2px 8px;
     min-height: 0;

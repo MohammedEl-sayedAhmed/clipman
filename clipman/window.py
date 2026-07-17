@@ -152,12 +152,19 @@ _TYPE_COLORS_DARK = {
     "type_snip": "#f9e2af",
 }
 _TYPE_COLORS_LIGHT = {
-    "type_text": "#2563eb",
-    "type_link": "#0891b2",
-    "type_code": "#0d9488",
-    "type_image": "#9333ea",
-    "type_snip": "#b45309",
+    "type_text": "#1d4ed8",
+    "type_link": "#155e75",
+    "type_code": "#115e59",
+    "type_image": "#7e22ce",
+    "type_snip": "#92400e",
 }
+
+# Secondary ("dim") text colour, per effective theme. Catppuccin subtext
+# tones that clear WCAG AA on each background — the alpha-of-fg approach
+# failed in light mode because Latte's muted #4c4f69 text can't hold
+# contrast once faded. #a6adc8 = 7.4:1 on dark, #5c5f77 = 5.5:1 on light.
+_DIM_TEXT_DARK = "#a6adc8"
+_DIM_TEXT_LIGHT = "#5c5f77"
 
 _URL_RE = re.compile(r"^(https?://|www\.)\S+$", re.IGNORECASE)
 # Conservative code detection: only strong, code-specific signals so plain
@@ -384,6 +391,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
             for name, value in colors.items()
         )
 
+    def _dim_color_block(self):
+        """@clip_dim — the secondary-text colour for the effective theme.
+        Always emitted (independent of the Catppuccin toggle) so CSS never
+        references an undefined @clip_dim."""
+        if self._theme == "light":
+            dim = _DIM_TEXT_LIGHT
+        elif self._theme == "dark":
+            dim = _DIM_TEXT_DARK
+        else:
+            try:
+                is_dark = Adw.StyleManager.get_default().get_dark()
+            except Exception:
+                is_dark = True
+            dim = _DIM_TEXT_DARK if is_dark else _DIM_TEXT_LIGHT
+        return f"@define-color clip_dim {dim};\n"
+
     def _accent_override_block(self):
         """Override libadwaita's accent @-tokens with the user's chosen
         accent (or nothing when 'default'). Picks a contrasting foreground
@@ -435,6 +458,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # The accent override comes after the palette so it wins.
         css_string = (
             self._type_color_block() + "\n"
+            + self._dim_color_block()
             + palette
             + self._accent_override_block()
             + template_body
