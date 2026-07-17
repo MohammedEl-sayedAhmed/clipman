@@ -13,6 +13,7 @@ import os
 import re
 import subprocess
 import time
+from datetime import date, datetime, timedelta
 from string import Template
 
 import gi
@@ -567,16 +568,28 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # Virtualized list: Gio.ListStore feeds a Gtk.ListView through a
         # recycling factory, so only the visible rows (~a dozen) are ever
         # built — opening the popup and switching filters no longer rebuilds
-        # every row. SingleSelection keeps a keyboard cursor for arrow-nav
-        # and the P / Delete / Enter shortcuts.
+        # every row. A Gtk.SortListModel groups entries into dated sections
+        # (★ Pinned / Today / Yesterday / Earlier), rendered as list
+        # headers. SingleSelection keeps a keyboard cursor for arrow-nav and
+        # the P / Delete / Enter shortcuts.
         self._store = Gio.ListStore(item_type=ClipItem)
-        self._selection = Gtk.SingleSelection(model=self._store)
+        self._sort_sorter = Gtk.CustomSorter.new(self._sort_cmp)
+        self._section_sorter = Gtk.CustomSorter.new(self._section_cmp)
+        self._sortmodel = Gtk.SortListModel(
+            model=self._store, sorter=self._sort_sorter
+        )
+        self._sortmodel.set_section_sorter(self._section_sorter)
+        self._selection = Gtk.SingleSelection(model=self._sortmodel)
         self._selection.set_autoselect(False)
         self._selection.set_can_unselect(True)
         factory = Gtk.SignalListItemFactory()
         factory.connect("setup", self._row_setup)
         factory.connect("bind", self._row_bind)
+        header_factory = Gtk.SignalListItemFactory()
+        header_factory.connect("setup", self._header_setup)
+        header_factory.connect("bind", self._header_bind)
         self.listview = Gtk.ListView(model=self._selection, factory=factory)
+        self.listview.set_header_factory(header_factory)
         self.listview.set_single_click_activate(True)
         self.listview.add_css_class("clipman-list")
         self.listview.connect("activate", self._on_list_activate)
@@ -640,6 +653,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def refresh(self):
         is_snippets = self._active_filter == "snippets"
+        # Dated sections apply to clipboard history, not the flat snippet list.
+        self._sortmodel.set_section_sorter(
+            None if is_snippets else self._section_sorter
+        )
 
         if is_snippets:
             entries = (
@@ -1153,6 +1170,67 @@ class ClipmanWindow(Adw.ApplicationWindow):
         else:
             self._bind_entry_row(row, item.data)
 
+    # ------------------------------------------------------------------
+    # Section grouping: ★ Pinned / Today / Yesterday / Earlier
+    # ------------------------------------------------------------------
+
+    def _compute_bucket(self, item):
+        """Return (order, label) for the item's dated section."""
+        if item.kind != "entry":
+            return (0, "")
+        entry = item.data
+        if entry.get("pinned"):
+            return (0, _("★ Pinned"))
+        try:
+            d = datetime.fromtimestamp(entry.get("accessed_at") or 0).date()
+        except (OSError, OverflowError, ValueError):
+            return (4, _("Older"))
+        today = date.today()
+        if d >= today:
+            return (1, _("Today"))
+        if d == today - timedelta(days=1):
+            return (2, _("Yesterday"))
+        if d > today - timedelta(days=7):
+            return (3, _("Earlier this week"))
+        return (4, _("Older"))
+
+    def _bucket(self, item):
+        """Cached section (order, label) for ``item`` — recomputed per
+        refresh since ClipItems are rebuilt each time."""
+        b = getattr(item, "_bucket", None)
+        if b is None:
+            b = self._compute_bucket(item)
+            item._bucket = b
+        return b
+
+    @staticmethod
+    def _sort_ts(item):
+        if item.kind == "entry":
+            return item.data.get("accessed_at") or 0
+        return 0
+
+    def _sort_cmp(self, a, b, _u):
+        oa, ob = self._bucket(a)[0], self._bucket(b)[0]
+        if oa != ob:
+            return -1 if oa < ob else 1
+        ta, tb = self._sort_ts(a), self._sort_ts(b)  # newest first in-section
+        if ta != tb:
+            return -1 if ta > tb else 1
+        return 0
+
+    def _section_cmp(self, a, b, _u):
+        oa, ob = self._bucket(a)[0], self._bucket(b)[0]
+        return -1 if oa < ob else (1 if oa > ob else 0)
+
+    def _header_setup(self, _factory, header):
+        label = Gtk.Label(xalign=0)
+        label.add_css_class("clip-section-header")
+        header.set_child(label)
+
+    def _header_bind(self, _factory, header):
+        item = header.get_item()
+        header.get_child().set_text(self._bucket(item)[1] if item else "")
+
     def _bind_entry_row(self, row, entry):
         ctype = entry.get("content_type") or "text"
         text = entry.get("content_text") or ""
@@ -1574,7 +1652,8 @@ class ClipmanWindow(Adw.ApplicationWindow):
         dialog.present(self)
 
     def _on_list_activate(self, _listview, position):
-        item = self._store.get_item(position)
+        # Position indexes the sorted/section model the ListView shows.
+        item = self._selection.get_item(position)
         if item is None:
             return
         if item.kind == "snippet":
@@ -1720,7 +1799,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # the user can start arrow-navigating rows. Up/Down within the
         # list itself is native to Gtk.ListView.
         if keyval == Gdk.KEY_Down and search_focused:
-            if self._store.get_n_items() > 0:
+            if self._selection.get_n_items() > 0:
                 if self._selection.get_selected() == Gtk.INVALID_LIST_POSITION:
                     self._selection.set_selected(0)
                 self.listview.grab_focus()
@@ -1748,12 +1827,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """Return the selected ``ClipItem``, or the first item if none is
         selected. Returns ``None`` when the list is empty.
         """
-        if self._store.get_n_items() == 0:
+        if self._selection.get_n_items() == 0:
             return None
         pos = self._selection.get_selected()
         if pos == Gtk.INVALID_LIST_POSITION:
-            return self._store.get_item(0)
-        return self._store.get_item(pos)
+            return self._selection.get_item(0)
+        return self._selection.get_item(pos)
 
     def _activate_selected(self):
         """Paste the selected item (or the first item if none selected).
