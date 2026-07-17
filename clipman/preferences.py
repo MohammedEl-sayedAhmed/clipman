@@ -114,8 +114,14 @@ EVENT_KEYS = frozenset({
 })
 
 
-class ClipmanPreferences(Adw.PreferencesWindow):
-    """Six-pane preferences window.
+class ClipmanPreferences(Adw.PreferencesDialog):
+    """Six-pane preferences dialog.
+
+    An ``Adw.PreferencesDialog`` (not a separate top-level window) so it
+    presents in-surface, anchored to the popup via ``present(parent)``.
+    A top-level ``Adw.PreferencesWindow`` opened *behind* the popup on
+    Wayland and looked unresponsive. ``parent`` is accepted for call-site
+    compatibility; anchoring happens in the caller's ``present(parent)``.
 
     ``on_setting_changed`` is a callable that the parent window passes
     in; it's invoked with ``(key, value)`` whenever any persisted
@@ -123,16 +129,19 @@ class ClipmanPreferences(Adw.PreferencesWindow):
     without a restart.
     """
 
-    def __init__(self, db, parent, on_setting_changed=None):
+    def __init__(self, db, parent=None, on_setting_changed=None):
         super().__init__()
         self.db = db
         self._on_setting_changed = on_setting_changed or (lambda k, v: None)
         self._kbd_dialog = None  # held so the GC doesn't collect mid-capture
+        # As an Adw.Dialog this is NOT a Gtk.Window, so it can't be the
+        # parent of a Gtk.FileChooserNative. Keep the real toplevel (the
+        # ClipmanWindow passed in) for the backup/restore choosers.
+        self._parent_window = parent
 
-        self.set_modal(True)
-        self.set_transient_for(parent)
+        # Adw.Dialog manages its own sizing/stacking — no set_modal /
+        # set_transient_for / set_default_size (those are Window APIs).
         self.set_search_enabled(True)
-        self.set_default_size(820, 600)
 
         self.add(self._build_appearance_page())
         self.add(self._build_privacy_page())
@@ -586,7 +595,7 @@ class ClipmanPreferences(Adw.PreferencesWindow):
     def _on_backup_clicked(self, _btn):
         chooser = Gtk.FileChooserNative.new(
             _("Export backup"),
-            self,
+            self._parent_window,
             Gtk.FileChooserAction.SAVE,
             _("Save"),
             _("Cancel"),
@@ -611,7 +620,7 @@ class ClipmanPreferences(Adw.PreferencesWindow):
     def _on_restore_clicked(self, _btn):
         chooser = Gtk.FileChooserNative.new(
             _("Restore from backup"),
-            self,
+            self._parent_window,
             Gtk.FileChooserAction.OPEN,
             _("Open"),
             _("Cancel"),

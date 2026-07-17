@@ -3,7 +3,19 @@ import Meta from 'gi://Meta';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import Shell from 'gi://Shell';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
+
+// The popup's Wayland app_id / wm_class (clipman/app.py application_id).
+// Used to keep our ephemeral popup out of alt-tab and the dash, like Win+V.
+const CLIPMAN_WM_CLASS = 'com.clipman.Clipman';
+
+function _isClipmanWindow(win) {
+    if (!win)
+        return false;
+    const cls = win.get_wm_class ? win.get_wm_class() : win.wm_class;
+    return cls === CLIPMAN_WM_CLASS;
+}
 
 const PASTE_DBUS_IFACE = `
 <node>
@@ -14,6 +26,7 @@ const PASTE_DBUS_IFACE = `
     <method name="MoveWindowToCursor">
       <arg type="s" direction="in" name="title"/>
     </method>
+    <method name="RestorePreviousFocus"/>
   </interface>
 </node>`;
 
@@ -63,9 +76,61 @@ export default class ClipmanExtension extends Extension {
             PASTE_DBUS_IFACE, this
         );
         this._dbusImpl.export(Gio.DBus.session, '/org/gnome/Shell/Extensions/clipman');
+
+        // Win+V parity: keep the ephemeral popup out of alt-tab and the
+        // dash. There is no writable skip-taskbar API before GNOME 49, so
+        // we monkey-patch the two JS entry points that build those lists
+        // and filter our window out. On 49+ the daemon-side move loop uses
+        // the real Meta.Window.hide_from_window_list() instead (see below).
+        this._origGetTabList = global.display.get_tab_list;
+        const origGetTabList = this._origGetTabList;
+        global.display.get_tab_list = function (type, workspace) {
+            return origGetTabList.call(this, type, workspace)
+                .filter(w => !_isClipmanWindow(w));
+        };
+
+        this._origAppGetWindows = Shell.App.prototype.get_windows;
+        const origAppGetWindows = this._origAppGetWindows;
+        Shell.App.prototype.get_windows = function () {
+            return origAppGetWindows.call(this)
+                .filter(w => !_isClipmanWindow(w));
+        };
+
+        // The dash/dock (incl. Ubuntu Dock / Dash-to-Dock) lists running
+        // apps from AppSystem.get_running(). Our popup has no installed
+        // .desktop, so the Shell tracks it as a window-backed app that
+        // shows up there. Filter that app out of the running list so the
+        // ephemeral popup never appears in the dock — Win+V parity. We use
+        // the ORIGINAL get_windows here (the patched one above hides
+        // clipman windows, which would make this app look window-less).
+        this._origGetRunning = Shell.AppSystem.prototype.get_running;
+        const origGetRunning = this._origGetRunning;
+        Shell.AppSystem.prototype.get_running = function () {
+            return origGetRunning.call(this).filter(app => {
+                let wins;
+                try {
+                    wins = origAppGetWindows.call(app);
+                } catch {
+                    return true;
+                }
+                return !(wins.length > 0 && wins.every(_isClipmanWindow));
+            });
+        };
     }
 
     disable() {
+        if (this._origGetTabList) {
+            global.display.get_tab_list = this._origGetTabList;
+            this._origGetTabList = null;
+        }
+        if (this._origAppGetWindows) {
+            Shell.App.prototype.get_windows = this._origAppGetWindows;
+            this._origAppGetWindows = null;
+        }
+        if (this._origGetRunning) {
+            Shell.AppSystem.prototype.get_running = this._origGetRunning;
+            this._origGetRunning = null;
+        }
         if (this._clipboardTimeout) {
             GLib.source_remove(this._clipboardTimeout);
             this._clipboardTimeout = null;
@@ -136,7 +201,45 @@ export default class ClipmanExtension extends Extension {
                 winX = Math.max(workArea.x, winX);
                 winY = Math.max(workArea.y, winY);
                 metaWin.move_frame(true, winX, winY);
+                // Remember who had focus BEFORE we steal it below, so paste
+                // can hand focus back to the real target (see
+                // RestorePreviousFocus). Capture now: activate() has not run
+                // yet, so the focus window is still the user's app.
+                const focused = global.display.get_focus_window();
+                if (focused && !_isClipmanWindow(focused))
+                    this._prevFocus = focused;
+                // GNOME 49+: the supported way to drop the popup from the
+                // dash AND alt-tab in one call (no-op / undefined before 49,
+                // where the enable() list overrides handle it instead).
+                if (metaWin.hide_from_window_list)
+                    metaWin.hide_from_window_list();
+                // Give the popup real input focus. A background D-Bus
+                // daemon's window is mapped WITHOUT focus by Mutter's
+                // focus-stealing prevention, so its buttons/keys are inert
+                // until focused. The Shell has the privilege to focus it;
+                // GTK's present() does not. This is what makes Win+V-style
+                // click/type/dismiss work. On hide, focus returns to the
+                // previously-active window, so wtype paste still lands there.
+                metaWin.activate(global.get_current_time());
                 break;
+            }
+        }
+    }
+
+    RestorePreviousFocus() {
+        // The popup held input focus (so its buttons/keys worked); before
+        // the daemon fires the paste keystroke it must hand focus back to
+        // the window the user came from, otherwise Ctrl+V lands on nothing.
+        // Only the Shell can refocus another window on Wayland, so the
+        // daemon calls this after hiding the popup and just before wtype.
+        const prev = this._prevFocus;
+        this._prevFocus = null;
+        if (prev && !_isClipmanWindow(prev)) {
+            try {
+                prev.activate(global.get_current_time());
+            } catch {
+                // The target window may have closed meanwhile; the paste
+                // keystroke then goes to whatever is now focused.
             }
         }
     }
