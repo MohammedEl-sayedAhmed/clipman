@@ -278,6 +278,16 @@ class TestWindowConstruction(unittest.TestCase):
         w_off._on_setting_changed("use_catppuccin", "true")
         self.assertTrue(w_off._use_catppuccin)
 
+    def test_type_icons_resolve(self):
+        """Every row type icon must exist so no broken-icon placeholder shows."""
+        from gi.repository import Gdk, Gtk
+
+        from clipman.window import TYPE_ICONS
+
+        theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+        for name in TYPE_ICONS.values():
+            self.assertTrue(theme.has_icon(name), name)
+
     def test_snippets_dialog_constructs(self):
         from clipman.snippets_dialog import SnippetsDialog
 

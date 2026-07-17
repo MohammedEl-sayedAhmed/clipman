@@ -108,21 +108,14 @@
     font-size: 0.85em;
 }
 
-/* Per-type 3px prefix bar. Tints are hard-coded so they read the same
-   in both light and dark Adw schemes — colour identity by type is more
-   important here than scheme conformance.  */
+/* Per-type symbolic icon in each row's prefix. Symbolic icons inherit
+   the foreground colour, so they adapt to light/dark and the user's
+   system theme; dim slightly so they read as a quiet type hint. */
 
-.clip-type-bar {
-    border-radius: 2px;
-    margin: 4px 6px 4px 2px;
-    min-width: 3px;
+.clip-type-icon {
+    color: alpha(@window_fg_color, 0.55);
+    margin: 0 6px 0 2px;
 }
-
-.clip-type-text  { background-color: #89b4fa; }
-.clip-type-image { background-color: #cba6f7; }
-.clip-type-link  { background-color: #74c7ec; }
-.clip-type-code  { background-color: #94e2d5; }
-.clip-type-snip  { background-color: #f9e2af; }
 
 /* Footer hints ------------------------------------------------------- */
 
