@@ -143,8 +143,10 @@ class ClipmanPreferences(Adw.Dialog):
         self._parent_window = parent
 
         self.set_title(_("Preferences"))
+        # Tall enough that the Appearance page fits without a scrollbar
+        # (Adw.Dialog clamps to the work area on small screens anyway).
         self.set_content_width(760)
-        self.set_content_height(560)
+        self.set_content_height(690)
 
         # Pages carry their own title + icon; the sidebar reads both.
         self._stack = Gtk.Stack()
@@ -337,7 +339,7 @@ class ClipmanPreferences(Adw.Dialog):
         accent_group = Adw.PreferencesGroup()
         accent_group.set_title(_("Accent"))
         accent_group.set_description(
-            _("Color applied to clip text in the popup.")
+            _("Accent for controls and highlights; font color for clip text.")
         )
 
         # Accent colour picker — drives toggles, active tabs, focus rings,
