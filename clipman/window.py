@@ -173,10 +173,20 @@ _DIM_TEXT_LIGHT = "#57534e"
 _URL_RE = re.compile(r"^(https?://|www\.)\S+$", re.IGNORECASE)
 # Conservative code detection: only strong, code-specific signals so plain
 # notes ("cd cabinet", "from the shop") don't get mislabeled as code.
+# Each alternative is individually unambiguous in prose:
+#   - code-y line starts (def/class/import/print(/return /shebang/$ prompt)
+#   - a line ending in ; { }
+#   - arrows / closing tags
+#   - a method call: word.word( — "'{0}'.format(x)", "obj.method(arg)"
+#   - a call with a string/numeric literal argument: foo('x'), bar(3)
+#   - brace format placeholders: {0} {name} f'{x}'
 _CODE_HINT_RE = re.compile(
-    r"^\s*(def |class |function |import |#!/|\$ )"   # code-y line starts
-    r"|[{};]\s*$"                                     # line ends in ; { }
-    r"|=>|</[a-zA-Z]",                               # arrows, closing tags
+    r"^\s*(def |class |function |import |#!/|\$ |print\(|return[ (])"
+    r"|[{};]\s*$"
+    r"|=>|</[a-zA-Z]"
+    r"|\.\w+\("
+    r"|\b\w+\((['\"]|\d)"
+    r"|\{\w*\}",
     re.MULTILINE,
 )
 
