@@ -425,13 +425,15 @@ See the [LICENSE](LICENSE) and [NOTICE](NOTICE) files for full details.
 
 ## Star History
 
-<a href="https://star-history.com/#MohammedEl-sayedAhmed/clipman&Date">
+<a href="https://github.com/MohammedEl-sayedAhmed/clipman/stargazers">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=MohammedEl-sayedAhmed/clipman&type=Date&theme=dark" />
-    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=MohammedEl-sayedAhmed/clipman&type=Date" />
-    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=MohammedEl-sayedAhmed/clipman&type=Date" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/assets/star-history-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/assets/star-history-light.svg" />
+    <img alt="Star history chart" src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/assets/star-history-light.svg" />
   </picture>
 </a>
+
+<sub>Chart and <a href="docs/_data/stats_history.json">download history</a> are regenerated daily from the GitHub API by the numbers workflow — no third-party chart service.</sub>
 
 ## Acknowledgements
 
