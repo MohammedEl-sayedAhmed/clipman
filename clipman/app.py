@@ -56,7 +56,8 @@ class ClipmanApp(Adw.Application):
         # the window so the header toggle, tooltip and privacy banner all
         # reflect it — previously this setting was saved but never read, so
         # "start in incognito" silently did nothing and clips were recorded.
-        if self.db.get_setting("incognito_on_launch", "false") == "true":
+        if (self.db.get_setting("incognito_on_launch", "false") or "").strip(
+        ).lower() == "true":
             self.window.set_incognito(True)
 
         # Register the D-Bus service BEFORE calling hold() — if another

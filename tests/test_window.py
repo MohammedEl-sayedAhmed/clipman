@@ -222,13 +222,12 @@ class TestWindowConstruction(unittest.TestCase):
         self.assertTrue(hasattr(window, "refresh"))
         self.assertTrue(hasattr(window, "refresh_update_banner"))
 
-    def test_incognito_toggle_syncs_monitor_and_banner(self):
-        """set_incognito drives the monitor, button and privacy banner.
+    def test_incognito_toggle_syncs_monitor_button_and_pill(self):
+        """set_incognito drives the monitor, header button and footer pill.
 
-        Regression for two bugs: the incognito-on banner (and its
-        "Resume recording" action) was never surfaced by the toggle, and
-        set_incognito is the launch-time entry point for the previously
-        ignored incognito_on_launch setting.
+        The bulky in-list "incognito-on" banner was replaced by the footer
+        status pill (Recording/Paused). set_incognito is also the launch-time
+        entry point for the incognito_on_launch setting.
         """
         from unittest.mock import MagicMock
 
@@ -242,12 +241,14 @@ class TestWindowConstruction(unittest.TestCase):
         window.set_incognito(True)
         self.assertTrue(window._incognito_btn.get_active())
         monitor.set_incognito.assert_called_with(True)
-        self.assertIsNotNone(window._current_edge_banner)  # banner shown
+        self.assertEqual(window._recording_label.get_text(), "Paused")
+        self.assertTrue(window._recording_pill.has_css_class("paused"))
 
         window.set_incognito(False)
         self.assertFalse(window._incognito_btn.get_active())
         monitor.set_incognito.assert_called_with(False)
-        self.assertIsNone(window._current_edge_banner)  # banner dismissed
+        self.assertEqual(window._recording_label.get_text(), "Recording")
+        self.assertFalse(window._recording_pill.has_css_class("paused"))
 
     def test_preferences_window_constructs(self):
         from clipman.preferences import ClipmanPreferences
@@ -593,6 +594,22 @@ class TestWindowConstruction(unittest.TestCase):
         self.assertIn(("font_size", 14), received)
         # And the value persisted to the DB as a stringified int.
         self.assertEqual(db.get_setting("font_size"), "14")
+
+    def test_save_stores_bools_lowercase(self):
+        """_save persists Python bools as lowercase 'true'/'false'.
+
+        Regression: str(True) == 'True', which broke case-sensitive readers
+        like app.py's `incognito_on_launch == 'true'` — the Privacy toggle
+        silently did nothing.
+        """
+        from clipman.preferences import ClipmanPreferences
+
+        db = self._make_db()
+        prefs = ClipmanPreferences(db, None, on_setting_changed=None)
+        prefs._save("incognito_on_launch", True)
+        self.assertEqual(db.get_setting("incognito_on_launch"), "true")
+        prefs._save("incognito_on_launch", False)
+        self.assertEqual(db.get_setting("incognito_on_launch"), "false")
 
     def test_refresh_update_banner_revealed(self):
         """should_show_banner -> (True, version) reveals the banner."""

@@ -266,11 +266,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # When off, don't force the Catppuccin @-token overrides so the app
         # follows the user's system GNOME/Adwaita theme + accent. Default on.
         self._use_catppuccin = (
-            self.db.get_setting("use_catppuccin", "true") != "false"
-        )
+            self.db.get_setting("use_catppuccin", "true") or ""
+        ).strip().lower() != "false"
         self._show_count_badges = (
-            self.db.get_setting("show_count_badges", "true") != "false"
-        )
+            self.db.get_setting("show_count_badges", "true") or ""
+        ).strip().lower() != "false"
         self._accent_color = (
             self.db.get_setting("accent_color", "default") or "default"
         )
@@ -678,17 +678,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
         footer.append(self._count_label)
 
         # Recording / incognito status pill (reflects the header toggle).
-        self._recording_pill = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=4
-        )
+        # Clickable status pill: shows Recording/Paused and toggles incognito
+        # (the mockup's footer indicator — replaces the bulky in-list banner).
+        self._recording_pill = Gtk.Button()
         self._recording_pill.add_css_class("recording-pill")
+        self._recording_pill.add_css_class("flat")
         self._recording_pill.set_valign(Gtk.Align.CENTER)
+        self._recording_pill.set_tooltip_text(_("Toggle incognito"))
+        self._recording_pill.connect("clicked", self._on_recording_pill_clicked)
+        pill_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         self._recording_icon = Gtk.Image.new_from_icon_name(
             "media-record-symbolic"
         )
         self._recording_label = Gtk.Label(label=_("Recording"))
-        self._recording_pill.append(self._recording_icon)
-        self._recording_pill.append(self._recording_label)
+        pill_box.append(self._recording_icon)
+        pill_box.append(self._recording_label)
+        self._recording_pill.set_child(pill_box)
         footer.append(self._recording_pill)
 
         clear_btn = Gtk.Button(label=_("Clear all"))
@@ -1726,6 +1731,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self.db.delete_entry(entry_id)
         self.refresh()
 
+    def _on_recording_pill_clicked(self, _button):
+        """Footer pill toggles incognito (drives the header toggle so the
+        monitor, tooltip and pill all update through one handler)."""
+        self._incognito_btn.set_active(not self._incognito_btn.get_active())
+
     def _update_recording_pill(self, incognito):
         """Reflect incognito state in the footer status pill."""
         if not hasattr(self, "_recording_pill"):
@@ -1750,13 +1760,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
             if active
             else _("Incognito mode: OFF")
         )
-        # Surface (or clear) the privacy banner so the state is visible and
-        # the "Resume recording" action is reachable. Without this the
-        # incognito-on banner and its resume action were dead code.
-        if active:
-            self._show_edge_state("incognito-on")
-        else:
-            self._dismiss_edge_banner("incognito-on")
+        # The footer "Paused" pill (and this header toggle) are the incognito
+        # indicators now — no heavy in-list banner. Clear any stale one.
+        self._dismiss_edge_banner("incognito-on")
 
     def set_incognito(self, active):
         """Public entry point to set incognito state (used at launch).

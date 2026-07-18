@@ -156,7 +156,14 @@ class ClipmanPreferences(Adw.PreferencesDialog):
     # ------------------------------------------------------------------
 
     def _save(self, key, value):
-        """Persist + notify. ``value`` is coerced to ``str`` for SQLite."""
+        """Persist + notify. ``value`` is coerced to ``str`` for SQLite.
+
+        Booleans are stored lowercase (``true``/``false``) — Python's
+        ``str(True)`` is ``"True"``, which broke case-sensitive readers
+        (e.g. ``incognito_on_launch == "true"`` in app.py never matched).
+        """
+        if isinstance(value, bool):
+            value = "true" if value else "false"
         self.db.set_setting(key, str(value))
         try:
             self._on_setting_changed(key, value)
@@ -243,9 +250,7 @@ class ClipmanPreferences(Adw.PreferencesDialog):
         catppuccin_row.set_subtitle(
             _("Off: follow your system GNOME theme and accent color.")
         )
-        catppuccin_row.set_active(
-            self.db.get_setting("use_catppuccin", "true") != "false"
-        )
+        catppuccin_row.set_active(self._get_bool("use_catppuccin", True))
         catppuccin_row.connect(
             "notify::active",
             lambda row, _pspec: self._save(

@@ -186,6 +186,14 @@
     padding: 2px 8px;
     border-radius: 9999px;
     background-color: alpha(@accent_color, 0.14);
+    min-height: 0;
+    box-shadow: none;
+}
+.recording-pill:hover {
+    background-color: alpha(@accent_color, 0.24);
+}
+.recording-pill.paused:hover {
+    background-color: alpha(@warning_color, 0.26);
 }
 .recording-pill label {
     color: @accent_color;
