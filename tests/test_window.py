@@ -454,6 +454,33 @@ class TestWindowConstruction(unittest.TestCase):
         window._shell_extension_iface = lambda: None
         self.assertFalse(window._paste_via_shell("auto"))
 
+    def test_classify_text_code_vs_prose(self):
+        """The row-type classifier catches obvious code without flagging
+        prose. Regression: print('...{0}...'.format(x)) showed as plain
+        text; earlier, 'cd cabinet' showed as code."""
+        from clipman.window import _classify_text
+
+        fmt_call = "print('The sum of {0} and {1} is {2}'" \
+            + ".format(num1, num2, sum))"
+        code = [
+            fmt_call,
+            "def hello():",
+            "x => x * 2",
+            "result.append(42)",
+            "git log --oneline {",
+        ]
+        prose = [
+            "cd cabinet",
+            "from the shop earlier",
+            "meet me at 5pm (maybe)",
+            "The quick brown fox jumps over the lazy dog.",
+        ]
+        for t in code:
+            self.assertEqual(_classify_text(t), "code", t)
+        for t in prose:
+            self.assertEqual(_classify_text(t), "text", t)
+        self.assertEqual(_classify_text("https://github.com/x/y"), "link")
+
     def test_copy_prefers_wl_copy_on_wayland(self):
         """On Wayland the background daemon must set the clipboard via wl-copy
         — Gdk.Clipboard.set() silently fails without input focus, so the
