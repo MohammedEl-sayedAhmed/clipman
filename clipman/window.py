@@ -11,6 +11,7 @@ module without changes.
 import logging
 import os
 import re
+import shutil
 import subprocess
 import time
 from datetime import date, datetime, timedelta
@@ -836,9 +837,14 @@ class ClipmanWindow(Adw.ApplicationWindow):
             elif not self._extension_connected():
                 # Empty AND the Shell extension isn't on the bus: guide the
                 # setup instead of a generic empty state (mockup first-run /
-                # snap-required).
-                state_id = ("extension-missing" if os.environ.get("SNAP")
-                            else "first-run")
+                # snap-required / clipboard-blocked).
+                if os.environ.get("SNAP"):
+                    state_id = "extension-missing"
+                elif shutil.which("wl-paste") is None:
+                    # No extension AND no wl-clipboard: nothing can record.
+                    state_id = "clipboard-blocked"
+                else:
+                    state_id = "first-run"
             else:
                 state_id = "empty"
             self._show_edge_state(state_id)
@@ -1031,6 +1037,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
         "retry-update-check",
         "close-dialog",
         "dismiss-banner",
+        "copy-install-wl-clipboard",
+        "copy-shortcut-command",
+        "restart-daemon",
     })
 
     def _on_edge_action(self, action_id):
@@ -1084,6 +1093,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
             "reveal-db-folder": self._action_reveal_db_folder,
             "retry-update-check": self._action_retry_update_check,
             "dismiss-banner": self._action_dismiss_banner,
+            "copy-install-wl-clipboard": self._action_copy_wl_install,
+            "copy-shortcut-command": self._action_copy_shortcut_command,
+            "restart-daemon": self._action_restart_daemon,
             # AlertDialog close (response id when user dismisses).
             "close-dialog": self._action_close_dialog,
         }
@@ -1112,6 +1124,29 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def _action_open_snap_notes(self):
         self._open_url(self._SNAP_NOTES_URL)
+
+    def _action_copy_wl_install(self):
+        """clipboard-blocked: put the install command on the clipboard."""
+        self._copy_to_clipboard("sudo apt install wl-clipboard")
+
+    def _action_copy_shortcut_command(self):
+        """shortcut-failed: copy the register command for a terminal run."""
+        self._copy_to_clipboard("bash install.sh")
+
+    def _action_restart_daemon(self):
+        """watcher-crashed: restart the daemon (systemd brings us back)."""
+        try:
+            subprocess.Popen(
+                ["systemctl", "--user", "restart", "clipman.service"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            logger.debug("daemon restart failed", exc_info=True)
+
+    def show_watcher_crashed(self):
+        """Public — app.py routes the monitor's watcher-dead callback here."""
+        self._show_edge_state("watcher-crashed")
 
     def _action_dismiss_banner(self):
         """X button on an edge banner — remove whatever banner is mounted."""
@@ -1530,8 +1565,16 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def _bind_snippet_row(self, row, snippet):
         row._clip_title.set_text(snippet["name"])
-        preview = (snippet.get("content_text") or "").split("\n", 1)[0]
-        row._clip_subtitle.set_text(preview[:120])
+        uses = snippet.get("use_count") or 0
+        # Mockup meta: "Snippet · used 14×"; before first use show the
+        # snippet preview so the row isn't a bare name.
+        if uses:
+            row._clip_subtitle.set_text(
+                _("Snippet · used {n}×").format(n=uses)
+            )
+        else:
+            preview = (snippet.get("content_text") or "").split("\n", 1)[0]
+            row._clip_subtitle.set_text(preview[:120])
         row._clip_thumb.set_paintable(None)
         row._clip_thumb.set_visible(False)
         self._set_tile(row, "snip")
@@ -1753,6 +1796,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         text = snippet.get("content_text") or ""
         if not text:
             return
+        if snippet.get("id"):
+            try:
+                self.db.increment_snippet_use(snippet["id"])
+            except Exception:
+                logger.debug("snippet use-count bump failed", exc_info=True)
         text = self._expand_snippet_tokens(text)
         self._copy_to_clipboard(text)
         self.set_visible(False)

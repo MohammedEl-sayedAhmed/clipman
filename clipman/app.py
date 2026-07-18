@@ -1,6 +1,7 @@
 import logging
 import os
 import signal
+import sqlite3
 import dbus
 import dbus.exceptions
 import gi
@@ -44,8 +45,18 @@ class ClipmanApp(Adw.Application):
             self.window.toggle()
             return
 
-        self.db = ClipboardDB()
+        try:
+            self.db = ClipboardDB()
+        except sqlite3.OperationalError:
+            # Locked or corrupt database — show the guided error state
+            # (mockup db-corrupt) instead of crashing with a traceback.
+            logger.exception("clipboard database could not be opened")
+            self._present_db_error()
+            return
         self.monitor = ClipboardMonitor(self.db, on_new_entry=self._on_new_entry)
+        # Surface repeated wl-paste crashes in the popup instead of dying
+        # silently (mockup watcher-crashed).
+        self.monitor.on_watcher_dead = self._on_watcher_dead
         # Phase 1 of the GTK 4 + libadwaita port: keyword args only, the
         # window constructor expects (application, db, monitor) now.
         self.window = ClipmanWindow(
@@ -101,6 +112,37 @@ class ClipmanApp(Adw.Application):
         # Handle SIGINT/SIGTERM gracefully
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, self._shutdown)
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self._shutdown)
+
+    def _on_watcher_dead(self):
+        if self.window is not None:
+            GLib.idle_add(self.window.show_watcher_crashed)
+
+    def _present_db_error(self):
+        """Minimal window with the db-locked statuspage (no DB available)."""
+        from gi.repository import Gtk
+
+        from clipman.database import DATA_DIR
+        from clipman.edge_states import render_edge_state
+
+        def on_action(action_id):
+            if action_id == "reveal-db-folder":
+                import subprocess
+                try:
+                    subprocess.Popen(
+                        ["xdg-open", str(DATA_DIR)],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                except OSError:
+                    logger.debug("xdg-open failed", exc_info=True)
+            else:
+                self.quit()
+
+        win = Gtk.ApplicationWindow(application=self)
+        win.set_title("Clipman")
+        win.set_default_size(420, 480)
+        win.set_child(render_edge_state("db-locked", on_action=on_action))
+        win.present()
 
     def _update_check_tick_once(self):
         """One-shot initial tick — runs ``_update_check_tick`` then dies.

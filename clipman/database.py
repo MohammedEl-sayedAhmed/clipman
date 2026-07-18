@@ -110,6 +110,12 @@ class ClipboardDB:
             self.conn.execute(
                 "ALTER TABLE entries ADD COLUMN sensitive INTEGER NOT NULL DEFAULT 0"
             )
+        # Migration: snippet paste counter ("Snippet · used N×" row meta)
+        scols = [r[1] for r in self.conn.execute("PRAGMA table_info(snippets)")]
+        if "use_count" not in scols:
+            self.conn.execute(
+                "ALTER TABLE snippets ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0"
+            )
         self.conn.commit()
 
     def add_entry(self, content_type: str, content_text: str = None,
@@ -385,6 +391,14 @@ class ClipboardDB:
         )
         self.conn.commit()
         return cursor.lastrowid
+
+    def increment_snippet_use(self, snippet_id: int):
+        """Bump the paste counter shown in the snippet row meta."""
+        self.conn.execute(
+            "UPDATE snippets SET use_count = use_count + 1 WHERE id = ?",
+            (snippet_id,),
+        )
+        self.conn.commit()
 
     def get_snippets(self):
         rows = self.conn.execute(

@@ -1,4 +1,4 @@
-"""Pure-data declarations for the 16 edge states from the mockups.
+"""Pure-data declarations for the edge states from the mockups.
 
 Each ``StateSpec`` captures everything the renderer needs:
 - ``id``: stable identifier used by ``window.py`` to look the state up.
@@ -64,7 +64,7 @@ class StateSpec:
 
 
 # ---------------------------------------------------------------------
-# The 16 specs. Order matches the mockup picker (states.html), reading
+# The specs (16 mockup states + 3 plumbed error states). Order matches the mockup picker (states.html), reading
 # top-to-bottom: Baseline / Informational / Privacy / Setup / Errors.
 # "populated" is a sentinel: it represents the normal list-view popup,
 # is never actually rendered through ``render_edge_state`` (the list
@@ -227,6 +227,40 @@ STATES: dict[str, StateSpec] = {
                "on your clipboard. Paste it manually with Ctrl+V."),
         primary_action=(_("Got it"), "close-dialog"),
         secondary_action=(_("Install help"), "open-install-guide"),
+    ),
+    "clipboard-blocked": StateSpec(
+        id="clipboard-blocked",
+        kind="statuspage",
+        tone="error",
+        icon_name="dialog-error-symbolic",
+        title=_("Clipman can't watch the clipboard"),
+        body=_("Install wl-clipboard and use a Wayland session, or enable "
+               "the GNOME extension. Until then, copies won't be recorded."),
+        primary_action=(_("Copy install command"),
+                        "copy-install-wl-clipboard"),
+        secondary_action=(_("Setup help"), "open-install-guide"),
+    ),
+    "watcher-crashed": StateSpec(
+        id="watcher-crashed",
+        kind="statuspage",
+        tone="error",
+        icon_name="computer-fail-symbolic",
+        title=_("Clipboard watcher stopped"),
+        body=_("The wl-paste helper crashed too many times, so Clipman "
+               "stopped retrying. Restart the daemon to resume capturing "
+               "clips."),
+        primary_action=(_("Restart Clipman"), "restart-daemon"),
+    ),
+    "shortcut-failed": StateSpec(
+        id="shortcut-failed",
+        kind="alertdialog",
+        tone="warning",
+        icon_name="input-keyboard-symbolic",
+        title=_("Couldn't update the GNOME shortcut"),
+        body=_("Clipman's keybinding isn't registered with GNOME. Run "
+               "install.sh to register it, then set the shortcut again."),
+        primary_action=(_("Got it"), "close-dialog"),
+        secondary_action=(_("Copy command"), "copy-shortcut-command"),
     ),
     "history-too-large": StateSpec(
         id="history-too-large",

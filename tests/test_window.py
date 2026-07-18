@@ -67,14 +67,15 @@ if os.environ.get("CLIPMAN_REQUIRE_GTK4") == "1" and not (_HAS_GTK and _ADW_INIT
 @unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
                      "GTK 4 + libadwaita not available")
 class TestEdgeStates(unittest.TestCase):
-    """The 16 mockup states must all map to a renderable widget."""
+    """Every declared state must map to a renderable widget."""
 
     EXPECTED_IDS = {
         "populated", "empty", "no-snippets-yet", "no-results", "first-run",
         "incognito-on", "sensitive-shown", "sensitive-cleared",
         "extension-missing", "backup-failed", "restore-failed",
         "network-error", "db-locked", "paused", "paste-target-missing",
-        "history-too-large",
+        "history-too-large", "clipboard-blocked", "watcher-crashed",
+        "shortcut-failed",
     }
 
     def test_state_id_inventory(self):
@@ -86,7 +87,7 @@ class TestEdgeStates(unittest.TestCase):
         """
         from clipman.edge_states import STATES
         self.assertEqual(set(STATES.keys()), self.EXPECTED_IDS)
-        self.assertEqual(len(STATES), 16)
+        self.assertEqual(len(STATES), 19)
 
     def test_render_each_state_returns_widget(self):
         from clipman.edge_states import STATES, render_edge_state
@@ -980,6 +981,19 @@ class TestKeyboardShortcuts(unittest.TestCase):
         self.assertTrue(window._activate_selected())
         # Index 0 is the most-recent entry ("new").
         self.assertEqual(pasted[0]["content_text"], "new")
+
+    def test_paste_snippet_increments_use_count(self):
+        """Pasting a snippet bumps use_count and the row meta shows it."""
+        db, window = self._seeded_window(texts=())
+        db.add_snippet("sig", "regards")
+        window._active_filter = "snippets"
+        window.refresh()
+        window._selection.set_selected(0)
+        window._copy_to_clipboard = lambda text: None
+        window._dispatch_paste = lambda: None
+        self.assertTrue(window._activate_selected())
+        snip = db.get_snippets()[0]
+        self.assertEqual(snip["use_count"], 1)
 
     def test_activate_selected_pastes_snippet(self):
         db, window = self._seeded_window(texts=())
