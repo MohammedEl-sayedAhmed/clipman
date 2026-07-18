@@ -87,34 +87,38 @@ _CATPPUCCIN_MOCHA = {
     "error_bg_color":      "#f38ba8",
     "error_fg_color":      "#1e1e2e",
 }
-_CATPPUCCIN_LATTE = {
-    "window_bg_color":     "#eff1f5",
-    "view_bg_color":       "#eff1f5",
-    "headerbar_bg_color":  "#e6e9ef",
-    "card_bg_color":       "#ccd0da",
-    "dialog_bg_color":     "#eff1f5",
-    "popover_bg_color":    "#ccd0da",
-    "window_fg_color":     "#4c4f69",
-    "view_fg_color":       "#4c4f69",
-    "headerbar_fg_color":  "#4c4f69",
-    "card_fg_color":       "#4c4f69",
-    "dialog_fg_color":     "#4c4f69",
-    "popover_fg_color":    "#4c4f69",
-    "accent_color":        "#8839ef",
-    "accent_bg_color":     "#8839ef",
-    "accent_fg_color":     "#eff1f5",
-    "destructive_color":   "#d20f39",
-    "destructive_bg_color":"#d20f39",
-    "destructive_fg_color":"#eff1f5",
-    "success_color":       "#40a02b",
-    "success_bg_color":    "#40a02b",
-    "success_fg_color":    "#eff1f5",
-    "warning_color":       "#df8e1d",
-    "warning_bg_color":    "#df8e1d",
-    "warning_fg_color":    "#eff1f5",
-    "error_color":         "#d20f39",
-    "error_bg_color":      "#d20f39",
-    "error_fg_color":      "#eff1f5",
+# Light theme — the mockup's "high-contrast stone + brand-blue" palette
+# (docs/design/tokens.css body.theme-light), NOT Catppuccin Latte: white
+# cards on stone-100, near-black text (16:1), punchy blue accent. Latte's
+# muted #4c4f69 text was the root of every light-mode readability issue.
+_STONE_LIGHT = {
+    "window_bg_color":     "#f5f5f4",
+    "view_bg_color":       "#f5f5f4",
+    "headerbar_bg_color":  "#e7e5e4",
+    "card_bg_color":       "#ffffff",
+    "dialog_bg_color":     "#f5f5f4",
+    "popover_bg_color":    "#ffffff",
+    "window_fg_color":     "#1c1917",
+    "view_fg_color":       "#1c1917",
+    "headerbar_fg_color":  "#1c1917",
+    "card_fg_color":       "#1c1917",
+    "dialog_fg_color":     "#1c1917",
+    "popover_fg_color":    "#1c1917",
+    "accent_color":        "#2563eb",
+    "accent_bg_color":     "#2563eb",
+    "accent_fg_color":     "#ffffff",
+    "destructive_color":   "#dc2626",
+    "destructive_bg_color":"#dc2626",
+    "destructive_fg_color":"#ffffff",
+    "success_color":       "#15803d",
+    "success_bg_color":    "#15803d",
+    "success_fg_color":    "#ffffff",
+    "warning_color":       "#b45309",
+    "warning_bg_color":    "#b45309",
+    "warning_fg_color":    "#ffffff",
+    "error_color":         "#dc2626",
+    "error_bg_color":      "#dc2626",
+    "error_fg_color":      "#ffffff",
 }
 DEFAULT_FONT_COLOR = "default"
 
@@ -152,11 +156,11 @@ _TYPE_COLORS_DARK = {
     "type_snip": "#f9e2af",
 }
 _TYPE_COLORS_LIGHT = {
-    "type_text": "#1d4ed8",
-    "type_link": "#155e75",
-    "type_code": "#115e59",
-    "type_image": "#7e22ce",
-    "type_snip": "#92400e",
+    "type_text": "#2563eb",
+    "type_link": "#0891b2",
+    "type_code": "#0d9488",
+    "type_image": "#9333ea",
+    "type_snip": "#b45309",
 }
 
 # Secondary ("dim") text colour, per effective theme. Catppuccin subtext
@@ -164,7 +168,7 @@ _TYPE_COLORS_LIGHT = {
 # failed in light mode because Latte's muted #4c4f69 text can't hold
 # contrast once faded. #a6adc8 = 7.4:1 on dark, #5c5f77 = 5.5:1 on light.
 _DIM_TEXT_DARK = "#a6adc8"
-_DIM_TEXT_LIGHT = "#5c5f77"
+_DIM_TEXT_LIGHT = "#57534e"
 
 _URL_RE = re.compile(r"^(https?://|www\.)\S+$", re.IGNORECASE)
 # Conservative code detection: only strong, code-specific signals so plain
@@ -266,11 +270,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # When off, don't force the Catppuccin @-token overrides so the app
         # follows the user's system GNOME/Adwaita theme + accent. Default on.
         self._use_catppuccin = (
-            self.db.get_setting("use_catppuccin", "true") != "false"
-        )
+            self.db.get_setting("use_catppuccin", "true") or ""
+        ).strip().lower() != "false"
         self._show_count_badges = (
-            self.db.get_setting("show_count_badges", "true") != "false"
-        )
+            self.db.get_setting("show_count_badges", "true") or ""
+        ).strip().lower() != "false"
         self._accent_color = (
             self.db.get_setting("accent_color", "default") or "default"
         )
@@ -355,7 +359,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         otherwise — matches the marketing mockup default.
         """
         if self._theme == "light":
-            palette = _CATPPUCCIN_LATTE
+            palette = _STONE_LIGHT
         elif self._theme == "dark":
             palette = _CATPPUCCIN_MOCHA
         else:  # auto — follow system, default dark
@@ -363,7 +367,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 is_dark = Adw.StyleManager.get_default().get_dark()
             except Exception:
                 is_dark = True
-            palette = _CATPPUCCIN_MOCHA if is_dark else _CATPPUCCIN_LATTE
+            palette = _CATPPUCCIN_MOCHA if is_dark else _STONE_LIGHT
         return "\n".join(
             f"@define-color {name} {hex_value};"
             for name, hex_value in palette.items()
@@ -678,17 +682,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
         footer.append(self._count_label)
 
         # Recording / incognito status pill (reflects the header toggle).
-        self._recording_pill = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=4
-        )
+        # Clickable status pill: shows Recording/Paused and toggles incognito
+        # (the mockup's footer indicator — replaces the bulky in-list banner).
+        self._recording_pill = Gtk.Button()
         self._recording_pill.add_css_class("recording-pill")
+        self._recording_pill.add_css_class("flat")
         self._recording_pill.set_valign(Gtk.Align.CENTER)
+        self._recording_pill.set_tooltip_text(_("Toggle incognito"))
+        self._recording_pill.connect("clicked", self._on_recording_pill_clicked)
+        pill_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
         self._recording_icon = Gtk.Image.new_from_icon_name(
             "media-record-symbolic"
         )
         self._recording_label = Gtk.Label(label=_("Recording"))
-        self._recording_pill.append(self._recording_icon)
-        self._recording_pill.append(self._recording_label)
+        pill_box.append(self._recording_icon)
+        pill_box.append(self._recording_label)
+        self._recording_pill.set_child(pill_box)
         footer.append(self._recording_pill)
 
         clear_btn = Gtk.Button(label=_("Clear all"))
@@ -1022,12 +1031,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._dismiss_edge_banner()
 
     def _action_open_prefs_privacy(self):
-        # Adw.PreferencesWindow auto-selects the first matching page;
-        # we expose the privacy pane via search to be deep-link friendly.
-        self._on_prefs_clicked(None)
+        self._on_prefs_clicked(None, page="privacy")
 
     def _action_open_prefs_storage(self):
-        self._on_prefs_clicked(None)
+        self._on_prefs_clicked(None, page="storage")
 
     def _action_retry_backup(self):
         # The retry flow is owned by the preferences window — bring
@@ -1286,7 +1293,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def _header_bind(self, _factory, header):
         item = header.get_item()
-        header.get_child().set_text(self._bucket(item)[1] if item else "")
+        label = self._bucket(item)[1] if item else ""
+        # Uppercase like the mockup's group headers (GTK CSS has no
+        # text-transform, so do it here; .upper() is locale-aware enough
+        # for the translated bucket names).
+        header.get_child().set_text(label.upper())
 
     def _bind_entry_row(self, row, entry):
         ctype = entry.get("content_type") or "text"
@@ -1726,6 +1737,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self.db.delete_entry(entry_id)
         self.refresh()
 
+    def _on_recording_pill_clicked(self, _button):
+        """Footer pill toggles incognito (drives the header toggle so the
+        monitor, tooltip and pill all update through one handler)."""
+        self._incognito_btn.set_active(not self._incognito_btn.get_active())
+
     def _update_recording_pill(self, incognito):
         """Reflect incognito state in the footer status pill."""
         if not hasattr(self, "_recording_pill"):
@@ -1750,13 +1766,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
             if active
             else _("Incognito mode: OFF")
         )
-        # Surface (or clear) the privacy banner so the state is visible and
-        # the "Resume recording" action is reachable. Without this the
-        # incognito-on banner and its resume action were dead code.
-        if active:
-            self._show_edge_state("incognito-on")
-        else:
-            self._dismiss_edge_banner("incognito-on")
+        # The footer "Paused" pill (and this header toggle) are the incognito
+        # indicators now — no heavy in-list banner. Clear any stale one.
+        self._dismiss_edge_banner("incognito-on")
 
     def set_incognito(self, active):
         """Public entry point to set incognito state (used at launch).
@@ -1766,12 +1778,14 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """
         self._incognito_btn.set_active(bool(active))
 
-    def _on_prefs_clicked(self, _button):
+    def _on_prefs_clicked(self, _button, page=None):
         from clipman.preferences import ClipmanPreferences
 
         prefs = ClipmanPreferences(
             self.db, self, on_setting_changed=self._on_setting_changed
         )
+        if page:
+            prefs.show_page(page)
         # In-surface dialog anchored to the popup so it can't open behind
         # it on Wayland; tracked so dismiss-on-focus-loss is guarded.
         self._register_child(prefs)
@@ -1801,6 +1815,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
         elif key == "accent_color":
             self._accent_color = value or "default"
             self._apply_css()
+        elif key == "incognito_on_launch":
+            # The Privacy toggle must take effect immediately, not only on
+            # the next launch — flipping it while "Recording" stayed lit
+            # read as a broken switch. Drives the header toggle, monitor
+            # and footer pill through the one handler.
+            self.set_incognito(str(value).strip().lower() in ("true", "1"))
         elif key == "font_size":
             try:
                 self._font_size = max(8, min(20, int(value)))
@@ -2058,6 +2078,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """
         self.set_visible(True)
         self.present()
+        # Keep the footer status pill in sync with the real incognito state
+        # on every show — covers incognito-on-launch and any path that set
+        # it while the popup was hidden, so it never shows "Recording" while
+        # incognito is actually on.
+        self._update_recording_pill(self._incognito_btn.get_active())
         # grab_focus no-ops on a not-yet-focused Wayland toplevel; defer.
         GLib.idle_add(self.search_entry.grab_focus)
         if self._cursor_move_id:

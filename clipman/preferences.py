@@ -115,14 +115,16 @@ EVENT_KEYS = frozenset({
 })
 
 
-class ClipmanPreferences(Adw.PreferencesDialog):
-    """Six-pane preferences dialog.
+class ClipmanPreferences(Adw.Dialog):
+    """Six-pane preferences dialog with a left sidebar.
 
-    An ``Adw.PreferencesDialog`` (not a separate top-level window) so it
-    presents in-surface, anchored to the popup via ``present(parent)``.
-    A top-level ``Adw.PreferencesWindow`` opened *behind* the popup on
-    Wayland and looked unresponsive. ``parent`` is accepted for call-site
-    compatibility; anchoring happens in the caller's ``present(parent)``.
+    An ``Adw.Dialog`` (not a separate top-level window) so it presents
+    in-surface, anchored to the popup via ``present(parent)`` — a
+    top-level window opened *behind* the popup on Wayland and looked
+    unresponsive. The layout matches ``docs/design/preferences.html``:
+    a persistent icon+label sidebar on the left and the selected page on
+    the right (Adw.PreferencesDialog's bottom view-switcher tabs read as
+    cramped at this size).
 
     ``on_setting_changed`` is a callable that the parent window passes
     in; it's invoked with ``(key, value)`` whenever any persisted
@@ -140,23 +142,101 @@ class ClipmanPreferences(Adw.PreferencesDialog):
         # ClipmanWindow passed in) for the backup/restore choosers.
         self._parent_window = parent
 
-        # Adw.Dialog manages its own sizing/stacking — no set_modal /
-        # set_transient_for / set_default_size (those are Window APIs).
-        self.set_search_enabled(True)
+        self.set_title(_("Preferences"))
+        self.set_content_width(760)
+        self.set_content_height(560)
 
-        self.add(self._build_appearance_page())
-        self.add(self._build_privacy_page())
-        self.add(self._build_shortcuts_page())
-        self.add(self._build_storage_page())
-        self.add(self._build_updates_page())
-        self.add(self._build_about_page())
+        # Pages carry their own title + icon; the sidebar reads both.
+        self._stack = Gtk.Stack()
+        self._stack.set_hexpand(True)
+        self._stack.set_vexpand(True)
+
+        self._sidebar = Gtk.ListBox()
+        self._sidebar.add_css_class("navigation-sidebar")
+        self._sidebar.set_selection_mode(Gtk.SelectionMode.BROWSE)
+        self._sidebar.connect("row-selected", self._on_nav_selected)
+
+        for pid, page in [
+            ("appearance", self._build_appearance_page()),
+            ("privacy", self._build_privacy_page()),
+            ("shortcuts", self._build_shortcuts_page()),
+            ("storage", self._build_storage_page()),
+            ("updates", self._build_updates_page()),
+            ("about", self._build_about_page()),
+        ]:
+            self._stack.add_named(page, pid)
+            row = Gtk.ListBoxRow()
+            box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+            box.set_margin_top(8)
+            box.set_margin_bottom(8)
+            box.set_margin_start(6)
+            box.set_margin_end(6)
+            box.append(Gtk.Image.new_from_icon_name(page.get_icon_name()))
+            box.append(Gtk.Label(label=page.get_title(), xalign=0))
+            row.set_child(box)
+            row._page_id = pid
+            row._page_title = page.get_title()
+            self._sidebar.append(row)
+
+        self._title_widget = Adw.WindowTitle(
+            title=_("Preferences"), subtitle=""
+        )
+        header = Adw.HeaderBar()
+        header.set_title_widget(self._title_widget)
+
+        sidebar_scroll = Gtk.ScrolledWindow()
+        sidebar_scroll.set_policy(
+            Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC
+        )
+        sidebar_scroll.set_child(self._sidebar)
+        sidebar_scroll.set_size_request(180, -1)
+        sidebar_scroll.add_css_class("prefs-sidebar")
+
+        content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        content.append(sidebar_scroll)
+        content.append(
+            Gtk.Separator(orientation=Gtk.Orientation.VERTICAL)
+        )
+        content.append(self._stack)
+
+        toolbar_view = Adw.ToolbarView()
+        toolbar_view.add_top_bar(header)
+        toolbar_view.set_content(content)
+        self.set_child(toolbar_view)
+
+        self._sidebar.select_row(self._sidebar.get_row_at_index(0))
+
+    def _on_nav_selected(self, _listbox, row):
+        if row is None:
+            return
+        self._stack.set_visible_child_name(row._page_id)
+        self._title_widget.set_title(row._page_title)
+
+    def show_page(self, page_id):
+        """Select ``page_id`` in the sidebar (deep links from edge states)."""
+        i = 0
+        while True:
+            row = self._sidebar.get_row_at_index(i)
+            if row is None:
+                break
+            if row._page_id == page_id:
+                self._sidebar.select_row(row)
+                break
+            i += 1
 
     # ------------------------------------------------------------------
     # Generic helpers
     # ------------------------------------------------------------------
 
     def _save(self, key, value):
-        """Persist + notify. ``value`` is coerced to ``str`` for SQLite."""
+        """Persist + notify. ``value`` is coerced to ``str`` for SQLite.
+
+        Booleans are stored lowercase (``true``/``false``) — Python's
+        ``str(True)`` is ``"True"``, which broke case-sensitive readers
+        (e.g. ``incognito_on_launch == "true"`` in app.py never matched).
+        """
+        if isinstance(value, bool):
+            value = "true" if value else "false"
         self.db.set_setting(key, str(value))
         try:
             self._on_setting_changed(key, value)
@@ -243,9 +323,7 @@ class ClipmanPreferences(Adw.PreferencesDialog):
         catppuccin_row.set_subtitle(
             _("Off: follow your system GNOME theme and accent color.")
         )
-        catppuccin_row.set_active(
-            self.db.get_setting("use_catppuccin", "true") != "false"
-        )
+        catppuccin_row.set_active(self._get_bool("use_catppuccin", True))
         catppuccin_row.connect(
             "notify::active",
             lambda row, _pspec: self._save(
@@ -420,9 +498,10 @@ class ClipmanPreferences(Adw.PreferencesDialog):
         )
 
         incog_row = Adw.SwitchRow()
-        incog_row.set_title(_("Start in incognito mode"))
+        incog_row.set_title(_("Incognito mode"))
         incog_row.set_subtitle(
-            _("Useful on shared machines or before opening a password manager.")
+            _("Takes effect immediately and applies on every launch. "
+              "Useful on shared machines or before a password manager.")
         )
         incog_row.set_active(self._get_bool("incognito_on_launch", False))
         incog_row.connect(
@@ -602,7 +681,9 @@ class ClipmanPreferences(Adw.PreferencesDialog):
         page.add(cap_group)
 
         backup_group = Adw.PreferencesGroup()
-        backup_group.set_title(_("Backup & restore"))
+        # Group titles are parsed as Pango markup — a bare "&" logs a
+        # markup-parse warning and drops the text; escape it.
+        backup_group.set_title(_("Backup &amp; restore"))
         backup_group.set_description(
             _("Export your history as a portable .clipman file.")
         )
