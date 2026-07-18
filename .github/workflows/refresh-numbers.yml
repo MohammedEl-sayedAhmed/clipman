@@ -25,6 +25,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/refresh-numbers.yml'
+      - 'scripts/refresh_stats.py'
       - 'docs/_data/numbers.json'
 
 permissions:
@@ -123,13 +124,18 @@ jobs:
           }))
           PY
 
+      - name: Refresh self-hosted stats (star chart + downloads history)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/refresh_stats.py
+
       - name: Open auto-merge PR if changed
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_COMMIT_AUTHOR: github-actions[bot]
           GH_COMMIT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         run: |
-          if git diff --quiet docs/_data/numbers.json; then
+          if git diff --quiet docs/_data/numbers.json docs/_data/stats_history.json docs/assets/star-history-dark.svg docs/assets/star-history-light.svg; then
             echo "Numbers unchanged; nothing to push."
             exit 0
           fi
@@ -159,7 +165,7 @@ jobs:
           git config user.name  "$GH_COMMIT_AUTHOR"
           git config user.email "$GH_COMMIT_EMAIL"
           git checkout -b "$branch"
-          git add docs/_data/numbers.json
+          git add docs/_data/numbers.json docs/_data/stats_history.json docs/assets/star-history-dark.svg docs/assets/star-history-light.svg
           # NOTE: no ``[skip ci]`` here. Branch protection on main requires
           # the status checks to run+pass before the PR can merge; a
           # ``[skip ci]`` commit message suppresses all workflow runs, so
