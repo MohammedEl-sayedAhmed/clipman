@@ -220,6 +220,10 @@ def _format_bytes(n):
 # real content's length (mockup: .row.is-sensitive).
 _SENSITIVE_MASK = "•" * 13
 
+# Cache-miss sentinel for _img_info_cache (distinct from the cached None
+# that marks an unreadable image).
+_IMG_INFO_MISS = object()
+
 
 class ClipItem(GObject.Object):
     """A GObject wrapper around one history entry or snippet dict so it can
@@ -1485,16 +1489,16 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
         if not image_path or not _safe_image_path(image_path):
             return None
-        info = self._img_info_cache.get(image_path)
-        if info is None:
+        info = self._img_info_cache.get(image_path, _IMG_INFO_MISS)
+        if info is _IMG_INFO_MISS:
             try:
                 size_b = os.stat(image_path).st_size
                 fmt, w, h = GdkPixbuf.Pixbuf.get_file_info(image_path)
-                info = (size_b, w, h) if fmt is not None else ()
+                info = (size_b, w, h) if fmt is not None else None
             except (OSError, TypeError, ValueError):
-                info = ()
+                info = None
             self._img_info_cache[image_path] = info
-        return info or None
+        return info
 
     def _bind_snippet_row(self, row, snippet):
         row._clip_title.set_text(snippet["name"])
