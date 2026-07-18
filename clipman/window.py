@@ -823,6 +823,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 state_id = "no-results"
             elif is_snippets:
                 state_id = "no-snippets-yet"
+            elif not self._extension_connected():
+                # Empty AND the Shell extension isn't on the bus: guide the
+                # setup instead of a generic empty state (mockup first-run /
+                # snap-required).
+                state_id = ("extension-missing" if os.environ.get("SNAP")
+                            else "first-run")
             else:
                 state_id = "empty"
             self._show_edge_state(state_id)
@@ -883,6 +889,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
         if self._active_filter == "snippets":
             label = _("{n} snippet").format(n=n) if n == 1 \
                 else _("{n} snippets").format(n=n)
+        elif self._search_query:
+            try:
+                total = self.db.count_entries()
+            except Exception:
+                total = n
+            label = _("{n} of {total} items").format(n=n, total=total)
         else:
             label = _("{n} item").format(n=n) if n == 1 \
                 else _("{n} items").format(n=n)
@@ -1008,6 +1020,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         "reveal-db-folder",
         "retry-update-check",
         "close-dialog",
+        "dismiss-banner",
     })
 
     def _on_edge_action(self, action_id):
@@ -1060,6 +1073,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
             "open-prefs-storage": self._action_open_prefs_storage,
             "reveal-db-folder": self._action_reveal_db_folder,
             "retry-update-check": self._action_retry_update_check,
+            "dismiss-banner": self._action_dismiss_banner,
             # AlertDialog close (response id when user dismisses).
             "close-dialog": self._action_close_dialog,
         }
@@ -1088,6 +1102,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def _action_open_snap_notes(self):
         self._open_url(self._SNAP_NOTES_URL)
+
+    def _action_dismiss_banner(self):
+        """X button on an edge banner — remove whatever banner is mounted."""
+        self._dismiss_edge_banner()
 
     def _action_resume_recording(self):
         if self.monitor is not None:
@@ -1546,7 +1564,8 @@ class ClipmanWindow(Adw.ApplicationWindow):
         show, latest = updates.should_show_banner(self.db)
         if show:
             self._update_banner.set_title(
-                _("Update available: v{new} (you have v{cur})").format(
+                _("A newer Clipman release is available — v{new} "
+                  "(you have v{cur})").format(
                     new=latest, cur=__version__
                 )
             )
@@ -1778,6 +1797,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # keys land on the restored window, still imperceptible to the user.
         GLib.timeout_add(120, _fire_keystroke)
         return True
+
+    def _extension_connected(self):
+        """Whether the GNOME Shell extension owns its bus name (cached 60s —
+        refresh() runs often and this is only advisory for empty states)."""
+        now = time.time()
+        cached = getattr(self, "_ext_check", None)
+        if cached is not None and now - cached[0] < 60:
+            return cached[1]
+        try:
+            import dbus
+            bus = dbus.SessionBus()
+            ok = bus.name_has_owner("org.gnome.Shell.Extensions.clipman")
+        except Exception:
+            ok = False
+        self._ext_check = (now, ok)
+        return ok
 
     def _shell_extension_iface(self):
         """Return the GNOME Shell extension's D-Bus interface, or None if it
@@ -2042,6 +2077,16 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self.search_entry.grab_focus()
             return True
 
+        # Ctrl+N: new snippet, when the Snippets view is active (the
+        # no-snippets state advertises it as a keycap hint).
+        if (
+            self._active_filter == "snippets"
+            and keyval in (Gdk.KEY_n, Gdk.KEY_N)
+            and _state & Gdk.ModifierType.CONTROL_MASK
+        ):
+            self._on_snippets_clicked(None)
+            return True
+
         # Down arrow from the search entry drops focus into the list so
         # the user can start arrow-navigating rows. Up/Down within the
         # list itself is native to Gtk.ListView.
@@ -2177,6 +2222,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
         deleted = self.db.delete_expired_sensitive(self._sensitive_timeout)
         if deleted > 0 and self.get_visible():
             self.refresh()
+            # Surface the purge (mockup sensitive-auto-cleared banner) so
+            # rows vanishing isn't silent; X or the action dismisses it.
+            self._show_edge_state("sensitive-cleared")
         return True
 
     def _move_to_cursor(self):

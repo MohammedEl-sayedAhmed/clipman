@@ -57,6 +57,10 @@ class StateSpec:
     body: str
     primary_action: tuple[str, str] | None = None
     secondary_action: tuple[str, str] | None = None
+    # Optional keyboard hint rendered under a statuspage's buttons as
+    # keycaps; tokens starting with an em-dash render as plain dim text
+    # (mockup: ['Super', 'V', '— or your custom shortcut']).
+    kbd: tuple[str, ...] | None = None
 
 
 # ---------------------------------------------------------------------
@@ -83,18 +87,20 @@ STATES: dict[str, StateSpec] = {
         tone="info",
         icon_name="edit-paste-symbolic",
         title=_("Nothing copied yet"),
-        body=_("Copy text or an image and it will appear here."),
+        body=_("Copy text or an image and it will appear here. The popup "
+               "stays hidden until you summon it."),
+        kbd=("Super", "V", _("— or your custom shortcut")),
     ),
     "no-snippets-yet": StateSpec(
         id="no-snippets-yet",
         kind="statuspage",
         tone="info",
-        icon_name="text-x-generic-symbolic",
+        icon_name="user-bookmarks-symbolic",
         title=_("No snippets yet"),
-        body=_("Snippets are reusable text fragments you can paste with "
-               "one click. Add some from Preferences -> Storage, or use "
-               "the New button when this list is showing."),
-        primary_action=(_("Add a snippet"), "open-snippets-dialog"),
+        body=_("Save reusable text — signatures, addresses, code stubs — "
+               "and paste them from here."),
+        primary_action=(_("Add snippet"), "open-snippets-dialog"),
+        kbd=("Ctrl", "N"),
     ),
     "no-results": StateSpec(
         id="no-results",
@@ -102,7 +108,8 @@ STATES: dict[str, StateSpec] = {
         tone="info",
         icon_name="system-search-symbolic",
         title=_("No clips match that search"),
-        body=_("Try a shorter query or clear the search box."),
+        body=_("Try a shorter query, switch the filter to All, or clear "
+               "the search box."),
         primary_action=(_("Clear search"), "clear-search"),
     ),
     "first-run": StateSpec(
@@ -138,7 +145,7 @@ STATES: dict[str, StateSpec] = {
     "sensitive-cleared": StateSpec(
         id="sensitive-cleared",
         kind="banner",
-        tone="info",
+        tone="warning",
         icon_name="security-high-symbolic",
         title=_("Sensitive items cleared"),
         body=_("Clips matching token / password patterns were purged "
@@ -163,7 +170,8 @@ STATES: dict[str, StateSpec] = {
         icon_name="dialog-error-symbolic",
         title=_("Backup failed"),
         body=_("The destination is full, read-only, or otherwise "
-               "unwritable. Pick a different folder and retry."),
+               "unwritable. Pick a different folder or free up space, "
+               "then retry."),
         primary_action=(_("Retry"), "retry-backup"),
         secondary_action=(_("Choose another location"), "rechoose-backup"),
     ),
@@ -174,7 +182,8 @@ STATES: dict[str, StateSpec] = {
         icon_name="dialog-error-symbolic",
         title=_("Restore failed"),
         body=_("That file isn't a Clipman backup, or it includes "
-               "triggers/views we won't import."),
+               "triggers/views we won't import. Pick a .db file exported "
+               "by Clipman."),
         primary_action=(_("Close"), "close-dialog"),
         secondary_action=(_("Pick another file"), "rechoose-restore"),
     ),
@@ -194,7 +203,8 @@ STATES: dict[str, StateSpec] = {
         icon_name="drive-harddisk-symbolic",
         title=_("Can't open the clipboard database"),
         body=_("Another Clipman process may be running, or the database "
-               "file is corrupt."),
+               "file is corrupt. Close other instances, or restore a "
+               "backup."),
         primary_action=(_("Reveal database folder"), "reveal-db-folder"),
         secondary_action=(_("Restore from backup"), "open-restore"),
     ),
@@ -289,22 +299,54 @@ def render_edge_state(
         spec = STATES["empty"]
 
     if spec.kind == "banner":
-        banner = Adw.Banner()
-        banner.set_title(spec.title)
-        primary_action_id: str | None = None
-        if spec.primary_action is not None:
-            banner.set_button_label(spec.primary_action[0])
-            primary_action_id = spec.primary_action[1]
-            banner.action_id = primary_action_id
-        banner.set_revealed(True)
+        # Custom banner (mockup fidelity): Adw.Banner shows a single title
+        # line only — the mockup's banners carry an icon, a secondary desc
+        # line, a text action AND a dismiss X.
+        banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        banner.add_css_class("edge-banner")
         if spec.tone in _TONE_CSS:
             banner.add_css_class(_TONE_CSS[spec.tone])
+
+        icon = Gtk.Image.new_from_icon_name(spec.icon_name)
+        icon.set_valign(Gtk.Align.CENTER)
+        banner.append(icon)
+
+        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+        text_box.set_valign(Gtk.Align.CENTER)
+        text_box.set_hexpand(True)
+        title = Gtk.Label(label=spec.title, xalign=0)
+        title.add_css_class("edge-banner-title")
+        title.set_wrap(True)
+        desc = Gtk.Label(label=spec.body, xalign=0)
+        desc.add_css_class("edge-banner-desc")
+        desc.set_wrap(True)
+        text_box.append(title)
+        text_box.append(desc)
+        banner.append(text_box)
+
+        if spec.primary_action is not None:
+            btn = Gtk.Button(label=spec.primary_action[0])
+            btn.add_css_class("flat")
+            btn.add_css_class("edge-banner-action")
+            btn.set_valign(Gtk.Align.CENTER)
+            btn.action_id = spec.primary_action[1]
+            if on_action is not None:
+                btn.connect(
+                    "clicked",
+                    lambda _b, _aid=spec.primary_action[1]: on_action(_aid),
+                )
+            banner.append(btn)
+
+        close = Gtk.Button.new_from_icon_name("window-close-symbolic")
+        close.add_css_class("flat")
+        close.add_css_class("circular")
+        close.set_valign(Gtk.Align.CENTER)
+        close.set_tooltip_text(_("Dismiss"))
+        if on_action is not None:
+            close.connect("clicked", lambda _b: on_action("dismiss-banner"))
+        banner.append(close)
+
         banner.state_spec = spec
-        if on_action is not None and primary_action_id is not None:
-            banner.connect(
-                "button-clicked",
-                lambda _b, _aid=primary_action_id: on_action(_aid),
-            )
         return banner
 
     if spec.kind == "alertdialog":
@@ -318,12 +360,14 @@ def render_edge_state(
                 spec.primary_action[1], spec.primary_action[0]
             )
             dialog.set_default_response(spec.primary_action[1])
-        if spec.tone == "error":
-            if spec.primary_action is not None:
-                dialog.set_response_appearance(
-                    spec.primary_action[1],
-                    Adw.ResponseAppearance.DESTRUCTIVE,
-                )
+        if spec.primary_action is not None:
+            # Mockup dialogs style the primary as the safe/suggested move
+            # (Retry / Close / Got it) — destructive red is reserved for
+            # genuinely destructive actions, which none of these are.
+            dialog.set_response_appearance(
+                spec.primary_action[1],
+                Adw.ResponseAppearance.SUGGESTED,
+            )
         dialog.state_spec = spec
         if on_action is not None:
             # AlertDialog responses are already action_ids (we registered
@@ -362,7 +406,14 @@ def render_edge_state(
             button_box.append(btn)
         if spec.primary_action is not None:
             btn = Gtk.Button(label=spec.primary_action[0])
-            btn.add_css_class("suggested-action")
+            # CTA tone follows the state (mockup: warning states get an
+            # amber CTA, error states a red one, info the accent).
+            if spec.tone == "error":
+                btn.add_css_class("destructive-action")
+            elif spec.tone == "warning":
+                btn.add_css_class("warning-cta")
+            else:
+                btn.add_css_class("suggested-action")
             btn.add_css_class("pill")
             btn.action_id = spec.primary_action[1]
             if on_action is not None:
@@ -372,6 +423,24 @@ def render_edge_state(
                 )
             button_box.append(btn)
         page.set_child(button_box)
+
+    if spec.kbd:
+        outer = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14)
+        existing = page.get_child()
+        if existing is not None:
+            page.set_child(None)
+            outer.append(existing)
+        kbd_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        kbd_box.set_halign(Gtk.Align.CENTER)
+        for token in spec.kbd:
+            lbl = Gtk.Label(label=token)
+            if token.startswith("—"):
+                lbl.add_css_class("dim-label")
+            else:
+                lbl.add_css_class("keycap")
+            kbd_box.append(lbl)
+        outer.append(kbd_box)
+        page.set_child(outer)
 
     page.state_spec = spec
     return page
