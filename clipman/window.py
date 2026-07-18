@@ -193,6 +193,34 @@ def _classify_text(text):
     return "text"
 
 
+def _domain_of(url):
+    """Bare hostname of a URL for the row meta ("github.com"), '' if none."""
+    from urllib.parse import urlparse
+
+    u = (url or "").strip()
+    if u.lower().startswith("www."):
+        u = "https://" + u
+    try:
+        host = urlparse(u).hostname or ""
+    except ValueError:
+        return ""
+    return host[4:] if host.startswith("www.") else host
+
+
+def _format_bytes(n):
+    """Short human size for the image row meta ("1.2 MB", "640 KB")."""
+    if n >= 1024 * 1024:
+        return f"{n / (1024 * 1024):.1f} MB"
+    if n >= 1024:
+        return f"{n // 1024} KB"
+    return f"{n} B"
+
+
+# Masked preview for sensitive rows — fixed length so it never leaks the
+# real content's length (mockup: .row.is-sensitive).
+_SENSITIVE_MASK = "•" * 13
+
+
 class ClipItem(GObject.Object):
     """A GObject wrapper around one history entry or snippet dict so it can
     live in a ``Gio.ListStore`` and feed ``Gtk.ListView``.
@@ -244,9 +272,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # (hash.png, immutable). Without this every refresh re-decoded every
         # image thumbnail — brutal for an image-heavy history.
         self._thumb_cache = {}
+        # (bytes, w, h) per image path for the row meta line — header sniff
+        # only, cached because paths are content-addressed/immutable.
+        self._img_info_cache = {}
 
         self.set_title("Clipman")
-        self.set_default_size(380, self._clamped_default_height())
+        self.set_default_size(420, self._clamped_default_height())
         # Win+V is a fixed overlay panel, not a resizable app window.
         self.set_resizable(False)
         self.add_css_class("clipman-window")
@@ -511,7 +542,15 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
         # -- Header bar (incognito start, prefs end) -----------------------
         header = Adw.HeaderBar()
-        header.set_title_widget(Adw.WindowTitle(title="Clipman", subtitle=""))
+        title_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        title_box.set_halign(Gtk.Align.CENTER)
+        pin_dot = Gtk.Label(label="\u25cf")
+        pin_dot.add_css_class("pin-dot")
+        title_label = Gtk.Label(label="Clipman")
+        title_label.add_css_class("heading")
+        title_box.append(pin_dot)
+        title_box.append(title_label)
+        header.set_title_widget(title_box)
         # The popup is its own GtkApplicationWindow but doubles as a
         # transient overlay — title-bar controls (close / minimise /
         # maximise) clash with the close-on-Escape interaction model.
@@ -572,17 +611,30 @@ class ClipmanWindow(Adw.ApplicationWindow):
         search_box.set_margin_start(8)
         search_box.set_margin_end(8)
         self.search_entry = Gtk.SearchEntry()
-        self.search_entry.set_placeholder_text(_("Search..."))
+        self.search_entry.set_placeholder_text(_("Search clipboard history…"))
         self.search_entry.set_hexpand(True)
         self.search_entry.add_css_class("clipman-search")
         self.search_entry.connect("search-changed", self._on_search_changed)
-        search_box.append(self.search_entry)
+        # Right-aligned keyboard hint inside the field (mockup's ⌘/ chip);
+        # "/" focuses the search from anywhere in the popup.
+        search_overlay = Gtk.Overlay()
+        search_overlay.set_hexpand(True)
+        search_overlay.set_child(self.search_entry)
+        kbd_chip = Gtk.Label(label="/")
+        kbd_chip.add_css_class("kbd-chip")
+        kbd_chip.set_halign(Gtk.Align.END)
+        kbd_chip.set_valign(Gtk.Align.CENTER)
+        kbd_chip.set_margin_end(10)
+        kbd_chip.set_can_target(False)  # clicks fall through to the entry
+        search_overlay.add_overlay(kbd_chip)
+        search_box.append(search_overlay)
         root.append(search_box)
 
         # -- Filter pill row ----------------------------------------------
         self._filter_box = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=6
+            orientation=Gtk.Orientation.HORIZONTAL, spacing=2
         )
+        self._filter_box.add_css_class("switcher-track")
         self._filter_box.set_margin_top(2)
         self._filter_box.set_margin_bottom(6)
         self._filter_box.set_margin_start(8)
@@ -1287,42 +1339,101 @@ class ClipmanWindow(Adw.ApplicationWindow):
         return -1 if oa < ob else (1 if oa > ob else 0)
 
     def _header_setup(self, _factory, header):
-        label = Gtk.Label(xalign=0)
-        label.add_css_class("clip-section-header")
-        header.set_child(label)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        title = Gtk.Label(xalign=0)
+        title.add_css_class("clip-section-header")
+        title.set_hexpand(True)
+        count = Gtk.Label(xalign=1)
+        count.add_css_class("clip-section-header")
+        box.append(title)
+        box.append(count)
+        box._h_title = title
+        box._h_count = count
+        header.set_child(box)
 
     def _header_bind(self, _factory, header):
         item = header.get_item()
-        label = self._bucket(item)[1] if item else ""
+        box = header.get_child()
+        if item is None:
+            box._h_title.set_text("")
+            box._h_count.set_text("")
+            return
+        order, label = self._bucket(item)
         # Uppercase like the mockup's group headers (GTK CSS has no
         # text-transform, so do it here; .upper() is locale-aware enough
         # for the translated bucket names).
-        header.get_child().set_text(label.upper())
+        box._h_title.set_text(label.upper())
+        if order == 0:
+            # Pinned group: gold header + item count on the right (mockup
+            # .group-header.pinned with a trailing count).
+            box._h_title.add_css_class("pinned")
+            box._h_count.add_css_class("pinned")
+            n = sum(
+                1 for i in range(self._selection.get_n_items())
+                if self._bucket(self._selection.get_item(i))[0] == 0
+            )
+            box._h_count.set_text(str(n))
+        else:
+            box._h_title.remove_css_class("pinned")
+            box._h_count.remove_css_class("pinned")
+            box._h_count.set_text("")
 
     def _bind_entry_row(self, row, entry):
         ctype = entry.get("content_type") or "text"
         text = entry.get("content_text") or ""
-        first_line = text.split("\n", 1)[0].strip() if text else ""
-        if ctype == "image":
-            title = "[Image]"
-        else:
-            title = first_line[:120] or _("(empty)")
-        # Gtk.Label.set_text renders literally, so no markup-escaping needed.
-        row._clip_title.set_text(title)
-        # Lead with the relative time (the type icon already conveys type),
-        # plus a char count for text entries.
+        sensitive = bool(entry.get("sensitive"))
+        pinned = bool(entry.get("pinned"))
+        rtype = "image" if ctype == "image" else _classify_text(text)
         ts = self._format_time(entry["accessed_at"])
-        if ctype == "text" and text:
-            n = len(text)
-            subtitle = f"{ts} · {n:,} char{'s' if n != 1 else ''}"
+
+        # --- title + meta line (mockup .preview / .meta) -----------------
+        if sensitive:
+            # Masked preview: never render sensitive content, its length,
+            # or its thumbnail. Meta carries the auto-clear countdown.
+            title = _SENSITIVE_MASK
+            row._clip_title.add_css_class("masked")
+            row._clip_subtitle.add_css_class("warning")
+            remaining = self._sensitive_remaining(entry)
+            subtitle = _("Sensitive — auto-clear in {n} s").format(n=remaining)
         else:
-            subtitle = ts
+            row._clip_title.remove_css_class("masked")
+            row._clip_subtitle.remove_css_class("warning")
+            first_line = text.split("\n", 1)[0].strip() if text else ""
+            title = ("[Image]" if ctype == "image"
+                     else first_line[:120] or _("(empty)"))
+            if ctype == "image":
+                info = self._image_info(entry.get("image_path"))
+                if info:
+                    size_b, w, h = info
+                    subtitle = f"{ts} · {_format_bytes(size_b)} · {w}×{h}"
+                else:
+                    subtitle = ts
+            elif rtype == "link":
+                domain = _domain_of(text.strip())
+                subtitle = f"{ts} · {domain}" if domain else ts
+            elif rtype == "code":
+                subtitle = f"{ts} · " + _("Code")
+            elif text:
+                n = len(text)
+                subtitle = f"{ts} · {n:,} char{'s' if n != 1 else ''}"
+            else:
+                subtitle = ts
+
+        # Pinned rows lead with a gold star in the title (mockup
+        # .is-pinned .preview::before). Markup needs escaping.
+        if pinned:
+            row._clip_title.set_markup(
+                f'<span foreground="{self._gold_hex()}">★</span> '
+                + GLib.markup_escape_text(title)
+            )
+        else:
+            row._clip_title.set_text(title)
         row._clip_subtitle.set_text(subtitle)
 
-        # Image rows show a thumbnail; everything else shows a coloured tile.
+        # --- leading visual: thumbnail or coloured tile ------------------
         texture = (
             self._thumbnail_texture(entry.get("image_path"))
-            if ctype == "image" else None
+            if ctype == "image" and not sensitive else None
         )
         if texture is not None:
             row._clip_thumb.set_paintable(texture)
@@ -1331,20 +1442,58 @@ class ClipmanWindow(Adw.ApplicationWindow):
         else:
             row._clip_thumb.set_paintable(None)
             row._clip_thumb.set_visible(False)
-            rtype = "image" if ctype == "image" else _classify_text(text)
             self._set_tile(row, rtype)
+            if sensitive:
+                # Lock icon in the type-coloured tile (mockup is-sensitive).
+                row._clip_icon.set_from_icon_name("dialog-password-symbolic")
 
-        pinned = entry.get("pinned")
         row._clip_pin.set_icon_name(
             "starred-symbolic" if pinned else "non-starred-symbolic"
         )
         row._clip_pin.set_tooltip_text(_("Unpin") if pinned else _("Pin"))
         row._clip_actions.set_visible(True)
-        # Pinned rows keep their actions visible; others fade in on hover.
+        # Pinned rows keep their actions visible + a gold edge tint; others
+        # fade actions in on hover.
         if pinned:
             row.add_css_class("pinned")
         else:
             row.remove_css_class("pinned")
+
+    def _gold_hex(self):
+        """The pin/snippet gold for the effective theme (title star)."""
+        if self._theme == "light":
+            return _TYPE_COLORS_LIGHT["type_snip"]
+        if self._theme == "dark":
+            return _TYPE_COLORS_DARK["type_snip"]
+        try:
+            is_dark = Adw.StyleManager.get_default().get_dark()
+        except Exception:
+            is_dark = True
+        return (_TYPE_COLORS_DARK if is_dark
+                else _TYPE_COLORS_LIGHT)["type_snip"]
+
+    def _sensitive_remaining(self, entry):
+        """Seconds until the purge loop removes this sensitive entry."""
+        created = entry.get("created_at") or time.time()
+        return max(0, int(self._sensitive_timeout - (time.time() - created)))
+
+    def _image_info(self, image_path):
+        """(bytes, width, height) for an image row's meta, cached; None if
+        unreadable. Uses get_file_info (header sniff — no full decode)."""
+        from clipman.database import _safe_image_path
+
+        if not image_path or not _safe_image_path(image_path):
+            return None
+        info = self._img_info_cache.get(image_path)
+        if info is None:
+            try:
+                size_b = os.stat(image_path).st_size
+                fmt, w, h = GdkPixbuf.Pixbuf.get_file_info(image_path)
+                info = (size_b, w, h) if fmt is not None else ()
+            except (OSError, TypeError, ValueError):
+                info = ()
+            self._img_info_cache[image_path] = info
+        return info or None
 
     def _bind_snippet_row(self, row, snippet):
         row._clip_title.set_text(snippet["name"])
@@ -1875,6 +2024,18 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
         search_focused = self.search_entry.has_focus()
 
+        # "/" (or Ctrl+F) jumps to the search field from anywhere in the
+        # popup — advertised by the kbd chip inside the field.
+        if not search_focused and (
+            keyval == Gdk.KEY_slash
+            or (
+                keyval in (Gdk.KEY_f, Gdk.KEY_F)
+                and _state & Gdk.ModifierType.CONTROL_MASK
+            )
+        ):
+            self.search_entry.grab_focus()
+            return True
+
         # Down arrow from the search entry drops focus into the list so
         # the user can start arrow-navigating rows. Up/Down within the
         # list itself is native to Gtk.ListView.
@@ -1984,10 +2145,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """Pick a sensible default popup height for the current monitor.
 
         Uses the primary monitor's geometry and caps at 60% of its
-        height, with 540 as the upper bound. Falls back to 540 if the
-        monitor metadata isn't queryable (offscreen / headless CI).
+        height, with 640 (the mockup's popup height) as the upper bound.
+        Falls back to 640 if the monitor metadata isn't queryable
+        (offscreen / headless CI).
         """
-        default = 540
+        default = 640
         try:
             display = Gdk.Display.get_default()
             if display is None:

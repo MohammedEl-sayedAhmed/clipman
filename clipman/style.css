@@ -44,32 +44,53 @@
     box-shadow: 0 0 0 2px alpha(@accent_color, 0.18);
 }
 
+/* Keyboard hint chip inside the search field (mockup .search .kbd) */
+.kbd-chip {
+    font-size: 10px;
+    padding: 1px 7px;
+    background-color: alpha(@window_fg_color, 0.06);
+    border: 1px solid alpha(@window_fg_color, 0.12);
+    border-radius: 4px;
+    color: @clip_dim;
+}
+
+/* Accent dot before the header title (mockup .title .pin-dot) */
+.pin-dot {
+    color: @accent_color;
+    font-size: 7px;
+    opacity: 0.75;
+}
+
 /* Filter pills ------------------------------------------------------- */
+
+.switcher-track {
+    background-color: alpha(@window_fg_color, 0.07);
+    border-radius: 10px;
+    padding: 2px;
+}
 
 .filter-tab {
     background-color: transparent;
     color: @clip_dim;
-    border: 1px solid alpha(@window_fg_color, 0.14);
-    border-radius: 999px;
+    border: none;
+    box-shadow: none;
+    border-radius: 8px;
     padding: 3px 12px;
     min-height: 22px;
     font-size: 0.9em;
 }
 
 .filter-tab:hover {
-    background-color: alpha(@window_fg_color, 0.06);
+    background-color: transparent;
     color: @window_fg_color;
 }
 
-.filter-tab-active {
-    background-color: @accent_color;
-    color: @accent_fg_color;
-    border-color: @accent_color;
-}
-
+/* Active tab: raised card on the track (mockup .switcher button.active) */
+.filter-tab-active,
 .filter-tab-active:hover {
-    background-color: @accent_color;
-    color: @accent_fg_color;
+    background-color: @card_bg_color;
+    color: @window_fg_color;
+    box-shadow: 0 1px 2px alpha(black, 0.15);
 }
 
 /* Count badge inside each switcher tab. */
@@ -85,8 +106,8 @@
     padding: 0;
 }
 .filter-tab-active .filter-count {
-    color: @accent_fg_color;
-    background-color: alpha(@accent_fg_color, 0.22);
+    color: @accent_color;
+    background-color: alpha(@accent_color, 0.15);
 }
 
 /* List + rows -------------------------------------------------------- */
@@ -166,6 +187,25 @@
     color: @clip_dim;
     margin: 10px 4px 3px 6px;
 }
+.clip-section-header.pinned {
+    color: @type_snip;
+}
+
+/* Pinned rows: gold edge tint fading into the card (mockup .is-pinned). */
+.clip-row.pinned {
+    background: linear-gradient(90deg,
+        alpha(@type_snip, 0.12), alpha(@type_snip, 0) 18%);
+}
+
+/* Sensitive rows: masked mono preview + warning countdown meta. */
+.clip-row .title.masked {
+    font-family: monospace;
+    letter-spacing: 2px;
+    color: @clip_dim;
+}
+.clip-row .subtitle.warning {
+    color: @warning_color;
+}
 
 /* Row actions (pin / delete) fade in on hover; pinned rows keep them on. */
 .clip-actions {
@@ -188,6 +228,7 @@
 .clipman-count {
     color: @clip_dim;
     font-size: 0.82em;
+    font-feature-settings: "tnum";
 }
 
 .recording-pill {
