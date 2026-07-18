@@ -252,6 +252,26 @@ class TestWindowConstruction(unittest.TestCase):
         self.assertEqual(window._recording_label.get_text(), "Recording")
         self.assertFalse(window._recording_pill.has_css_class("paused"))
 
+    def test_incognito_header_toggle_persists(self):
+        """The header incognito toggle persists across restarts.
+
+        Regression: only the Privacy switch persisted incognito, so a
+        daemon restart silently re-enabled incognito the user had turned
+        off in the header — copies were dropped with no visible cause.
+        """
+        from unittest.mock import MagicMock
+
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestIncogPersist")
+        window = ClipmanWindow(application=app, db=db, monitor=MagicMock())
+
+        window._incognito_btn.set_active(True)
+        self.assertEqual(db.get_setting("incognito_on_launch"), "true")
+        window._incognito_btn.set_active(False)
+        self.assertEqual(db.get_setting("incognito_on_launch"), "false")
+
     def test_preferences_window_constructs(self):
         from clipman.preferences import ClipmanPreferences
         from clipman.window import ClipmanWindow
