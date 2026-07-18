@@ -2058,6 +2058,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """
         self.set_visible(True)
         self.present()
+        # Keep the footer status pill in sync with the real incognito state
+        # on every show — covers incognito-on-launch and any path that set
+        # it while the popup was hidden, so it never shows "Recording" while
+        # incognito is actually on.
+        self._update_recording_pill(self._incognito_btn.get_active())
         # grab_focus no-ops on a not-yet-focused Wayland toplevel; defer.
         GLib.idle_add(self.search_entry.grab_focus)
         if self._cursor_move_id:
