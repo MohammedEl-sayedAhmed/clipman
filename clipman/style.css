@@ -292,3 +292,65 @@
     color: alpha(@window_fg_color, 0.35);
     -gtk-icon-size: 48px;
 }
+
+/* Amber CTA on warning statuspages (mockup tone-warning-cta). */
+button.warning-cta {
+    background-color: @warning_color;
+    color: @warning_fg_color;
+}
+button.warning-cta:hover {
+    background-color: alpha(@warning_color, 0.85);
+}
+
+/* Keycap hints under statuspage buttons (mockup .keycap). */
+.keycap {
+    font-size: 0.78em;
+    font-weight: 600;
+    padding: 1px 8px;
+    background-color: alpha(@window_fg_color, 0.07);
+    border: 1px solid alpha(@window_fg_color, 0.16);
+    border-bottom-width: 2px;
+    border-radius: 6px;
+    color: @clip_dim;
+}
+
+/* Edge banners (mockup states.html): icon · title/desc · action · X.
+   Adw.Banner can't show a desc line or dismiss button, so the renderer
+   builds this custom row; tones tint the background. */
+.edge-banner {
+    padding: 8px 10px;
+    margin: 6px 8px 2px 8px;
+    border-radius: 10px;
+    background-color: alpha(@accent_color, 0.10);
+}
+.edge-banner > image {
+    color: @accent_color;
+    -gtk-icon-size: 16px;
+}
+.edge-banner-title {
+    font-weight: 600;
+    font-size: 0.9em;
+}
+.edge-banner-desc {
+    font-size: 0.8em;
+    color: @clip_dim;
+}
+.edge-banner-action {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: @accent_color;
+}
+.edge-banner.warning {
+    background-color: alpha(@warning_color, 0.12);
+}
+.edge-banner.warning > image,
+.edge-banner.warning .edge-banner-action {
+    color: @warning_color;
+}
+.edge-banner.error {
+    background-color: alpha(@error_color, 0.12);
+}
+.edge-banner.error > image,
+.edge-banner.error .edge-banner-action {
+    color: @error_color;
+}

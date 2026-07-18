@@ -103,7 +103,9 @@ class TestEdgeStates(unittest.TestCase):
                 # on the resulting type to decide where to mount it.
                 spec = widget.state_spec
                 if spec.kind == "banner":
-                    self.assertIsInstance(widget, Adw.Banner)
+                    # Custom banner row (icon · title/desc · action · X) —
+                    # Adw.Banner can't show a desc line or dismiss button.
+                    self.assertTrue(widget.has_css_class("edge-banner"))
                 elif spec.kind == "alertdialog":
                     self.assertIsInstance(widget, Adw.AlertDialog)
                 else:
