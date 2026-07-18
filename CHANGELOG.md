@@ -4,6 +4,68 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-18
+
+### Highlights
+
+The GTK 4 line is now **stable** — this release closes out the
+post-rewrite stabilization tracker (#132) and removes the "use v1.0.6"
+advisory. Three fronts landed since 1.1.0: true **Win+V behaviour on
+GNOME Wayland**, a **~60× faster list**, and a **full redesign to the
+project's design mockups**.
+
+### Fixed — Wayland/Win+V parity (#141, #149, #156)
+
+- The popup now takes real input focus on GNOME Wayland: buttons, search
+  and keyboard work; clicking outside dismisses it; it stays out of the
+  dash/dock and Alt+Tab; Escape closes; paste lands in the previously
+  focused app (keystrokes are injected by the Shell extension — `wtype`
+  cannot inject on Mutter — and the clipboard is set via `wl-copy`,
+  since a background `Gdk.Clipboard.set()` silently fails).
+- The installer launches the daemon once (systemd user service only);
+  the duplicate XDG autostart that raced for the D-Bus name is gone.
+- Incognito is one persistent state across the header toggle, footer
+  pill and Privacy switch — "off" survives restarts (previously stale
+  state could silently stop recording).
+
+### Performance (#150)
+
+- Opening the popup and switching filters no longer freezes: rows are
+  lightweight widgets (~5× cheaper than `Adw.ActionRow`), image
+  thumbnails are decoded once and cached, and long histories stream in
+  incrementally. Measured on a real 263-entry history: back-to-All
+  refresh ~3.4 s → ~51 ms.
+
+### Changed — redesign to the design mockups (#151, #153–#155, #159)
+
+- Colour-coded type icons (text/link/code/image/snippet) with
+  conservative code/URL detection; per-type row metadata (domain for
+  links, size + dimensions for images, "Code" tag, snippet use-counts).
+- Day-grouped history (★ Pinned / Today / Yesterday / Earlier) with a
+  gold pinned group; hover-revealed row actions; sensitive entries are
+  masked with a lock icon and an auto-clear countdown.
+- Segmented filter switcher (All / Text / Images / Snippets) with live
+  count badges; search field with a `/` shortcut hint; footer with item
+  count, Recording/Paused pill and Clear all.
+- Preferences rebuilt with a left sidebar (matches the mockup), an
+  accent colour picker with contrast-aware foreground, and a generic
+  font colour picker replacing the fixed presets.
+- Light mode is the mockups' high-contrast "stone" palette — every
+  text/background pair now clears WCAG AA (the muted Catppuccin Latte
+  text was failing it); with the Catppuccin toggle off, the popup
+  follows the system GNOME light/dark preference.
+- All 19 design edge states are implemented and reachable, including
+  guided first-run/extension setup, watcher-crashed, clipboard-blocked,
+  shortcut-failed and a database-error screen; banners carry a
+  description line and a dismiss button.
+
+### Compatibility
+
+Toolchain floors unchanged from 1.1.0 (GTK 4 ≥ 4.10, libadwaita ≥ 1.4,
+Python 3.10–3.12, GNOME Shell 45–48). No D-Bus contract changes. SQLite
+schema gains an additive `snippets.use_count` column via automatic
+migration — downgrades to 1.1.0 remain safe.
+
 ## [1.1.0] - 2026-06-25
 
 ### Highlights
