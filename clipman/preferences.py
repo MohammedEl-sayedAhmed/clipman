@@ -644,8 +644,24 @@ class ClipmanPreferences(Adw.Dialog):
             self._toggle_row.set_subtitle(
                 keybindings.format_binding_for_display(binding)
             )
+        else:
+            # Registration failed (gsettings schema missing / non-GNOME):
+            # show the guided dialog instead of silently doing nothing
+            # (mockup shortcut-failed).
+            self._present_shortcut_failed()
         dialog.close()
         return True
+
+    def _present_shortcut_failed(self):
+        from clipman.edge_states import render_edge_state
+
+        parent = self._parent_window
+        if parent is not None and hasattr(parent, "_on_edge_action"):
+            parent._show_edge_state("shortcut-failed")
+            return
+        # Standalone (tests / no parent): present unwired on this dialog.
+        dlg = render_edge_state("shortcut-failed")
+        dlg.present(self)
 
     # ------------------------------------------------------------------
     # Pane 4: Storage

@@ -1,9 +1,12 @@
+import logging
 import os
 import string
 import subprocess
 import time
 
 from gi.repository import GLib
+
+logger = logging.getLogger(__name__)
 
 MAX_TEXT_SIZE = 10 * 1024 * 1024   # 10 MB
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
@@ -142,6 +145,9 @@ class _WlPasteWatcher:
         self._restart_count += 1
         if self._restart_count > self._MAX_RESTARTS:
             self.stop()
+            # Give up for good — surface it instead of failing silently
+            # (the popup shows the watcher-crashed state).
+            self._monitor._watcher_gave_up()
             return GLib.SOURCE_REMOVE
         self.stop()
         self.start()
@@ -197,6 +203,9 @@ class ClipboardMonitor:
     def __init__(self, db, on_new_entry=None):
         self.db = db
         self.on_new_entry = on_new_entry
+        # Optional: invoked (on the GLib main loop) when the wl-paste
+        # fallback watcher crashes repeatedly and stops retrying.
+        self.on_watcher_dead = None
         self._self_copy = False
         self._incognito = False
         self._last_event_time = 0.0
@@ -214,6 +223,15 @@ class ClipboardMonitor:
         if self._watcher is not None:
             self._watcher.stop()
             self._watcher = None
+
+    def _watcher_gave_up(self):
+        """The wl-paste watcher stopped retrying — notify the UI."""
+        self._watcher = None
+        if self.on_watcher_dead is not None:
+            try:
+                self.on_watcher_dead()
+            except Exception:
+                logger.debug("on_watcher_dead callback failed", exc_info=True)
 
     def set_self_copy(self, val: bool):
         self._self_copy = val
