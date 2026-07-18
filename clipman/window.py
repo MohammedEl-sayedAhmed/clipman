@@ -1031,12 +1031,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._dismiss_edge_banner()
 
     def _action_open_prefs_privacy(self):
-        # Adw.PreferencesWindow auto-selects the first matching page;
-        # we expose the privacy pane via search to be deep-link friendly.
-        self._on_prefs_clicked(None)
+        self._on_prefs_clicked(None, page="privacy")
 
     def _action_open_prefs_storage(self):
-        self._on_prefs_clicked(None)
+        self._on_prefs_clicked(None, page="storage")
 
     def _action_retry_backup(self):
         # The retry flow is owned by the preferences window — bring
@@ -1780,12 +1778,14 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """
         self._incognito_btn.set_active(bool(active))
 
-    def _on_prefs_clicked(self, _button):
+    def _on_prefs_clicked(self, _button, page=None):
         from clipman.preferences import ClipmanPreferences
 
         prefs = ClipmanPreferences(
             self.db, self, on_setting_changed=self._on_setting_changed
         )
+        if page:
+            prefs.show_page(page)
         # In-surface dialog anchored to the popup so it can't open behind
         # it on Wayland; tracked so dismiss-on-focus-loss is guarded.
         self._register_child(prefs)
@@ -1815,6 +1815,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
         elif key == "accent_color":
             self._accent_color = value or "default"
             self._apply_css()
+        elif key == "incognito_on_launch":
+            # The Privacy toggle must take effect immediately, not only on
+            # the next launch — flipping it while "Recording" stayed lit
+            # read as a broken switch. Drives the header toggle, monitor
+            # and footer pill through the one handler.
+            self.set_incognito(str(value).strip().lower() in ("true", "1"))
         elif key == "font_size":
             try:
                 self._font_size = max(8, min(20, int(value)))

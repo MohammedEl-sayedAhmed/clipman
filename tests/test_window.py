@@ -294,12 +294,14 @@ class TestWindowConstruction(unittest.TestCase):
         Regression guard: as a top-level Adw.PreferencesWindow it opened
         behind the popup on Wayland and looked unresponsive.
         """
+        from gi.repository import Gtk
+
         from clipman.preferences import ClipmanPreferences
 
         db = self._make_db()
         prefs = ClipmanPreferences(db, None, on_setting_changed=None)
-        self.assertIsInstance(prefs, Adw.PreferencesDialog)
         self.assertIsInstance(prefs, Adw.Dialog)
+        self.assertNotIsInstance(prefs, Gtk.Window)
 
     def test_dismiss_on_focus_loss(self):
         """notify::is-active handler hides the popup when it loses focus,
@@ -659,7 +661,9 @@ class TestWindowConstruction(unittest.TestCase):
         # actually called something rather than the warning fallback.
         called: list[str] = []
         window._open_url = lambda url: called.append(("url", url))
-        window._on_prefs_clicked = lambda _b: called.append(("prefs", None))
+        window._on_prefs_clicked = (
+            lambda _b, page=None: called.append(("prefs", page))
+        )
         window._on_snippets_clicked = lambda _b: called.append(
             ("snippets", None)
         )
