@@ -87,34 +87,38 @@ _CATPPUCCIN_MOCHA = {
     "error_bg_color":      "#f38ba8",
     "error_fg_color":      "#1e1e2e",
 }
-_CATPPUCCIN_LATTE = {
-    "window_bg_color":     "#eff1f5",
-    "view_bg_color":       "#eff1f5",
-    "headerbar_bg_color":  "#e6e9ef",
-    "card_bg_color":       "#ccd0da",
-    "dialog_bg_color":     "#eff1f5",
-    "popover_bg_color":    "#ccd0da",
-    "window_fg_color":     "#4c4f69",
-    "view_fg_color":       "#4c4f69",
-    "headerbar_fg_color":  "#4c4f69",
-    "card_fg_color":       "#4c4f69",
-    "dialog_fg_color":     "#4c4f69",
-    "popover_fg_color":    "#4c4f69",
-    "accent_color":        "#8839ef",
-    "accent_bg_color":     "#8839ef",
-    "accent_fg_color":     "#eff1f5",
-    "destructive_color":   "#d20f39",
-    "destructive_bg_color":"#d20f39",
-    "destructive_fg_color":"#eff1f5",
-    "success_color":       "#40a02b",
-    "success_bg_color":    "#40a02b",
-    "success_fg_color":    "#eff1f5",
-    "warning_color":       "#df8e1d",
-    "warning_bg_color":    "#df8e1d",
-    "warning_fg_color":    "#eff1f5",
-    "error_color":         "#d20f39",
-    "error_bg_color":      "#d20f39",
-    "error_fg_color":      "#eff1f5",
+# Light theme — the mockup's "high-contrast stone + brand-blue" palette
+# (docs/design/tokens.css body.theme-light), NOT Catppuccin Latte: white
+# cards on stone-100, near-black text (16:1), punchy blue accent. Latte's
+# muted #4c4f69 text was the root of every light-mode readability issue.
+_STONE_LIGHT = {
+    "window_bg_color":     "#f5f5f4",
+    "view_bg_color":       "#f5f5f4",
+    "headerbar_bg_color":  "#e7e5e4",
+    "card_bg_color":       "#ffffff",
+    "dialog_bg_color":     "#f5f5f4",
+    "popover_bg_color":    "#ffffff",
+    "window_fg_color":     "#1c1917",
+    "view_fg_color":       "#1c1917",
+    "headerbar_fg_color":  "#1c1917",
+    "card_fg_color":       "#1c1917",
+    "dialog_fg_color":     "#1c1917",
+    "popover_fg_color":    "#1c1917",
+    "accent_color":        "#2563eb",
+    "accent_bg_color":     "#2563eb",
+    "accent_fg_color":     "#ffffff",
+    "destructive_color":   "#dc2626",
+    "destructive_bg_color":"#dc2626",
+    "destructive_fg_color":"#ffffff",
+    "success_color":       "#15803d",
+    "success_bg_color":    "#15803d",
+    "success_fg_color":    "#ffffff",
+    "warning_color":       "#b45309",
+    "warning_bg_color":    "#b45309",
+    "warning_fg_color":    "#ffffff",
+    "error_color":         "#dc2626",
+    "error_bg_color":      "#dc2626",
+    "error_fg_color":      "#ffffff",
 }
 DEFAULT_FONT_COLOR = "default"
 
@@ -152,11 +156,11 @@ _TYPE_COLORS_DARK = {
     "type_snip": "#f9e2af",
 }
 _TYPE_COLORS_LIGHT = {
-    "type_text": "#1d4ed8",
-    "type_link": "#155e75",
-    "type_code": "#115e59",
-    "type_image": "#7e22ce",
-    "type_snip": "#92400e",
+    "type_text": "#2563eb",
+    "type_link": "#0891b2",
+    "type_code": "#0d9488",
+    "type_image": "#9333ea",
+    "type_snip": "#b45309",
 }
 
 # Secondary ("dim") text colour, per effective theme. Catppuccin subtext
@@ -164,7 +168,7 @@ _TYPE_COLORS_LIGHT = {
 # failed in light mode because Latte's muted #4c4f69 text can't hold
 # contrast once faded. #a6adc8 = 7.4:1 on dark, #5c5f77 = 5.5:1 on light.
 _DIM_TEXT_DARK = "#a6adc8"
-_DIM_TEXT_LIGHT = "#5c5f77"
+_DIM_TEXT_LIGHT = "#57534e"
 
 _URL_RE = re.compile(r"^(https?://|www\.)\S+$", re.IGNORECASE)
 # Conservative code detection: only strong, code-specific signals so plain
@@ -355,7 +359,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         otherwise — matches the marketing mockup default.
         """
         if self._theme == "light":
-            palette = _CATPPUCCIN_LATTE
+            palette = _STONE_LIGHT
         elif self._theme == "dark":
             palette = _CATPPUCCIN_MOCHA
         else:  # auto — follow system, default dark
@@ -363,7 +367,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 is_dark = Adw.StyleManager.get_default().get_dark()
             except Exception:
                 is_dark = True
-            palette = _CATPPUCCIN_MOCHA if is_dark else _CATPPUCCIN_LATTE
+            palette = _CATPPUCCIN_MOCHA if is_dark else _STONE_LIGHT
         return "\n".join(
             f"@define-color {name} {hex_value};"
             for name, hex_value in palette.items()
@@ -1291,7 +1295,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def _header_bind(self, _factory, header):
         item = header.get_item()
-        header.get_child().set_text(self._bucket(item)[1] if item else "")
+        label = self._bucket(item)[1] if item else ""
+        # Uppercase like the mockup's group headers (GTK CSS has no
+        # text-transform, so do it here; .upper() is locale-aware enough
+        # for the translated bucket names).
+        header.get_child().set_text(label.upper())
 
     def _bind_entry_row(self, row, entry):
         ctype = entry.get("content_type") or "text"

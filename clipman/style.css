@@ -100,13 +100,18 @@
    hairline separators, the standard Adwaita grouped list). Do NOT give
    each row its own border/background/radius/margin — that stacks a card
    inside the card and reads as heavy, cluttered chips. Keep only sizing. */
+/* Rows read as elevated cards on the window background (mockup
+   .group-rows: bg-surface + hairline dividers). Contiguous rows in a
+   section form one card block; the dated header sits on the window bg. */
 .clipman-list > row {
     padding: 2px 4px;
     min-height: 44px;
+    background-color: @card_bg_color;
+    border-bottom: 1px solid alpha(@window_fg_color, 0.06);
 }
 
 .clipman-list > row:hover {
-    background-color: alpha(@accent_color, 0.06);
+    background-color: mix(@card_bg_color, @window_fg_color, 0.05);
 }
 
 .clipman-list > row:selected,
@@ -151,12 +156,15 @@
 .clip-tile.type-image > image { color: @type_image; }
 .clip-tile.type-snip  > image { color: @type_snip; }
 
-/* Dated section headers (★ Pinned / Today / Yesterday / Earlier). */
+/* Dated section headers (★ PINNED / TODAY / …). Uppercased in code
+   (GTK CSS has no text-transform); tracked out like the mockup's
+   .group-header (letter-spacing 0.06em). */
 .clip-section-header {
     font-size: 0.72em;
-    font-weight: 700;
+    font-weight: 600;
+    letter-spacing: 0.8px;
     color: @clip_dim;
-    margin: 8px 4px 2px 6px;
+    margin: 10px 4px 3px 6px;
 }
 
 /* Row actions (pin / delete) fade in on hover; pinned rows keep them on. */
@@ -185,24 +193,24 @@
 .recording-pill {
     padding: 2px 8px;
     border-radius: 9999px;
-    background-color: alpha(@accent_color, 0.14);
+    background-color: alpha(@success_color, 0.14);
     min-height: 0;
     box-shadow: none;
 }
 .recording-pill:hover {
-    background-color: alpha(@accent_color, 0.24);
+    background-color: alpha(@success_color, 0.24);
 }
 .recording-pill.paused:hover {
     background-color: alpha(@warning_color, 0.26);
 }
 .recording-pill label {
-    color: @accent_color;
+    color: @success_color;
     font-size: 0.78em;
     font-weight: 500;
 }
 .recording-pill image {
     -gtk-icon-size: 11px;
-    color: @accent_color;
+    color: @success_color;
 }
 .recording-pill.paused {
     background-color: alpha(@warning_color, 0.16);
@@ -213,7 +221,7 @@
 }
 
 .clipman-clear {
-    color: @clip_dim;
+    color: @error_color;
     font-size: 0.82em;
     padding: 2px 8px;
     min-height: 0;
