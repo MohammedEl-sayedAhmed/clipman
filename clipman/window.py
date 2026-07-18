@@ -324,6 +324,15 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
         self._apply_theme()
         self._apply_css()
+        # While following the system (Catppuccin off, or theme auto) the
+        # GNOME preference can flip at any time — re-emit the theme-derived
+        # tokens (@clip_dim, @type_*) so they track the new scheme.
+        try:
+            Adw.StyleManager.get_default().connect(
+                "notify::dark", lambda *_a: self._apply_css()
+            )
+        except Exception:
+            logger.debug("StyleManager dark listener failed", exc_info=True)
         self._build_ui()
 
         # Re-evaluate update banner on startup so cached info isn't lost.
@@ -354,12 +363,29 @@ class ClipmanWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _apply_theme(self):
-        scheme = {
-            "auto": Adw.ColorScheme.DEFAULT,
-            "dark": Adw.ColorScheme.FORCE_DARK,
-            "light": Adw.ColorScheme.FORCE_LIGHT,
-        }.get(self._theme, Adw.ColorScheme.FORCE_DARK)
+        # Catppuccin off means "follow your system GNOME theme" (the
+        # Preferences subtitle's promise): never force a scheme, let the
+        # system light/dark preference drive appearance. The in-app
+        # Light/Dark row applies when the Catppuccin theme is on.
+        if not self._use_catppuccin:
+            scheme = Adw.ColorScheme.DEFAULT
+        else:
+            scheme = {
+                "auto": Adw.ColorScheme.DEFAULT,
+                "dark": Adw.ColorScheme.FORCE_DARK,
+                "light": Adw.ColorScheme.FORCE_LIGHT,
+            }.get(self._theme, Adw.ColorScheme.FORCE_DARK)
         Adw.StyleManager.get_default().set_color_scheme(scheme)
+
+    def _effective_dark(self):
+        """Whether the popup is effectively dark right now — honours the
+        follow-system cases (Catppuccin off, or theme == auto)."""
+        if self._use_catppuccin and self._theme in ("dark", "light"):
+            return self._theme == "dark"
+        try:
+            return Adw.StyleManager.get_default().get_dark()
+        except Exception:
+            return True
 
     def _resolve_font_color(self):
         """Translate the ``font_color`` setting to a CSS colour value.
@@ -411,16 +437,8 @@ class ClipmanWindow(Adw.ApplicationWindow):
         tiles always resolve (falling back to system theme just means the
         surrounding chrome isn't Catppuccin — the tile hues still apply).
         """
-        if self._theme == "light":
-            colors = _TYPE_COLORS_LIGHT
-        elif self._theme == "dark":
-            colors = _TYPE_COLORS_DARK
-        else:  # auto — follow system, default dark
-            try:
-                is_dark = Adw.StyleManager.get_default().get_dark()
-            except Exception:
-                is_dark = True
-            colors = _TYPE_COLORS_DARK if is_dark else _TYPE_COLORS_LIGHT
+        colors = (_TYPE_COLORS_DARK if self._effective_dark()
+                  else _TYPE_COLORS_LIGHT)
         return "\n".join(
             f"@define-color {name} {value};"
             for name, value in colors.items()
@@ -430,16 +448,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """@clip_dim — the secondary-text colour for the effective theme.
         Always emitted (independent of the Catppuccin toggle) so CSS never
         references an undefined @clip_dim."""
-        if self._theme == "light":
-            dim = _DIM_TEXT_LIGHT
-        elif self._theme == "dark":
-            dim = _DIM_TEXT_DARK
-        else:
-            try:
-                is_dark = Adw.StyleManager.get_default().get_dark()
-            except Exception:
-                is_dark = True
-            dim = _DIM_TEXT_DARK if is_dark else _DIM_TEXT_LIGHT
+        dim = _DIM_TEXT_DARK if self._effective_dark() else _DIM_TEXT_LIGHT
         return f"@define-color clip_dim {dim};\n"
 
     def _accent_override_block(self):
@@ -1461,15 +1470,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def _gold_hex(self):
         """The pin/snippet gold for the effective theme (title star)."""
-        if self._theme == "light":
-            return _TYPE_COLORS_LIGHT["type_snip"]
-        if self._theme == "dark":
-            return _TYPE_COLORS_DARK["type_snip"]
-        try:
-            is_dark = Adw.StyleManager.get_default().get_dark()
-        except Exception:
-            is_dark = True
-        return (_TYPE_COLORS_DARK if is_dark
+        return (_TYPE_COLORS_DARK if self._effective_dark()
                 else _TYPE_COLORS_LIGHT)["type_snip"]
 
     def _sensitive_remaining(self, entry):
@@ -1955,6 +1956,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._apply_css()  # palette block depends on the theme
         elif key == "use_catppuccin":
             self._use_catppuccin = str(value).lower() not in ("false", "0", "")
+            self._apply_theme()  # off -> follow the system scheme
             self._apply_css()
         elif key == "show_count_badges":
             self._show_count_badges = str(value).lower() not in (
