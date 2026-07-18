@@ -96,18 +96,18 @@ def main():
     def on_activate(app):
         app.hold()
         window = ClipmanWindow(application=app, db=db, monitor=None)
-        if args.view == "main":
-            window.refresh()
-            target = window
-        elif args.view == "preferences":
+        window.refresh()
+        window.set_default_size(440, 620)
+        window.present()
+        # preferences/snippets are in-surface Adw.Dialogs — present them on
+        # the window and capture the window (the dialog renders over it).
+        if args.view == "preferences":
             from clipman.preferences import ClipmanPreferences
-            target = ClipmanPreferences(parent=window, db=db)
-        else:
+            ClipmanPreferences(db, window).present(window)
+        elif args.view == "snippets":
             from clipman.snippets_dialog import SnippetsDialog
-            target = SnippetsDialog(parent=window, db=db)
-        target.set_default_size(440, 620)
-        target.present()
-        GLib.timeout_add(500, _capture, target, args.out, 20, app)
+            SnippetsDialog(db).present(window)
+        GLib.timeout_add(600, _capture, window, args.out, 20, app)
 
     app.connect("activate", on_activate)
     app.run([])

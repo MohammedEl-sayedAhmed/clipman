@@ -35,6 +35,7 @@ categories of message:
 
 import logging
 import os
+import re
 import subprocess
 import time
 
@@ -114,8 +115,14 @@ EVENT_KEYS = frozenset({
 })
 
 
-class ClipmanPreferences(Adw.PreferencesWindow):
-    """Six-pane preferences window.
+class ClipmanPreferences(Adw.PreferencesDialog):
+    """Six-pane preferences dialog.
+
+    An ``Adw.PreferencesDialog`` (not a separate top-level window) so it
+    presents in-surface, anchored to the popup via ``present(parent)``.
+    A top-level ``Adw.PreferencesWindow`` opened *behind* the popup on
+    Wayland and looked unresponsive. ``parent`` is accepted for call-site
+    compatibility; anchoring happens in the caller's ``present(parent)``.
 
     ``on_setting_changed`` is a callable that the parent window passes
     in; it's invoked with ``(key, value)`` whenever any persisted
@@ -123,16 +130,19 @@ class ClipmanPreferences(Adw.PreferencesWindow):
     without a restart.
     """
 
-    def __init__(self, db, parent, on_setting_changed=None):
+    def __init__(self, db, parent=None, on_setting_changed=None):
         super().__init__()
         self.db = db
         self._on_setting_changed = on_setting_changed or (lambda k, v: None)
         self._kbd_dialog = None  # held so the GC doesn't collect mid-capture
+        # As an Adw.Dialog this is NOT a Gtk.Window, so it can't be the
+        # parent of a Gtk.FileChooserNative. Keep the real toplevel (the
+        # ClipmanWindow passed in) for the backup/restore choosers.
+        self._parent_window = parent
 
-        self.set_modal(True)
-        self.set_transient_for(parent)
+        # Adw.Dialog manages its own sizing/stacking — no set_modal /
+        # set_transient_for / set_default_size (those are Window APIs).
         self.set_search_enabled(True)
-        self.set_default_size(820, 600)
 
         self.add(self._build_appearance_page())
         self.add(self._build_privacy_page())
@@ -252,39 +262,58 @@ class ClipmanPreferences(Adw.PreferencesWindow):
             _("Color applied to clip text in the popup.")
         )
 
+        # Accent colour picker — drives toggles, active tabs, focus rings,
+        # the recording pill. A picker (rather than the pale default) lets
+        # the user choose a high-contrast accent.
+        accent_color_row = Adw.ActionRow()
+        accent_color_row.set_title(_("Accent color"))
+        accent_color_row.set_subtitle(
+            _("Toggles, active tabs and highlights. Pick any colour or reset.")
+        )
+        cur_accent = self.db.get_setting("accent_color", "default")
+        accent_dialog = Gtk.ColorDialog()
+        accent_dialog.set_with_alpha(False)
+        self._accent_btn = Gtk.ColorDialogButton(dialog=accent_dialog)
+        self._accent_btn.set_valign(Gtk.Align.CENTER)
+        argba = Gdk.RGBA()
+        argba.parse(self._accent_display_hex(cur_accent))
+        self._accent_btn.set_rgba(argba)
+        self._accent_btn.connect("notify::rgba", self._on_accent_rgba)
+        accent_reset = Gtk.Button.new_from_icon_name("edit-undo-symbolic")
+        accent_reset.set_tooltip_text(_("Reset to theme default"))
+        accent_reset.add_css_class("flat")
+        accent_reset.set_valign(Gtk.Align.CENTER)
+        accent_reset.connect("clicked", self._on_accent_reset)
+        accent_color_row.add_suffix(self._accent_btn)
+        accent_color_row.add_suffix(accent_reset)
+        accent_group.add(accent_color_row)
+
         accent_row = Adw.ActionRow()
         accent_row.set_title(_("Font color"))
-        accent_row.set_subtitle(_("Pick a preset or fall back to default."))
-
-        swatches = Gtk.Box(
-            orientation=Gtk.Orientation.HORIZONTAL, spacing=6
+        accent_row.set_subtitle(
+            _("Pick any colour, or reset to the theme default.")
         )
-        swatches.set_valign(Gtk.Align.CENTER)
+
         current_font_color = self.db.get_setting("font_color", "default")
-        for preset_id, hex_value, tooltip in FONT_COLOR_PRESETS:
-            btn = Gtk.Button()
-            btn.set_tooltip_text(tooltip)
-            btn.add_css_class("circular")
-            btn.set_size_request(28, 28)
-            if hex_value:
-                # Inline CSS provider so the swatch fills with the preset.
-                provider = Gtk.CssProvider()
-                provider.load_from_data(
-                    f"button {{ background: {hex_value}; }}".encode(), -1
-                )
-                btn.get_style_context().add_provider(
-                    provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-                )
-            else:
-                btn.set_label("A")
-            if preset_id == current_font_color:
-                btn.add_css_class("suggested-action")
-            btn.connect(
-                "clicked",
-                lambda _b, pid=preset_id: self._on_font_color_picked(pid),
-            )
-            swatches.append(btn)
-        accent_row.add_suffix(swatches)
+        color_dialog = Gtk.ColorDialog()
+        color_dialog.set_with_alpha(False)
+        self._font_color_btn = Gtk.ColorDialogButton(dialog=color_dialog)
+        self._font_color_btn.set_valign(Gtk.Align.CENTER)
+        rgba = Gdk.RGBA()
+        rgba.parse(self._font_color_display_hex(current_font_color))
+        self._font_color_btn.set_rgba(rgba)
+        self._font_color_btn.connect(
+            "notify::rgba", self._on_font_color_rgba
+        )
+
+        reset_btn = Gtk.Button.new_from_icon_name("edit-undo-symbolic")
+        reset_btn.set_tooltip_text(_("Reset to theme default"))
+        reset_btn.add_css_class("flat")
+        reset_btn.set_valign(Gtk.Align.CENTER)
+        reset_btn.connect("clicked", self._on_font_color_reset)
+
+        accent_row.add_suffix(self._font_color_btn)
+        accent_row.add_suffix(reset_btn)
         accent_group.add(accent_row)
         page.add(accent_group)
 
@@ -333,10 +362,47 @@ class ClipmanPreferences(Adw.PreferencesWindow):
 
         return page
 
-    def _on_font_color_picked(self, preset_id):
-        self._save("font_color", preset_id)
-        # Caller refreshes; we don't redraw the swatch row here because
-        # the user will see the new color in the popup itself.
+    def _accent_display_hex(self, value):
+        """Hex to show in the accent button (custom hex, or the Catppuccin
+        mauve default so the button isn't blank)."""
+        if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            return value
+        return "#cba6f7"
+
+    def _on_accent_rgba(self, button, _pspec):
+        rgba = button.get_rgba()
+        hex_value = "#{:02x}{:02x}{:02x}".format(
+            round(rgba.red * 255),
+            round(rgba.green * 255),
+            round(rgba.blue * 255),
+        )
+        self._save("accent_color", hex_value)
+
+    def _on_accent_reset(self, _button):
+        self._save("accent_color", "default")
+
+    def _font_color_display_hex(self, value):
+        """Resolve a stored font_color (hex, legacy preset id, or
+        'default') to a hex the colour button can display."""
+        if isinstance(value, str) and re.fullmatch(r"#[0-9a-fA-F]{6}", value):
+            return value
+        for preset_id, hex_value, _tip in FONT_COLOR_PRESETS:
+            if preset_id == value and hex_value:
+                return hex_value
+        # 'default' — show a neutral so the button isn't misleading.
+        return "#9e9e9e"
+
+    def _on_font_color_rgba(self, button, _pspec):
+        rgba = button.get_rgba()
+        hex_value = "#{:02x}{:02x}{:02x}".format(
+            round(rgba.red * 255),
+            round(rgba.green * 255),
+            round(rgba.blue * 255),
+        )
+        self._save("font_color", hex_value)
+
+    def _on_font_color_reset(self, _button):
+        self._save("font_color", "default")
 
     # ------------------------------------------------------------------
     # Pane 2: Privacy
@@ -586,7 +652,7 @@ class ClipmanPreferences(Adw.PreferencesWindow):
     def _on_backup_clicked(self, _btn):
         chooser = Gtk.FileChooserNative.new(
             _("Export backup"),
-            self,
+            self._parent_window,
             Gtk.FileChooserAction.SAVE,
             _("Save"),
             _("Cancel"),
@@ -611,7 +677,7 @@ class ClipmanPreferences(Adw.PreferencesWindow):
     def _on_restore_clicked(self, _btn):
         chooser = Gtk.FileChooserNative.new(
             _("Restore from backup"),
-            self,
+            self._parent_window,
             Gtk.FileChooserAction.OPEN,
             _("Open"),
             _("Cancel"),

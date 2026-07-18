@@ -4,6 +4,7 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CLIPMAN_PY="$SCRIPT_DIR/clipman.py"
 AUTOSTART_DIR="$HOME/.config/autostart"
+LEGACY_AUTOSTART="$AUTOSTART_DIR/com.clipman.Clipman.desktop"
 DATA_DIR="$HOME/.local/share/clipman"
 EXTENSION_UUID="clipman@clipman.com"
 EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
@@ -32,7 +33,6 @@ fi
 # Step 2: Create data directories
 echo "[2/6] Creating data directories..."
 mkdir -p "$DATA_DIR/images"
-mkdir -p "$AUTOSTART_DIR"
 
 # Step 3: Install GNOME Shell extension for native clipboard monitoring
 echo "[3/6] Installing GNOME Shell clipboard extension..."
@@ -42,9 +42,13 @@ cp "$SCRIPT_DIR/extension/extension.js" "$EXTENSION_DIR/"
 gnome-extensions enable "$EXTENSION_UUID" 2>/dev/null || true
 echo "  Extension installed. You may need to log out and back in to activate it."
 
-# Step 4: Generate and install autostart desktop file + icon
-echo "[4/6] Setting up autostart..."
-sed "s|CLIPMAN_PATH_PLACEHOLDER|$SCRIPT_DIR|g" "$SCRIPT_DIR/data/com.clipman.Clipman.desktop" > "$AUTOSTART_DIR/com.clipman.Clipman.desktop"
+# Step 4: Install application icon
+# Clipman autostarts via the systemd user service (Step 6) ONLY. We do not
+# also drop an XDG autostart .desktop: running both starts the daemon twice,
+# and the two instances race for the com.clipman.Daemon bus name, leaving an
+# orphaned process. Remove any autostart file left by an older installer.
+echo "[4/6] Installing application icon..."
+rm -f "$LEGACY_AUTOSTART"
 ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
 mkdir -p "$ICON_DIR"
 cp "$SCRIPT_DIR/data/com.clipman.Clipman.svg" "$ICON_DIR/"

@@ -48,8 +48,8 @@
 
 .filter-tab {
     background-color: transparent;
-    color: alpha(@window_fg_color, 0.65);
-    border: 1px solid alpha(@window_fg_color, 0.10);
+    color: @clip_dim;
+    border: 1px solid alpha(@window_fg_color, 0.14);
     border-radius: 999px;
     padding: 3px 12px;
     min-height: 22px;
@@ -70,6 +70,23 @@
 .filter-tab-active:hover {
     background-color: @accent_color;
     color: @accent_fg_color;
+}
+
+/* Count badge inside each switcher tab. */
+.filter-count {
+    font-size: 0.76em;
+    font-weight: 600;
+    color: @clip_dim;
+    background-color: alpha(@window_fg_color, 0.12);
+    border-radius: 999px;
+    padding: 0 6px;
+}
+.filter-count:empty {
+    padding: 0;
+}
+.filter-tab-active .filter-count {
+    color: @accent_fg_color;
+    background-color: alpha(@accent_fg_color, 0.22);
 }
 
 /* List + rows -------------------------------------------------------- */
@@ -98,37 +115,104 @@
     color: @card_fg_color;
 }
 
+/* Lightweight box row (replaces the heavier Adw.ActionRow — see
+   window._row_setup). Give it the internal padding ActionRow used to
+   provide so rows aren't cramped. */
+.clip-row {
+    padding: 5px 4px;
+}
+
 .clip-row .title {
     font-weight: 500;
     color: ${font_color};
 }
 
 .clip-row .subtitle {
-    color: alpha(@card_fg_color, 0.65);
+    color: @clip_dim;
     font-size: 0.85em;
 }
 
-/* Per-type symbolic icon in each row's prefix. Symbolic icons inherit
-   the foreground colour, so they adapt to light/dark and the user's
-   system theme; dim slightly so they read as a quiet type hint. */
+/* Colour-coded type icon: the symbolic icon is tinted per clip type as a
+   quiet, scannable hint (no heavy background chip). Colours come from the
+   @type_* tokens injected by window._type_color_block(). */
 
-.clip-type-icon {
-    color: alpha(@window_fg_color, 0.55);
-    margin: 0 6px 0 2px;
+.clip-tile {
+    min-width: 24px;
+    margin: 0 4px 0 2px;
 }
 
-/* Footer hints ------------------------------------------------------- */
+.clip-tile > image {
+    -gtk-icon-size: 16px;
+}
+
+.clip-tile.type-text  > image { color: @type_text; }
+.clip-tile.type-link  > image { color: @type_link; }
+.clip-tile.type-code  > image { color: @type_code; }
+.clip-tile.type-image > image { color: @type_image; }
+.clip-tile.type-snip  > image { color: @type_snip; }
+
+/* Dated section headers (★ Pinned / Today / Yesterday / Earlier). */
+.clip-section-header {
+    font-size: 0.72em;
+    font-weight: 700;
+    color: @clip_dim;
+    margin: 8px 4px 2px 6px;
+}
+
+/* Row actions (pin / delete) fade in on hover; pinned rows keep them on. */
+.clip-actions {
+    opacity: 0;
+    transition: opacity 120ms ease;
+}
+.clipman-list row:hover .clip-actions,
+.clip-row.pinned .clip-actions {
+    opacity: 1;
+}
+
+/* Footer: item count · recording pill · clear all -------------------- */
 
 .clipman-footer {
-    padding: 4px 8px;
-    border-top: 1px solid alpha(@window_fg_color, 0.06);
+    padding: 4px 10px;
+    border-top: 1px solid alpha(@window_fg_color, 0.08);
     background-color: alpha(@window_fg_color, 0.02);
 }
 
-.clipman-footer-hint {
-    color: alpha(@window_fg_color, 0.55);
-    font-size: 0.8em;
-    letter-spacing: 0.02em;
+.clipman-count {
+    color: @clip_dim;
+    font-size: 0.82em;
+}
+
+.recording-pill {
+    padding: 2px 8px;
+    border-radius: 9999px;
+    background-color: alpha(@accent_color, 0.14);
+}
+.recording-pill label {
+    color: @accent_color;
+    font-size: 0.78em;
+    font-weight: 500;
+}
+.recording-pill image {
+    -gtk-icon-size: 11px;
+    color: @accent_color;
+}
+.recording-pill.paused {
+    background-color: alpha(@warning_color, 0.16);
+}
+.recording-pill.paused label,
+.recording-pill.paused image {
+    color: @warning_color;
+}
+
+.clipman-clear {
+    color: @clip_dim;
+    font-size: 0.82em;
+    padding: 2px 8px;
+    min-height: 0;
+}
+.clipman-clear:hover {
+    color: @error_color;
+    background-color: alpha(@error_color, 0.12);
 }
 
 /* Status page (empty / no-results) ----------------------------------- */
