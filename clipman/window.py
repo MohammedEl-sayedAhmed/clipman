@@ -1947,6 +1947,17 @@ class ClipmanWindow(Adw.ApplicationWindow):
     def _on_incognito_toggled(self, button):
         active = button.get_active()
         self._update_recording_pill(active)
+        # Incognito is ONE persistent state: the header toggle, footer pill
+        # and the Privacy switch all read/write the same setting. Previously
+        # only the Privacy switch persisted, so a daemon restart silently
+        # re-enabled incognito that the user had turned off in the header —
+        # copies were dropped with no obvious cause.
+        try:
+            self.db.set_setting(
+                "incognito_on_launch", "true" if active else "false"
+            )
+        except Exception:
+            logger.debug("persisting incognito failed", exc_info=True)
         if self.monitor is None:
             return
         self.monitor.set_incognito(active)

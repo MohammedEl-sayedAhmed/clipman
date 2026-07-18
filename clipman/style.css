@@ -102,9 +102,6 @@
     border-radius: 999px;
     padding: 0 6px;
 }
-.filter-count:empty {
-    padding: 0;
-}
 .filter-tab-active .filter-count {
     color: @accent_color;
     background-color: alpha(@accent_color, 0.15);
