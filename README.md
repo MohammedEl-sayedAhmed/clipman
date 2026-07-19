@@ -1,3 +1,9 @@
+> **⚙️ Personal fork** — patched for **Bluefin-DX / Fedora atomic, GNOME 50, Wayland**.
+> Tracks upstream v1.2.0 (native paste via the GNOME Shell extension). See
+> [`CUSTOMIZATIONS.md`](CUSTOMIZATIONS.md) for the atomic-host deltas and
+> [`INSTALL-BLUEFIN.md`](INSTALL-BLUEFIN.md) for setup. Upstream:
+> [MohammedEl-sayedAhmed/clipman](https://github.com/MohammedEl-sayedAhmed/clipman) (Apache-2.0).
+
 <div align="center">
 
 <img src="docs/logo.svg" alt="Clipman logo" width="128" height="128">
@@ -425,15 +431,13 @@ See the [LICENSE](LICENSE) and [NOTICE](NOTICE) files for full details.
 
 ## Star History
 
-<a href="https://github.com/MohammedEl-sayedAhmed/clipman/stargazers">
+<a href="https://star-history.com/#MohammedEl-sayedAhmed/clipman&Date">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/assets/star-history-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/assets/star-history-light.svg" />
-    <img alt="Star history chart" src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/assets/star-history-light.svg" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=MohammedEl-sayedAhmed/clipman&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=MohammedEl-sayedAhmed/clipman&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=MohammedEl-sayedAhmed/clipman&type=Date" />
   </picture>
 </a>
-
-<sub>Chart and <a href="docs/_data/stats_history.json">download history</a> are regenerated daily from the GitHub API by the numbers workflow — no third-party chart service.</sub>
 
 ## Acknowledgements
 
