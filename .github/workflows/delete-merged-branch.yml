@@ -1,0 +1,39 @@
+name: Delete merged branch
+
+# GitHub's repo-level "Automatically delete head branches" reliably fires
+# for UI/CLI merges but NOT for PRs merged by the Actions auto-merge queue
+# (github-actions[bot] / Dependabot), so chore(numbers-*) and dependabot/*
+# branches kept piling up. This closes that gap: on every merged PR, delete
+# the head branch if it still exists in this repo (skip forks).
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  delete:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Delete head branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          # Never delete the default/protected branch.
+          if [ "$BRANCH" = "${{ github.event.repository.default_branch }}" ]; then
+            echo "Refusing to delete default branch $BRANCH"; exit 0
+          fi
+          if gh api "repos/${{ github.repository }}/git/refs/heads/$BRANCH" >/dev/null 2>&1; then
+            gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$BRANCH" \
+              && echo "Deleted $BRANCH" \
+              || echo "Could not delete $BRANCH (already gone or protected)"
+          else
+            echo "$BRANCH already deleted"
+          fi
