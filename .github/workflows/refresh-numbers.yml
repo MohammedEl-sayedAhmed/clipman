@@ -44,6 +44,17 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
+          # Use the fine-grained PAT (NUMBERS_TOKEN) so the branch push and
+          # the PR below are attributed to a real account rather than
+          # GITHUB_TOKEN. GitHub deliberately does NOT start workflow runs
+          # for events made with GITHUB_TOKEN (loop prevention), so a
+          # bot-opened PR gets zero required checks and its ``--auto`` merge
+          # blocks forever — which is why the daily star/number bump used to
+          # stall until manually nudged, then get superseded and lost.
+          # A PAT-opened PR runs its checks and self-merges unattended.
+          # Falls back to GITHUB_TOKEN until the secret exists (checks then
+          # stall as before — harmless, just not hands-off).
+          token: ${{ secrets.NUMBERS_TOKEN || secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v7
         with:
@@ -131,7 +142,10 @@ jobs:
 
       - name: Open auto-merge PR if changed
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Same PAT-with-fallback as checkout: the PR must be created by a
+          # real account for its required checks to run and ``--auto`` to
+          # complete without a manual nudge.
+          GH_TOKEN: ${{ secrets.NUMBERS_TOKEN || secrets.GITHUB_TOKEN }}
           GH_COMMIT_AUTHOR: github-actions[bot]
           GH_COMMIT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         run: |
@@ -139,18 +153,17 @@ jobs:
             echo "Numbers unchanged; nothing to push."
             exit 0
           fi
-          # Supersede any earlier open numbers PR. Check runs on
-          # github-actions[bot] PRs need manual maintainer approval, so the
-          # maintainer approves only the latest pending PR. If they miss a
-          # day, stale auto-refresh PRs would otherwise pile up — close each
-          # prior one (and delete its branch) before opening today's.
+          # Supersede any earlier open numbers PR before opening today's so
+          # stale refreshes don't pile up. With NUMBERS_TOKEN set each PR
+          # runs its checks and auto-merges within minutes, so there is
+          # rarely a prior one still open to close.
           #
           # NB: filter client-side, not with ``--search``. gh pr list
           # --search hits the code-search index, which is eventually
-          # consistent and returned nothing under GITHUB_TOKEN in this
-          # runner, so no PR was ever closed and refreshes piled up. The
-          # plain REST list (--json) is immediately consistent; match the
-          # title prefix with jq instead.
+          # consistent and returned nothing in this runner, so no PR was
+          # ever closed and refreshes piled up. The plain REST list
+          # (--json) is immediately consistent; match the title prefix with
+          # jq instead.
           mapfile -t stale < <(gh pr list --state open --limit 100 --json number,title \
             --jq '.[] | select(.title | startswith("chore(numbers)")) | .number') || stale=()
           for n in "${stale[@]:-}"; do
@@ -177,5 +190,5 @@ jobs:
             --base main \
             --head "$branch" \
             --title "chore(numbers): refresh marketing counters" \
-            --body "Automated daily refresh of \`docs/_data/numbers.json\`. This run supersedes any earlier open numbers PR. Approve the workflow run to let checks run; it auto-merges once they pass."
+            --body "Automated daily refresh of marketing counters and the self-hosted star chart. Supersedes any earlier open numbers PR. Opened via NUMBERS_TOKEN so required checks run automatically; auto-merges once they pass."
           gh pr merge "$branch" --auto --squash --delete-branch
