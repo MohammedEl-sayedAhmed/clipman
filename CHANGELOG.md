@@ -4,6 +4,18 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Added — GNOME Shell 49 & 50 support (#186)
+
+- The Shell extension (v7) now declares support for GNOME Shell 49 and
+  50, covering Ubuntu 26.04 LTS. No code changes were needed: every API
+  the extension touches was verified unchanged against the Shell 49
+  headers and Mutter 50.0 (the 49/50 porting guides confirm none of the
+  removals — Meta.Rectangle constructors, Clutter.ClickAction, the X11
+  backend — intersect the extension's Wayland-native surface). On 49+
+  the popup is additionally hidden from the dash and Alt+Tab via the
+  supported `Meta.Window.hide_from_window_list()` API, which the code
+  already feature-detected.
+
 ## [1.2.0] - 2026-07-18
 
 ### Highlights

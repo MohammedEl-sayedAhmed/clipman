@@ -26,7 +26,7 @@ grown:
   `last_update_check`, `latest_known_version`, `dismissed_version` —
   see ADR 0007) are read by both the daemon and any future external
   tooling.
-- A documented support window: Python 3.10–3.12, GNOME Shell 45–48,
+- A documented support window: Python 3.10–3.12, GNOME Shell 45–50,
   Ubuntu 22.04+.
 - A toolkit choice (GTK3) that downstream packagers depend on.
 

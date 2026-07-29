@@ -110,7 +110,7 @@ Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extensi
 
 ## Requirements
 
-- Ubuntu 24.04+ with GNOME 46–48 and Wayland
+- Ubuntu 24.04+ with GNOME 46–50 and Wayland
 - Python 3.10+
 - GTK 4 + libadwaita 1.4+
 
