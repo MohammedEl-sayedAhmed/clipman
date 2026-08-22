@@ -71,6 +71,10 @@ def main():
     ap.add_argument("--out", default="/tmp/clipman-shot.png")
     ap.add_argument("--view", default="main", choices=["main", "preferences", "snippets"])
     ap.add_argument("--empty", action="store_true", help="don't seed history")
+    ap.add_argument("--theme", default="dark", choices=["dark", "light"],
+                    help="persisted theme setting for the shot")
+    ap.add_argument("--incognito", action="store_true",
+                    help="start with recording paused (privacy-state shots)")
     args = ap.parse_args()
 
     tmp = tempfile.mkdtemp(prefix="clipman-shot-")
@@ -89,6 +93,9 @@ def main():
     db = database.ClipboardDB()
     if not args.empty:
         _seed(db)
+    db.set_setting("theme", args.theme)
+    if args.incognito:
+        db.set_setting("incognito_on_launch", "true")
 
     app = Adw.Application(application_id="com.clipman.Shot",
                          flags=Gio.ApplicationFlags.NON_UNIQUE)
@@ -97,6 +104,10 @@ def main():
         app.hold()
         window = ClipmanWindow(application=app, db=db, monitor=None)
         window.refresh()
+        if args.incognito:
+            # app.py applies incognito_on_launch at startup; the harness
+            # constructs the window directly, so drive the toggle itself.
+            window.set_incognito(True)
         window.set_default_size(440, 620)
         window.present()
         # preferences/snippets are in-surface Adw.Dialogs — present them on
