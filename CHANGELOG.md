@@ -4,6 +4,14 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-08-22
+
+A polish release driven by a full four-dimension audit (docs, code, UI,
+repo meta): every public claim re-aligned with the shipped product, the
+two GTK deprecations removed, the update banner made dismissable, and
+the UI brought to full parity with the design mockups. Rebuilding the
+snap also pulls the patched libcurl from USN-8651-1.
+
 ### Added — GNOME Shell 49 & 50 support (#186)
 
 - The Shell extension (v7) now declares support for GNOME Shell 49 and
@@ -15,6 +23,51 @@ All notable changes to Clipman are documented in this file.
   the popup is additionally hidden from the dash and Alt+Tab via the
   supported `Meta.Window.hide_from_window_list()` API, which the code
   already feature-detected.
+
+### Fixed
+
+- **The update banner can now be dismissed** (#231). `updates.dismiss()`
+  existed but nothing called it — the bare `Adw.Banner` has no dismiss
+  control, so once a release was out the banner reappeared on every
+  launch. The notice is now a custom banner row (icon · title/desc ·
+  action · dismiss X) and the X persists the dismissal per version.
+- Backup/restore use `Gtk.FileDialog` instead of the deprecated
+  `Gtk.FileChooserNative`; thumbnails use `Gdk.MemoryTexture` instead of
+  the deprecated `Gdk.Texture.new_for_pixbuf` (#229). Zero deprecation
+  warnings in the test suite.
+
+### Changed — UI parity with the design mockups (#231)
+
+- Header and footer sit on the raised mantle surface; status-page icons
+  are tinted per tone; privacy states (paused pill, incognito banner)
+  use the mockup's lavender instead of warning amber; the search field
+  rests recessed and raises on focus; image thumbnails get rounded
+  corners; filter tabs left-aligned; Preferences gains an "In-popup
+  shortcuts" reference group. README screenshots retaken from this
+  build (`scripts/screenshot.py --theme/--incognito`).
+
+### Documentation (#226, #230)
+
+- Truth sweep: marketing-site install commands fixed (they referenced
+  nonexistent v1.1.0 asset names), the privacy FAQ now accurately
+  describes the optional once-daily update check, README/llms.txt
+  describe the shipped preferences dialog/palettes/list implementation,
+  test counts and support tables refreshed, `CITATION.cff` auto-bumped
+  by `bump-version.sh`.
+- New `AGENTS.md`: tool-agnostic working guide (workflow, verification
+  recipes, platform gotchas, release chain) for AI-assisted development.
+
+### CI (#227)
+
+- Bot workflows use job-scoped token permissions, commit-SHA-pinned
+  actions and the harden-runner first step (OpenSSF Scorecard
+  Token-Permissions fix).
+
+### Compatibility
+
+Unchanged from 1.2.0 otherwise: Python 3.10–3.12, GNOME Shell 45–50,
+Wayland. No D-Bus contract changes; no database migrations. The GNOME
+Shell extension remains at v7 (no upload needed).
 
 ## [1.2.0] - 2026-07-18
 
