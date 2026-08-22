@@ -617,6 +617,38 @@ class ClipmanPreferences(Adw.Dialog):
         paste_group.add(paste_row)
         page.add(paste_group)
 
+        # Reference list (mockup preferences.html "In-popup shortcuts"):
+        # non-interactive rows showing what the popup answers to while it
+        # has focus. Lists only shortcuts that actually exist in
+        # window._on_key_pressed / the ListView defaults — keep in sync.
+        popup_group = Adw.PreferencesGroup()
+        popup_group.set_title(_("In-popup shortcuts"))
+        popup_group.set_description(
+            _("Work whenever the popup has focus. Not customisable (yet).")
+        )
+        shortcuts = (
+            (_("Search"), ("/", "Ctrl+F")),
+            (_("Navigate clips"), ("↑", "↓")),
+            (_("Paste selected"), ("Enter",)),
+            (_("New snippet (Snippets view)"), ("Ctrl+N",)),
+            (_("Close popup"), ("Esc",)),
+        )
+        for label, keys in shortcuts:
+            row = Adw.ActionRow()
+            row.set_title(label)
+            row.set_activatable(False)
+            kbd_box = Gtk.Box(
+                orientation=Gtk.Orientation.HORIZONTAL, spacing=6
+            )
+            kbd_box.set_valign(Gtk.Align.CENTER)
+            for key in keys:
+                cap = Gtk.Label(label=key)
+                cap.add_css_class("keycap")
+                kbd_box.append(cap)
+            row.add_suffix(kbd_box)
+            popup_group.add(row)
+        page.add(popup_group)
+
         return page
 
     def _on_change_binding(self, _btn):

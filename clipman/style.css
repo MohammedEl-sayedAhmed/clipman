@@ -20,8 +20,11 @@
     font-size: ${font_size}px;
 }
 
+/* Mockup surface hierarchy: header/footer sit on the raised "mantle"
+   surface (libadwaita's headerbar token), not flattened onto the window
+   background. */
 .clipman-window headerbar {
-    background-color: @window_bg_color;
+    background-color: @headerbar_bg_color;
     border-bottom: 1px solid alpha(@window_fg_color, 0.08);
     box-shadow: none;
     padding: 4px 6px;
@@ -30,8 +33,11 @@
 
 /* Search ------------------------------------------------------------- */
 
+/* Rest state is recessed into the window (mockup's inset field); focus
+   raises it to the card surface with the accent ring. Without the split
+   the field looks permanently focused, most visibly in light mode. */
 .clipman-search {
-    background-color: @card_bg_color;
+    background-color: mix(@window_bg_color, @window_fg_color, 0.05);
     color: @card_fg_color;
     border: 1px solid alpha(@window_fg_color, 0.08);
     border-radius: 8px;
@@ -40,6 +46,7 @@
 }
 
 .clipman-search:focus-within {
+    background-color: @card_bg_color;
     border-color: @accent_color;
     box-shadow: 0 0 0 2px alpha(@accent_color, 0.18);
 }
@@ -194,6 +201,13 @@
         alpha(@type_snip, 0.12), alpha(@type_snip, 0) 18%);
 }
 
+/* Image thumbnails: rounded like the mockup's media tiles (the Python
+   side sets Gtk.Overflow.HIDDEN so the picture content is clipped too). */
+.clip-thumb {
+    border-radius: 9px;
+    box-shadow: inset 0 0 0 1px alpha(@window_fg_color, 0.12);
+}
+
 /* Sensitive rows: masked mono preview + warning countdown meta. */
 .clip-row .title.masked {
     font-family: monospace;
@@ -219,7 +233,7 @@
 .clipman-footer {
     padding: 4px 10px;
     border-top: 1px solid alpha(@window_fg_color, 0.08);
-    background-color: alpha(@window_fg_color, 0.02);
+    background-color: @headerbar_bg_color;
 }
 
 .clipman-count {
@@ -238,9 +252,6 @@
 .recording-pill:hover {
     background-color: alpha(@success_color, 0.24);
 }
-.recording-pill.paused:hover {
-    background-color: alpha(@warning_color, 0.26);
-}
 .recording-pill label {
     color: @success_color;
     font-size: 0.78em;
@@ -250,12 +261,18 @@
     -gtk-icon-size: 11px;
     color: @success_color;
 }
+/* Paused = incognito: lavender/violet per the mockup's --incognito token,
+   not the warning amber (paused recording is a chosen privacy state, not
+   a problem). */
 .recording-pill.paused {
-    background-color: alpha(@warning_color, 0.16);
+    background-color: alpha(@incognito, 0.16);
+}
+.recording-pill.paused:hover {
+    background-color: alpha(@incognito, 0.26);
 }
 .recording-pill.paused label,
 .recording-pill.paused image {
-    color: @warning_color;
+    color: @incognito;
 }
 
 .clipman-clear {
@@ -288,6 +305,22 @@
 .clipman-window statuspage > box > image {
     color: alpha(@window_fg_color, 0.35);
     -gtk-icon-size: 48px;
+}
+
+/* Tone-scoped status icons (mockup states.html: each state's artwork is
+   tinted to its tone, not a uniform neutral grey). Neutral states keep
+   the 35%-alpha default above. */
+.clipman-window statuspage.info > box > image {
+    color: @accent_color;
+}
+.clipman-window statuspage.warning > box > image {
+    color: @warning_color;
+}
+.clipman-window statuspage.error > box > image {
+    color: @error_color;
+}
+.clipman-window statuspage.privacy > box > image {
+    color: @incognito;
 }
 
 /* Amber CTA on warning statuspages (mockup tone-warning-cta). */
@@ -350,4 +383,13 @@ button.warning-cta:hover {
 .edge-banner.error > image,
 .edge-banner.error .edge-banner-action {
     color: @error_color;
+}
+/* Privacy states (incognito on/paused): the mockup's lavender, distinct
+   from both the accent and the warning amber. */
+.edge-banner.privacy {
+    background-color: alpha(@incognito, 0.12);
+}
+.edge-banner.privacy > image,
+.edge-banner.privacy .edge-banner-action {
+    color: @incognito;
 }

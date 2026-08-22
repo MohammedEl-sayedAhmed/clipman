@@ -82,10 +82,10 @@ body.theme-dark {
     --border-strong: #45475a;
     --divider:     rgba(205, 214, 244, 0.06);
 
-    /* Accent (Catppuccin Blue) */
-    --accent:      #89b4fa;
-    --accent-hover:#b4d0fb;
-    --accent-soft: rgba(137, 180, 250, 0.18);
+    /* Accent (Catppuccin Mauve — matches the shipped app, site & logo) */
+    --accent:      #cba6f7;
+    --accent-hover:#dcc7fa;
+    --accent-soft: rgba(203, 166, 247, 0.18);
 
     /* Semantic */
     --success:     #a6e3a1;
@@ -139,7 +139,7 @@ body.theme-dark {
     --accent-hover:  #1d4ed8; /* blue-700 */
     --accent-soft:   rgba(37, 99, 235, 0.12);
 
-    --success:       #16a34a; /* green-600 */
+    --success:       #15803d; /* green-700 — matches the app; holds contrast on white */
     --warning:       #b45309; /* amber-700 */
     --error:         #dc2626; /* red-600 */
     --info:          #0891b2; /* cyan-600 */

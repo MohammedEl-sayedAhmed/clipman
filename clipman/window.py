@@ -164,12 +164,20 @@ _TYPE_COLORS_LIGHT = {
     "type_snip": "#b45309",
 }
 
-# Secondary ("dim") text colour, per effective theme. Catppuccin subtext
-# tones that clear WCAG AA on each background — the alpha-of-fg approach
-# failed in light mode because Latte's muted #4c4f69 text can't hold
-# contrast once faded. #a6adc8 = 7.4:1 on dark, #5c5f77 = 5.5:1 on light.
+# Secondary ("dim") text colour, per effective theme. Chosen to clear
+# WCAG AA on each background — the alpha-of-fg approach failed in light
+# mode because faded text can't hold contrast on white. Dark: Catppuccin
+# subtext #a6adc8 (~7.4:1 on the Mocha base). Light: stone-600 #57534e
+# (~6.5:1 on white), from the same warm-stone family as the light palette.
 _DIM_TEXT_DARK = "#a6adc8"
 _DIM_TEXT_LIGHT = "#57534e"
+
+# Incognito/privacy tint, mirroring docs/design/tokens.css --incognito:
+# Catppuccin lavender on dark, violet-600 on light. Emitted as @incognito
+# alongside @clip_dim so privacy-toned banners/pills/status pages can use
+# the mockup's lavender instead of borrowing the warning amber or accent.
+_INCOGNITO_DARK = "#b4befe"
+_INCOGNITO_LIGHT = "#7c3aed"
 
 _URL_RE = re.compile(r"^(https?://|www\.)\S+$", re.IGNORECASE)
 # Conservative code detection: only strong, code-specific signals so plain
@@ -460,11 +468,16 @@ class ClipmanWindow(Adw.ApplicationWindow):
         )
 
     def _dim_color_block(self):
-        """@clip_dim — the secondary-text colour for the effective theme.
-        Always emitted (independent of the Catppuccin toggle) so CSS never
-        references an undefined @clip_dim."""
-        dim = _DIM_TEXT_DARK if self._effective_dark() else _DIM_TEXT_LIGHT
-        return f"@define-color clip_dim {dim};\n"
+        """@clip_dim + @incognito — theme-dependent tokens. Always emitted
+        (independent of the Catppuccin toggle) so CSS never references an
+        undefined token."""
+        dark = self._effective_dark()
+        dim = _DIM_TEXT_DARK if dark else _DIM_TEXT_LIGHT
+        incog = _INCOGNITO_DARK if dark else _INCOGNITO_LIGHT
+        return (
+            f"@define-color clip_dim {dim};\n"
+            f"@define-color incognito {incog};\n"
+        )
 
     def _accent_override_block(self):
         """Override libadwaita's accent @-tokens with the user's chosen
@@ -607,14 +620,19 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
         toolbarview.add_top_bar(header)
 
-        # -- Update banner (libadwaita native) -----------------------------
-        self._update_banner = Adw.Banner()
-        self._update_banner.set_button_label(_("Release notes"))
-        self._update_banner.set_revealed(False)
-        self._update_banner.connect(
-            "button-clicked", self._on_update_banner_clicked
+        # -- Update banner (custom edge-banner row) -------------------------
+        # Rendered through edge_states.build_banner_row so it matches the
+        # mockup (icon · title/desc · action · dismiss X) — Adw.Banner has
+        # no description line and, crucially, no dismiss control, which
+        # left updates.dismiss()/dismissed_version dead code and the banner
+        # reappearing on every launch.
+        self._update_banner_slot = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=0
         )
-        root.append(self._update_banner)
+        self._update_banner_row = None
+        self._update_banner_text = ""
+        self._update_latest = None
+        root.append(self._update_banner_slot)
 
         # -- Edge-state banner slot ---------------------------------------
         # Banner-kind edge states (incognito-on, paused, sensitive-shown,
@@ -663,7 +681,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._filter_box.set_margin_bottom(6)
         self._filter_box.set_margin_start(8)
         self._filter_box.set_margin_end(8)
-        self._filter_box.set_halign(Gtk.Align.CENTER)
+        self._filter_box.set_halign(Gtk.Align.START)
 
         self._filter_buttons = {}
         self._filter_count_labels = {}
@@ -1319,6 +1337,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
         thumb.set_size_request(48, 48)
         thumb.set_valign(Gtk.Align.CENTER)
         thumb.add_css_class("clip-thumb")
+        # CSS border-radius rounds the widget's background, not the
+        # painted picture — clip the content too or corners stay square.
+        thumb.set_overflow(Gtk.Overflow.HIDDEN)
         thumb.set_visible(False)
         row.append(thumb)
 
@@ -1628,23 +1649,42 @@ class ClipmanWindow(Adw.ApplicationWindow):
     def refresh_update_banner(self):
         """Public — ``app.py`` re-evaluates after a background check."""
         show, latest = updates.should_show_banner(self.db)
+        if self._update_banner_row is not None:
+            self._update_banner_slot.remove(self._update_banner_row)
+            self._update_banner_row = None
+            self._update_banner_text = ""
+        self._update_latest = latest if show else None
         if show:
-            self._update_banner.set_title(
-                _("A newer Clipman release is available — v{new} "
-                  "(you have v{cur})").format(
-                    new=latest, cur=__version__
-                )
+            from clipman.edge_states import build_banner_row
+            title = _("Update available — v{new}").format(new=latest)
+            body = _(
+                "You have v{cur}. See what changed before upgrading."
+            ).format(cur=__version__)
+            self._update_banner_row = build_banner_row(
+                "software-update-available-symbolic",
+                title,
+                body,
+                primary_action=(_("Release notes"), "open-release-notes"),
+                tone_css="info",
+                on_action=self._on_update_banner_action,
             )
-            self._update_banner.set_revealed(True)
-        else:
-            self._update_banner.set_revealed(False)
+            self._update_banner_text = f"{title} {body}"
+            self._update_banner_slot.append(self._update_banner_row)
 
-    def _on_update_banner_clicked(self, _banner):
-        latest = updates.latest_known(self.db) or __version__
-        self._open_url(
-            f"https://github.com/MohammedEl-sayedAhmed/clipman/"
-            f"releases/tag/v{latest}"
-        )
+    def _on_update_banner_action(self, action_id):
+        if action_id == "open-release-notes":
+            latest = self._update_latest or updates.latest_known(self.db) \
+                or __version__
+            self._open_url(
+                f"https://github.com/MohammedEl-sayedAhmed/clipman/"
+                f"releases/tag/v{latest}"
+            )
+            return
+        # dismiss-banner: persist so should_show_banner() stays False for
+        # this version — the previously-dead updates.dismiss() wiring.
+        if self._update_latest:
+            updates.dismiss(self.db, self._update_latest)
+        self.refresh_update_banner()
 
     # ------------------------------------------------------------------
     # Paste path — GTK 4 clipboard API with wl-copy + wtype/ydotool fallback

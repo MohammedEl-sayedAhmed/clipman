@@ -661,7 +661,7 @@ class TestWindowConstruction(unittest.TestCase):
         self.assertEqual(db.get_setting("incognito_on_launch"), "false")
 
     def test_refresh_update_banner_revealed(self):
-        """should_show_banner -> (True, version) reveals the banner."""
+        """should_show_banner -> (True, version) mounts the banner row."""
         from clipman import updates
         from clipman.window import ClipmanWindow
 
@@ -669,16 +669,49 @@ class TestWindowConstruction(unittest.TestCase):
         app = Adw.Application(application_id="com.clipman.Test")
         window = ClipmanWindow(application=app, db=db, monitor=None)
 
-        # The banner is built revealed=False at construction time. Patch
-        # should_show_banner so the next refresh_update_banner call
-        # flips the revealed flag and writes a title containing the
-        # advertised version.
+        # No banner row at construction time. Patch should_show_banner so
+        # the next refresh_update_banner call mounts the custom row with
+        # the advertised version in its text.
+        self.assertIsNone(window._update_banner_row)
         with patch.object(updates, "should_show_banner",
                           return_value=(True, "1.0.7")):
             window.refresh_update_banner()
 
-        self.assertTrue(window._update_banner.get_revealed())
-        self.assertIn("1.0.7", window._update_banner.get_title())
+        self.assertIsNotNone(window._update_banner_row)
+        self.assertIn("1.0.7", window._update_banner_text)
+
+    def test_update_banner_dismiss_persists_and_hides(self):
+        """The X persists updates.dismiss() so the banner stays gone.
+
+        Regression guard: with the old Adw.Banner there was no dismiss
+        control at all — updates.dismiss()/dismissed_version were dead
+        code and the banner reappeared on every launch.
+        """
+        from clipman import updates
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestDismiss")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        updates.set_enabled(db, True)  # independent of install-kind default
+
+        with patch.object(updates, "latest_known",
+                          return_value="9.9.9"):
+            window.refresh_update_banner()  # 9.9.9 > current -> shown
+        self.assertIsNotNone(window._update_banner_row)
+
+        with patch.object(updates, "latest_known",
+                          return_value="9.9.9"):
+            window._on_update_banner_action("dismiss-banner")
+
+        # Persisted for exactly the advertised version…
+        self.assertEqual(updates.dismissed_version(db), "9.9.9")
+        # …and the row is unmounted; a later refresh keeps it hidden.
+        self.assertIsNone(window._update_banner_row)
+        with patch.object(updates, "latest_known",
+                          return_value="9.9.9"):
+            window.refresh_update_banner()
+        self.assertIsNone(window._update_banner_row)
 
     def test_on_edge_action_dispatches_every_states_action_id(self):
         """Runtime contract: every action_id from STATES fires its handler.

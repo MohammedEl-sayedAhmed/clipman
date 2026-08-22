@@ -282,10 +282,73 @@ STATES: dict[str, StateSpec] = {
 _TONE_CSS = {
     "info": "info",
     "warning": "warning",
-    "privacy": "accent",
+    # Privacy states get their own class so CSS can tint them with the
+    # mockup's lavender/violet @incognito token instead of the accent.
+    "privacy": "privacy",
     "error": "error",
     "neutral": "dim-label",
 }
+
+
+def build_banner_row(icon_name, title, body, primary_action=None,
+                     tone_css=None, on_action=None):
+    """Build the custom banner row (icon · title/desc · action · dismiss X).
+
+    Shared by the edge-state renderer below and by callers with dynamic
+    text (the update notice in ``window.py``, whose title/desc change per
+    release so it can't be a static StateSpec). ``primary_action`` is an
+    optional ``(label, action_id)`` tuple; the dismiss X always fires
+    ``on_action("dismiss-banner")``. GTK is imported lazily for the same
+    reason as ``render_edge_state``.
+    """
+    import gi
+    gi.require_version("Gtk", "4.0")
+    from gi.repository import Gtk
+
+    banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+    banner.add_css_class("edge-banner")
+    if tone_css:
+        banner.add_css_class(tone_css)
+
+    icon = Gtk.Image.new_from_icon_name(icon_name)
+    icon.set_valign(Gtk.Align.CENTER)
+    banner.append(icon)
+
+    text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
+    text_box.set_valign(Gtk.Align.CENTER)
+    text_box.set_hexpand(True)
+    title_lbl = Gtk.Label(label=title, xalign=0)
+    title_lbl.add_css_class("edge-banner-title")
+    title_lbl.set_wrap(True)
+    desc = Gtk.Label(label=body, xalign=0)
+    desc.add_css_class("edge-banner-desc")
+    desc.set_wrap(True)
+    text_box.append(title_lbl)
+    text_box.append(desc)
+    banner.append(text_box)
+
+    if primary_action is not None:
+        btn = Gtk.Button(label=primary_action[0])
+        btn.add_css_class("flat")
+        btn.add_css_class("edge-banner-action")
+        btn.set_valign(Gtk.Align.CENTER)
+        btn.action_id = primary_action[1]
+        if on_action is not None:
+            btn.connect(
+                "clicked",
+                lambda _b, _aid=primary_action[1]: on_action(_aid),
+            )
+        banner.append(btn)
+
+    close = Gtk.Button.new_from_icon_name("window-close-symbolic")
+    close.add_css_class("flat")
+    close.add_css_class("circular")
+    close.set_valign(Gtk.Align.CENTER)
+    close.set_tooltip_text(_("Dismiss"))
+    if on_action is not None:
+        close.connect("clicked", lambda _b: on_action("dismiss-banner"))
+    banner.append(close)
+    return banner
 
 
 def render_edge_state(
@@ -335,51 +398,16 @@ def render_edge_state(
     if spec.kind == "banner":
         # Custom banner (mockup fidelity): Adw.Banner shows a single title
         # line only — the mockup's banners carry an icon, a secondary desc
-        # line, a text action AND a dismiss X.
-        banner = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
-        banner.add_css_class("edge-banner")
-        if spec.tone in _TONE_CSS:
-            banner.add_css_class(_TONE_CSS[spec.tone])
-
-        icon = Gtk.Image.new_from_icon_name(spec.icon_name)
-        icon.set_valign(Gtk.Align.CENTER)
-        banner.append(icon)
-
-        text_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=1)
-        text_box.set_valign(Gtk.Align.CENTER)
-        text_box.set_hexpand(True)
-        title = Gtk.Label(label=spec.title, xalign=0)
-        title.add_css_class("edge-banner-title")
-        title.set_wrap(True)
-        desc = Gtk.Label(label=spec.body, xalign=0)
-        desc.add_css_class("edge-banner-desc")
-        desc.set_wrap(True)
-        text_box.append(title)
-        text_box.append(desc)
-        banner.append(text_box)
-
-        if spec.primary_action is not None:
-            btn = Gtk.Button(label=spec.primary_action[0])
-            btn.add_css_class("flat")
-            btn.add_css_class("edge-banner-action")
-            btn.set_valign(Gtk.Align.CENTER)
-            btn.action_id = spec.primary_action[1]
-            if on_action is not None:
-                btn.connect(
-                    "clicked",
-                    lambda _b, _aid=spec.primary_action[1]: on_action(_aid),
-                )
-            banner.append(btn)
-
-        close = Gtk.Button.new_from_icon_name("window-close-symbolic")
-        close.add_css_class("flat")
-        close.add_css_class("circular")
-        close.set_valign(Gtk.Align.CENTER)
-        close.set_tooltip_text(_("Dismiss"))
-        if on_action is not None:
-            close.connect("clicked", lambda _b: on_action("dismiss-banner"))
-        banner.append(close)
-
+        # line, a text action AND a dismiss X. Construction is shared with
+        # the dynamic-text update notice via ``build_banner_row``.
+        banner = build_banner_row(
+            spec.icon_name,
+            spec.title,
+            spec.body,
+            primary_action=spec.primary_action,
+            tone_css=_TONE_CSS.get(spec.tone),
+            on_action=on_action,
+        )
         banner.state_spec = spec
         return banner
 
