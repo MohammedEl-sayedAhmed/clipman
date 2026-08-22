@@ -9,6 +9,7 @@
 #   - snap/snapcraft.yaml     (version: '...')
 #   - flathub/*.json          (tag URL in source array)
 #   - aur/PKGBUILD            (pkgver= line)
+#   - CITATION.cff            (version + date-released)
 #
 # The GNOME Shell extension's metadata.json uses an unrelated integer
 # version (bumped on D-Bus / behavior changes), so it is left alone.
@@ -58,10 +59,17 @@ if [ -f aur/PKGBUILD ]; then
     sed -i -E "s/^(pkgver=).*/\1$new/" aur/PKGBUILD
 fi
 
+# CITATION.cff — project version + release date (cff-version is the CFF
+# schema version, not ours; the anchored patterns leave it alone).
+if [ -f CITATION.cff ]; then
+    sed -i -E "s/^(version: ).*/\1$new/" CITATION.cff
+    sed -i -E "s/^(date-released: ).*/\1$(date -I)/" CITATION.cff
+fi
+
 # Summary of changes (don't commit automatically — let caller review)
 echo
 echo "Diff summary:"
-git --no-pager diff --stat pyproject.toml snap/snapcraft.yaml flathub aur 2>/dev/null || true
+git --no-pager diff --stat pyproject.toml snap/snapcraft.yaml flathub aur CITATION.cff 2>/dev/null || true
 echo
 echo "Next steps:"
 echo "  1. Update CHANGELOG.md (rename ## [Unreleased] -> ## [$new] - $(date -I))"
