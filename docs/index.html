@@ -39,7 +39,7 @@
       "description": "Clipman is an open-source, Wayland-native clipboard history manager for Ubuntu/GNOME and any compositor with wl-clipboard. Press Super+V to browse, search, pin and paste from a local SQLite-backed history. Privacy is built in: incognito mode pauses recording, sensitive data (passwords, tokens, cards) is auto-cleared after 30 seconds, and nothing leaves the machine.",
       "url": "https://mohammedel-sayedahmed.github.io/clipman/",
       "downloadUrl": "https://github.com/MohammedEl-sayedAhmed/clipman",
-      "softwareVersion": "1.1.0",
+      "softwareVersion": "1.2.0",
       "programmingLanguage": "Python",
       "license": "https://opensource.org/licenses/Apache-2.0",
       "isAccessibleForFree": true,
@@ -57,9 +57,9 @@
         { "@type": "Question", "name": "Does Clipman work outside GNOME?",
           "acceptedAnswer": { "@type": "Answer", "text": "Yes. The GNOME Shell extension (ID 9407) is the smoothest path on GNOME — events flow over D-Bus with zero polling. On KDE, Sway, Hyprland, and any other compositor with wl-clipboard installed, Clipman falls back to wl-paste --watch, which is still event-driven (no busy-poll). The popup UI is identical either way." } },
         { "@type": "Question", "name": "Is my clipboard data ever uploaded anywhere?",
-          "acceptedAnswer": { "@type": "Answer", "text": "No. Clipman is fully local. History lives in a SQLite database at ~/.local/share/clipman/clipman.db with restrictive file permissions (0600). There is no telemetry, no sync, no cloud, and no network access in the daemon code path. Backups are explicit, off by default, and write to a local file you choose." } },
+          "acceptedAnswer": { "@type": "Answer", "text": "No. Clipboard data never leaves your machine. History lives in a SQLite database at ~/.local/share/clipman/clipman.db with restrictive file permissions (0600). There is no telemetry, no sync, and no cloud. The only network activity is an optional once-daily version check against the GitHub Releases API — it sends no identifiers or clipboard data, can be switched off in Preferences → Updates, and is off by default on Snap and Flatpak (those channels update themselves). Backups are explicit, off by default, and write to a local file you choose." } },
         { "@type": "Question", "name": "How does sensitive-data detection actually work?",
-          "acceptedAnswer": { "@type": "Answer", "text": "When something lands on the clipboard, Clipman checks it against local heuristics — Luhn-valid credit-card patterns, JWT/PEM-shaped strings, GitHub-like tokens, password-mime-typed payloads, and a few others. Matches are stored but masked in the list and queued for auto-clear on a configurable 30–300-second timer (default 30s). Detection runs in-process; no rules are downloaded." } },
+          "acceptedAnswer": { "@type": "Answer", "text": "When something lands on the clipboard, Clipman checks it against local heuristics — Luhn-valid credit-card patterns, JWT/PEM-shaped strings, GitHub-like tokens, password-mime-typed payloads, and a few others. Matches are stored but masked in the list and queued for auto-clear on a configurable 10–300-second timer (default 30s). Detection runs in-process; no rules are downloaded." } },
         { "@type": "Question", "name": "Can I use Clipman without the GNOME extension?",
           "acceptedAnswer": { "@type": "Answer", "text": "Yes. The extension is an optimization, not a requirement. Without it, Clipman uses wl-clipboard's wl-paste --watch to subscribe to clipboard changes — event-driven, no polling. You lose the Super+V keybinding wired through GNOME Shell, but you can bind any shortcut yourself to call `clipman toggle`." } },
         { "@type": "Question", "name": "What about Wayland's clipboard security restrictions?",
@@ -1309,11 +1309,11 @@ footer.site .legal .mono { font-size: 0.78rem; }
         </details>
         <details>
           <summary>Is my clipboard data ever uploaded anywhere?</summary>
-          <div class="answer">No. Clipman is fully local. History lives in a SQLite database at <span class="mono">~/.local/share/clipman/clipman.db</span> with restrictive file permissions (<span class="mono">0600</span>). There is no telemetry, no sync, no cloud, and no network access in the daemon code path. Backups are explicit, off by default, and write to a local file you choose.</div>
+          <div class="answer">No. Clipboard data never leaves your machine. History lives in a SQLite database at <span class="mono">~/.local/share/clipman/clipman.db</span> with restrictive file permissions (<span class="mono">0600</span>). There is no telemetry, no sync, and no cloud. The only network activity is an optional once-daily version check against the GitHub Releases API — it sends no identifiers or clipboard data, can be switched off in Preferences → Updates, and is off by default on Snap and Flatpak (those channels update themselves). Backups are explicit, off by default, and write to a local file you choose.</div>
         </details>
         <details>
           <summary>How does sensitive-data detection actually work?</summary>
-          <div class="answer">When something lands on the clipboard, Clipman checks it against local heuristics — Luhn-valid credit-card patterns, JWT/PEM-shaped strings, GitHub-like tokens, password-mime-typed payloads, and a few others. Matches are stored but masked in the list and queued for auto-clear on a configurable 30–300-second timer (default 30 s). Detection runs in-process; no rules are downloaded.</div>
+          <div class="answer">When something lands on the clipboard, Clipman checks it against local heuristics — Luhn-valid credit-card patterns, JWT/PEM-shaped strings, GitHub-like tokens, password-mime-typed payloads, and a few others. Matches are stored but masked in the list and queued for auto-clear on a configurable 10–300-second timer (default 30 s). Detection runs in-process; no rules are downloaded.</div>
         </details>
         <details>
           <summary>Can I use Clipman without the GNOME extension?</summary>
@@ -1365,7 +1365,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
       </div>
     </div>
     <div class="legal">
-      <span>© 2026 Mohammed El-sayed Ahmed · <span class="mono">v1.1.0</span></span>
+      <span>© 2026 Mohammed El-sayed Ahmed · <span class="mono">v1.2.0</span></span>
       <span class="mono">cmd-K • super+V • <a href="https://github.com/MohammedEl-sayedAhmed/clipman">github</a></span>
     </div>
   </div>
@@ -1429,9 +1429,9 @@ footer.site .legal .mono { font-size: 0.78rem; }
                   hint: 'After install, run <span class="mono">./install.sh</span> from a source checkout to register the GNOME Shell extension and the keybinding. · <a href="https://pypi.org/project/clipman-clipboard/">pypi.org/project/clipman-clipboard</a>' },
         aur:    { cmd: 'yay -S clipman-clipboard   # or: paru -S clipman-clipboard',
                   hint: 'AUR package builds and registers everything for you. · <a href="https://aur.archlinux.org/packages/clipman-clipboard">aur.archlinux.org/packages/clipman-clipboard</a>' },
-        deb:    { cmd: 'sudo apt install ./clipman_1.1.0_amd64.deb',
+        deb:    { cmd: 'sudo apt install ./clipman_*_all.deb',
                   hint: 'Download the .deb from the GitHub Releases page first. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/releases">releases</a>' },
-        rpm:    { cmd: 'sudo dnf install ./clipman-1.1.0-1.x86_64.rpm',
+        rpm:    { cmd: 'sudo dnf install ./clipman-*.noarch.rpm',
                   hint: 'Download the .rpm from the GitHub Releases page first. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/releases">releases</a>' },
         source: { cmd: 'git clone https://github.com/MohammedEl-sayedAhmed/clipman\ncd clipman && ./install.sh',
                   hint: 'Requires Python 3.10+, GTK 4 + libadwaita 1.4+, and either the GNOME Shell extension or wl-clipboard. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CONTRIBUTING.md">contributing guide</a>' },

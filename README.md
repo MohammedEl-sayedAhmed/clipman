@@ -15,7 +15,8 @@ Like Windows `Win+V` — but for Linux.
 [![GitHub Stars](https://img.shields.io/github/stars/MohammedEl-sayedAhmed/clipman?style=flat&logo=github&label=Stars)](https://github.com/MohammedEl-sayedAhmed/clipman/stargazers)
 [![GitHub Downloads](https://img.shields.io/github/downloads/MohammedEl-sayedAhmed/clipman/total?logo=github&label=Downloads)](https://github.com/MohammedEl-sayedAhmed/clipman/releases)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04+-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com)
-[![GNOME](https://img.shields.io/badge/GNOME-46--48-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
+[![GNOME](https://img.shields.io/badge/GNOME-46--50-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MohammedEl-sayedAhmed/clipman/badge)](https://scorecard.dev/viewer/?uri=github.com/MohammedEl-sayedAhmed/clipman)
 [![Wayland](https://img.shields.io/badge/Wayland-native-yellow)](https://wayland.freedesktop.org)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/clipman-clipboard?label=PyPI&logo=pypi&logoColor=white)](https://pypi.org/project/clipman-clipboard/)
@@ -78,14 +79,14 @@ Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extensi
 
 ### Appearance
 
-- **Dark and light themes** — Catppuccin Mocha and Catppuccin Latte
-- **Font customization** — adjustable size (8–20px) and 6 color presets (Default, Green, Peach, Mauve, Pink, Teal)
+- **Dark and light themes** — Catppuccin Mocha (dark), a warm-stone light palette, or follow the system scheme
+- **Font customization** — adjustable size (8–20px) plus free-form font and accent color pickers
 - **Window opacity** — configurable transparency from 30% to 100%
 
 ### Privacy and Security
 
 - **Incognito mode** — pause clipboard recording entirely
-- **Sensitive data detection** — tokens and passwords auto-detected and cleared after 30 seconds
+- **Sensitive data detection** — tokens and passwords auto-detected and cleared after a configurable delay (default 30 s)
 - **Restrictive permissions** — data directory `0o700`, image files `0o600`
 - **Path traversal protection** — all image paths validated before file operations
 - **Backup validation** — imported databases checked for schema integrity and sanitized
@@ -208,7 +209,7 @@ Same caveat as the `.deb`: the per-user extension + keybinding are not registere
 <details>
 <summary><strong>GNOME Shell Extension</strong> (installed automatically by install.sh)</summary>
 
-The companion extension is required for clipboard detection. It is installed automatically by the install script, but can also be installed manually from [GNOME Extensions](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/):
+The companion extension provides native GNOME clipboard detection and the Super+V binding; without it Clipman falls back to `wl-paste --watch` and you bind a shortcut to `clipman toggle` yourself. It is installed automatically by the install script, but can also be installed manually from [GNOME Extensions](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/):
 
 ```bash
 gnome-extensions install clipman-extension.zip
@@ -248,13 +249,14 @@ Or with paru: `paru -S clipman-clipboard`
 
 ### Settings
 
-Click the gear icon to open the `Adw.PreferencesWindow`. It carries six panes:
+Click the gear icon to open the preferences dialog (an `Adw.Dialog` with a
+left sidebar). It carries six panes:
 
 | Pane | Setting | Description |
 |------|---------|-------------|
-| **Appearance** | Theme | Segmented control: Dark (Catppuccin Mocha) / Light (Catppuccin Latte) |
+| **Appearance** | Theme | Follow system / Dark (Catppuccin Mocha) / Light (warm stone) |
 | | Font size | Text size for entries (8–20px) |
-| | Font color | Default, Green, Peach, Mauve, Pink, or Teal |
+| | Font & accent colors | Free-form color pickers with one-tap reset to theme defaults |
 | | Opacity | Window transparency (30%–100%) |
 | **Privacy** | Start in incognito mode | Launch with clipboard recording paused |
 | | Auto-clear delay | Seconds before detected sensitive entries are purged (default 30) |
@@ -310,20 +312,20 @@ clipman/
 │   ├── clipboard_monitor.py       # Event-driven clipboard monitor
 │   ├── database.py                # SQLite storage with dedup/search/pin/snippets
 │   ├── dbus_service.py            # D-Bus IPC for toggle and clipboard events
-│   ├── edge_states.py             # 16 declarative StateSpec entries +
+│   ├── edge_states.py             # 19 declarative StateSpec entries +
 │   │                              #   render_edge_state dispatch (StatusPage /
 │   │                              #   Banner / AlertDialog) for empty,
 │   │                              #   no-results, incognito, sensitive-cleared,
 │   │                              #   first-run, errors, …
 │   ├── keybindings.py             # gsettings helpers for Super+V customization
-│   ├── preferences.py             # Adw.PreferencesWindow (Appearance, Privacy,
+│   ├── preferences.py             # Sidebar Adw.Dialog (Appearance, Privacy,
 │   │                              #   Shortcuts, Storage, Updates, About)
 │   ├── snippets_dialog.py         # Adw.NavigationSplitView master-detail editor
 │   ├── updates.py                 # Anonymous update-check against GitHub Releases
 │   ├── window.py                  # Adw.ApplicationWindow + Adw.HeaderBar +
-│   │                              #   Adw.ActionRow history list
-│   └── style.css                  # libadwaita @-token overrides + Catppuccin
-│                                  #   palette overlay (Mocha / Latte)
+│   │                              #   virtualized Gtk.ListView history list
+│   └── style.css                  # libadwaita @-token overrides + palette
+│                                  #   overlay (Catppuccin Mocha / warm stone)
 ├── extension/
 │   ├── extension.js               # GNOME Shell extension (clipboard detection + paste)
 │   └── metadata.json              # Extension metadata
@@ -343,10 +345,11 @@ clipman/
 │   ├── test_keybindings.py        # Keybinding-customization tests (32 tests)
 │   ├── test_updates.py            # Update-check tests (38 tests)
 │   ├── test_entry_point.py        # D-Bus mainloop init tests (7 tests)
-│   └── test_window_utils.py       # URL detection & time formatting (28 tests)
+│   ├── test_app.py                # Application lifecycle tests (8 tests)
+│   └── test_window.py             # Window, classify & render tests (47 tests)
 ├── docs/
 │   ├── adr/                       # Architecture Decision Records
-│   ├── releases/                  # Per-release notes (mirrors GH Releases)
+│   ├── releases/                  # Release process docs (GH Releases are authoritative)
 │   ├── dark-theme.png             # Screenshot (dark theme)
 │   └── light-theme.png            # Screenshot (light theme)
 ├── snap/
@@ -401,7 +404,7 @@ journalctl --user -u clipman.service -n 20
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite (303 tests, no GTK or D-Bus required).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite (330 tests).
 
 ## Uninstall
 

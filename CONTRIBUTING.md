@@ -64,7 +64,7 @@ clipman/
 python3 -m unittest discover -s tests
 ```
 
-All 303 tests should pass. The suite is stdlib-only — no GTK or D-Bus required at test time. Tests cover the database layer, clipboard monitor, URL detection, and time formatting. See [docs/development.md](docs/development.md) for the fuller dev setup.
+All 330 tests should pass. GTK 4 is required at test time (CI runs the suite under `xvfb-run`); D-Bus is not. Tests cover the database layer, clipboard monitor, window/classification logic, app lifecycle, keybindings, and the update check. See [docs/development.md](docs/development.md) for the fuller dev setup.
 
 ### Lint
 
@@ -233,7 +233,7 @@ When filing a bug report, please include:
 
 ## Definition of Done
 
-- [ ] `python3 -m unittest discover -s tests` passes locally (303 tests)
+- [ ] `xvfb-run -a python3 -m unittest discover -s tests` passes locally (330 tests)
 - [ ] `ruff check clipman tests` is clean
 - [ ] `shellcheck --severity=warning install.sh uninstall.sh launcher.sh` is clean if any shell script was touched
 - [ ] `CHANGELOG.md` `[Unreleased]` updated for user-visible changes
