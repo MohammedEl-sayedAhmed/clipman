@@ -1,5 +1,5 @@
 name: clipman
-version: '1.2.0'
+version: '1.2.1'
 summary: Clipboard history for Wayland — like Win+V for Linux
 description: |
   A fast, native clipboard manager for Wayland (GNOME, KDE, Sway,
