@@ -10,8 +10,9 @@ on:
   pull_request:
     types: [closed]
 
-permissions:
-  contents: write
+# Default-deny at the workflow level; the single job below is granted
+# exactly what it needs (Scorecard Token-Permissions).
+permissions: {}
 
 jobs:
   delete:
@@ -20,7 +21,13 @@ jobs:
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    permissions:
+      contents: write  # delete the merged head branch ref
     steps:
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
       - name: Delete head branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
