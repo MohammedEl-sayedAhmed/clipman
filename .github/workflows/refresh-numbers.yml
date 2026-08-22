@@ -28,9 +28,9 @@ on:
       - 'scripts/refresh_stats.py'
       - 'docs/_data/numbers.json'
 
-permissions:
-  contents: write       # push a refresh branch
-  pull-requests: write  # open the auto-merge PR
+# Default-deny at the workflow level; the single job below is granted
+# exactly what it needs (Scorecard Token-Permissions).
+permissions: {}
 
 concurrency:
   group: refresh-numbers
@@ -40,8 +40,15 @@ jobs:
   refresh:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: write       # push a refresh branch
+      pull-requests: write  # open the auto-merge PR
     steps:
-      - uses: actions/checkout@v7.0.1
+      - uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           # Use the fine-grained PAT (NUMBERS_TOKEN) so the branch push and
@@ -56,7 +63,7 @@ jobs:
           # stall as before — harmless, just not hands-off).
           token: ${{ secrets.NUMBERS_TOKEN || secrets.GITHUB_TOKEN }}
 
-      - uses: actions/setup-python@v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
