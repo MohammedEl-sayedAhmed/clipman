@@ -137,9 +137,10 @@ class ClipmanPreferences(Adw.Dialog):
         self.db = db
         self._on_setting_changed = on_setting_changed or (lambda k, v: None)
         self._kbd_dialog = None  # held so the GC doesn't collect mid-capture
-        # As an Adw.Dialog this is NOT a Gtk.Window, so it can't be the
-        # parent of a Gtk.FileChooserNative. Keep the real toplevel (the
-        # ClipmanWindow passed in) for the backup/restore choosers.
+        # As an Adw.Dialog this is NOT a Gtk.Window, and Gtk.FileDialog's
+        # save()/open() want a Gtk.Window (or None) as the modal parent.
+        # Keep the real toplevel (the ClipmanWindow passed in) for the
+        # backup/restore dialogs.
         self._parent_window = parent
 
         self.set_title(_("Preferences"))
@@ -749,47 +750,37 @@ class ClipmanPreferences(Adw.Dialog):
         return f"{count} entries · {size_str}"
 
     def _on_backup_clicked(self, _btn):
-        chooser = Gtk.FileChooserNative.new(
-            _("Export backup"),
-            self._parent_window,
-            Gtk.FileChooserAction.SAVE,
-            _("Save"),
-            _("Cancel"),
-        )
-        chooser.set_current_name(
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Export backup"))
+        dialog.set_initial_name(
             f"clipman-{time.strftime('%Y%m%d-%H%M%S')}.db"
         )
-        chooser.connect("response", self._on_backup_response, chooser)
-        chooser.show()
+        dialog.save(self._parent_window, None, self._on_backup_finished)
 
-    def _on_backup_response(self, _native, response, chooser):
-        if response == Gtk.ResponseType.ACCEPT:
-            file = chooser.get_file()
-            if file is not None:
-                try:
-                    self.db.export_backup(file.get_path())
-                    self._emit_event("backup_succeeded", file.get_path())
-                except Exception as exc:
-                    self._emit_event("backup_failed", str(exc))
-        chooser.destroy()
+    def _on_backup_finished(self, dialog, result):
+        try:
+            file = dialog.save_finish(result)
+        except GLib.Error:
+            return  # dismissed
+        if file is not None:
+            try:
+                self.db.export_backup(file.get_path())
+                self._emit_event("backup_succeeded", file.get_path())
+            except Exception as exc:
+                self._emit_event("backup_failed", str(exc))
 
     def _on_restore_clicked(self, _btn):
-        chooser = Gtk.FileChooserNative.new(
-            _("Restore from backup"),
-            self._parent_window,
-            Gtk.FileChooserAction.OPEN,
-            _("Open"),
-            _("Cancel"),
-        )
-        chooser.connect("response", self._on_restore_response, chooser)
-        chooser.show()
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Restore from backup"))
+        dialog.open(self._parent_window, None, self._on_restore_finished)
 
-    def _on_restore_response(self, _native, response, chooser):
-        if response == Gtk.ResponseType.ACCEPT:
-            file = chooser.get_file()
-            if file is not None:
-                self._confirm_restore(file.get_path())
-        chooser.destroy()
+    def _on_restore_finished(self, dialog, result):
+        try:
+            file = dialog.open_finish(result)
+        except GLib.Error:
+            return  # dismissed
+        if file is not None:
+            self._confirm_restore(file.get_path())
 
     def _confirm_restore(self, source_path):
         """Show a destructive AlertDialog before overwriting the DB.

@@ -531,7 +531,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._css_provider = Gtk.CssProvider()
         # ``load_from_data`` is binding-typed as ``bytes`` on older PyGObject
         # — passing a Python ``str`` raises ``TypeError`` before the popup
-        # finishes building. Adw 4.12+ ships ``load_from_string`` which
+        # finishes building. GTK 4.12+ ships ``load_from_string`` which
         # accepts ``str`` directly; fall back to the bytes form everywhere
         # else.
         if hasattr(self._css_provider, "load_from_string"):
@@ -1254,7 +1254,20 @@ class ClipmanWindow(Adw.ApplicationWindow):
             pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
                 image_path, box, box, True
             )
-            texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+            # Gdk.Texture.new_for_pixbuf is deprecated since GTK 4.12;
+            # build the texture from the pixbuf's raw bytes instead.
+            fmt = (
+                Gdk.MemoryFormat.R8G8B8A8
+                if pixbuf.get_has_alpha()
+                else Gdk.MemoryFormat.R8G8B8
+            )
+            texture = Gdk.MemoryTexture.new(
+                pixbuf.get_width(),
+                pixbuf.get_height(),
+                fmt,
+                pixbuf.read_pixel_bytes(),
+                pixbuf.get_rowstride(),
+            )
         except Exception:
             # Corrupt file or unsupported format — fall back to the type
             # icon rather than crashing.

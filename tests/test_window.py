@@ -518,10 +518,11 @@ class TestWindowConstruction(unittest.TestCase):
         self.assertEqual(wl_called, [])
 
     def test_backup_restore_use_toplevel_parent(self):
-        """FileChooserNative needs a Gtk.Window parent; the dialog isn't one.
+        """Gtk.FileDialog wants a Gtk.Window parent; the Adw.Dialog isn't one.
 
         Regression guard for the PreferencesWindow->PreferencesDialog port
-        that crashed Export/Restore with a TypeError.
+        that crashed Export/Restore with a TypeError: the preferences
+        dialog must keep the real toplevel around for save()/open().
         """
         from gi.repository import Gtk
 
@@ -533,11 +534,7 @@ class TestWindowConstruction(unittest.TestCase):
         parent = ClipmanWindow(application=app, db=db, monitor=None)
         prefs = ClipmanPreferences(db, parent, on_setting_changed=None)
         self.assertIsInstance(prefs._parent_window, Gtk.Window)
-        # The parent must be accepted by FileChooserNative (no TypeError).
-        chooser = Gtk.FileChooserNative.new(
-            "t", prefs._parent_window, Gtk.FileChooserAction.SAVE, "s", "c"
-        )
-        self.assertIsNotNone(chooser)
+        self.assertNotIsInstance(prefs, Gtk.Window)
 
     def test_window_is_not_resizable(self):
         """Win+V parity: the popup is a fixed panel, not a resizable window."""
