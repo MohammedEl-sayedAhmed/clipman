@@ -161,8 +161,14 @@ body{
 .caption.show{opacity:1; transform:translateY(0)}
 .caption .eyebrow{font-family:"JetBrains Mono",monospace; font-size:0.75rem; letter-spacing:.22em; color:var(--accent); text-transform:uppercase; margin-bottom:0.55rem}
 .caption .head{font-family:"Bricolage Grotesque",sans-serif; font-weight:600; letter-spacing:-.02em; line-height:1.06; font-size:2.55rem; color:#fff; text-wrap:balance; text-shadow:0 2px 22px rgba(0,0,0,.5)}
-.stage.nocap .caption, .stage.nocap .capscrim,
-.stage.smallframe .caption, .stage.smallframe .capscrim{opacity:0 !important; visibility:hidden}
+.stage.nocap .caption, .stage.nocap .capscrim{opacity:0 !important; visibility:hidden}
+/* small / mobile embeds: keep captions but shrink them so they read as a tasteful lower-third */
+@media (max-width:620px){
+  .caption{max-width:84%; left:clamp(12px,4%,36px); bottom:clamp(12px,5%,36px)}
+  .caption .eyebrow{display:none}
+  .caption .head{font-size:1.8rem; line-height:1.14}
+  .capscrim{height:38%}
+}
 
 /* brand-card outro */
 .outro{position:absolute; inset:0; z-index:8; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; text-align:center; padding:24px;
@@ -350,9 +356,8 @@ body.capture .stage{width:100vw; height:100vh; max-width:none; border-radius:0; 
   const K=()=>parseFloat(getComputedStyle(document.documentElement).fontSize)/16;
   function fit(){const r=stage.getBoundingClientRect(); const v=document.body.classList.contains('vertical');
     S0 = v ? Math.min((r.height*0.58)/H,(r.width*0.86)/W) : Math.min((r.height*0.76)/H,(r.width*0.52)/W);
-    // scale overlays proportionally to the frame; hide captions on small/mobile embeds where they'd overwhelm the video
-    document.documentElement.style.fontSize=Math.max(6,(Math.max(r.width, r.height*0.75)/1280)*16)+'px';
-    stage.classList.toggle('smallframe',(EMBED||RECORDING)&&r.width<600);
+    // scale overlays proportionally to the frame so captions stay a tasteful lower-third at any size (incl. mobile)
+    document.documentElement.style.fontSize=Math.max(5,(Math.max(r.width, r.height*0.78)/1280)*16)+'px';
     window.__S0=S0; window.__stage=[r.width,r.height];}
   const sc=()=>stage.getBoundingClientRect();
   // element center in the camera's LOCAL (content) coords — transform-independent
@@ -468,7 +473,10 @@ body.capture .stage{width:100vw; height:100vh; max-width:none; border-radius:0; 
   $('capBtn').addEventListener('click',e=>{ capsOn=!capsOn; stage.classList.toggle('nocap',!capsOn); e.target.textContent='Captions: '+(capsOn?'On':'Off'); if(!capsOn){caption.classList.remove('show');capscrim.classList.remove('show');} });
   let rt; addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{fit();},160);});
 
-  fit(); play();                       // start immediately; fonts swap in (no blank lead-in)
+  fit();
+  const GATED = HASH.includes('step');   // deterministic 60fps capture drives the timeline via window.__start()
+  if(GATED){ window.__start=()=>{ fit(); play(); }; }
+  else { play(); }
   if(document.fonts&&document.fonts.ready){document.fonts.ready.then(fit);}
 })();
 </script>
