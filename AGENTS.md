@@ -110,8 +110,17 @@ specific assistant.
 7. PyPI/store pages render the **README snapshot from the release** —
    README fixes reach PyPI only via the next release.
 8. Snap Store security emails ("built with packages that have since
-   received security updates", USN-…) are resolved by any rebuild — a
-   release does it; otherwise dispatch the snap rebuild workflow.
+   received security updates", USN-…) are resolved by any rebuild and
+   now **self-heal**: the weekly `snap-refresh` cron rebuilds every
+   published channel (stable/candidate/beta from the latest release
+   tag, edge from main — never publish a main build to stable, it
+   would leak unreleased code). The snap uses `extensions: [gnome]`,
+   so the GTK stack (and its libcurl-via-libappstream tail, the old
+   recurring offender) lives in Canonical's gnome-46-2404 content snap
+   and is off our scan surface entirely; only `wtype` (+ wl-clipboard,
+   built from source) is ours. For an immediate fix, dispatch
+   `snap-refresh.yml` with the target channel — the channel choice
+   picks the right source ref automatically.
 
 ## Bots & automation
 

@@ -4,6 +4,22 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Changed — Snap packaging (#237, #238)
+
+- The snap now uses the `gnome` extension: the GTK4/libadwaita runtime
+  (GTK 4.18 / libadwaita 1.7) comes from Canonical's `gnome-46-2404`
+  content snap instead of being staged from the Ubuntu archive. This
+  removes the `libadwaita → libappstream → libcurl` dependency tail
+  that made every curl security update trip the Snap Store's daily
+  scan (three "outdated Ubuntu packages" emails in five weeks), shrinks
+  the snap to ~13 MB, and hands GTK-stack security rebuilds to
+  Canonical. Only `wtype` and the from-source `wl-clipboard` remain
+  first-party payload.
+- The weekly snap rebuild now refreshes every published channel —
+  stable/candidate/beta are rebuilt from the latest release tag, edge
+  from main — so store security notices self-resolve within a week
+  with no manual action.
+
 ## [1.2.1] - 2026-08-22
 
 A polish release driven by a full four-dimension audit (docs, code, UI,
