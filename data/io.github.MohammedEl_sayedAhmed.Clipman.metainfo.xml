@@ -5,7 +5,7 @@
   <summary>Clipboard history manager for GNOME on Wayland</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
-  <developer id="io.github.MohammedEl-sayedAhmed">
+  <developer id="io.github.mohammedel-sayedahmed">
     <name>Mohammed El-sayed Ahmed</name>
   </developer>
 
@@ -68,6 +68,16 @@
   </supports>
 
   <releases>
+    <release version="1.2.1" date="2026-08-22">
+      <description>
+        <p>Polish release: GNOME Shell 49 and 50 support, a dismissable update banner, GTK 4.10/4.12 deprecation removals, and full UI parity with the design mockups.</p>
+      </description>
+    </release>
+    <release version="1.2.0" date="2026-07-18">
+      <description>
+        <p>The GTK 4 line is now stable: true Win+V behaviour on GNOME Wayland, a much faster virtualized history list, and a full redesign to the project design mockups.</p>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-06-25">
       <description>
         <p>GTK 3 to GTK 4 + libadwaita port and Catppuccin palette overlay.</p>
