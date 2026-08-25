@@ -38,14 +38,16 @@ apps:
   clipman:
     command: bin/clipman-wrapper
     desktop: share/applications/com.clipman.Clipman.desktop
+    # The gnome extension supplies the GTK4/libadwaita runtime from the
+    # Canonical-maintained gnome-46-2404 content snap and adds the desktop
+    # plugs (desktop, desktop-legacy, gsettings, opengl, wayland, x11)
+    # plus the env command-chain. Staging the GTK stack ourselves made
+    # every archive security update to its transitive deps (libcurl via
+    # libadwaita -> libappstream) OUR daily-scan problem — see the USN
+    # email trail (USN-8525-1/8651-1/8670-1).
+    extensions: [gnome]
     plugs:
-      - wayland
-      - x11
-      - desktop
-      - desktop-legacy
       - home
-      - gsettings
-      - opengl
       - network  # update-check daemon polls api.github.com (opt-in,
                  # default OFF in snap because snap auto-refreshes)
 
@@ -64,22 +66,13 @@ parts:
     plugin: dump
     source: .
     after: [wl-clipboard]
-    build-packages:
-      - libgdk-pixbuf2.0-dev
-      - libglib2.0-dev
-      - libadwaita-1-dev
+    # Everything GTK comes from the gnome extension's content snap:
+    # python3 + PyGObject + python3-dbus, GTK4/libadwaita + typelibs,
+    # gdk-pixbuf with the librsvg loader (cache prebuilt), icon themes,
+    # shared-mime-info and compiled GSettings schemas. Only the paste
+    # helper remains to stage.
     stage-packages:
-      - python3
-      - python3-gi
-      - python3-dbus
-      - gir1.2-gtk-4.0
-      - gir1.2-adw-1
-      - libadwaita-1-0
       - wtype
-      - adwaita-icon-theme
-      - hicolor-icon-theme
-      - librsvg2-common
-      - shared-mime-info
     override-build: |
       craftctl default
       install -d $CRAFT_PART_INSTALL/share/clipman
@@ -90,24 +83,39 @@ parts:
       install -Dm644 data/com.clipman.Clipman.desktop $CRAFT_PART_INSTALL/share/applications/com.clipman.Clipman.desktop
       install -Dm644 data/com.clipman.Clipman.svg $CRAFT_PART_INSTALL/share/icons/hicolor/scalable/apps/com.clipman.Clipman.svg
 
-      # Generate GdkPixbuf loader cache
-      LOADERS_DIR=$CRAFT_PART_INSTALL/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders
-      GDK_PIXBUF_MODULEDIR=$LOADERS_DIR /usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/gdk-pixbuf-query-loaders > $CRAFT_PART_INSTALL/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache
-      # Fix paths in cache to use $SNAP prefix at runtime
-      sed -i "s|$CRAFT_PART_INSTALL|/snap/clipman/current|g" $CRAFT_PART_INSTALL/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache
-
-      # Compile GSettings schemas
-      glib-compile-schemas $CRAFT_PART_INSTALL/usr/share/glib-2.0/schemas/ || true
-
       install -d $CRAFT_PART_INSTALL/bin
       cat > $CRAFT_PART_INSTALL/bin/clipman-wrapper << 'EOF'
       #!/bin/sh
-      export PYTHONPATH="$SNAP/usr/lib/python3/dist-packages:$SNAP/share/clipman:$PYTHONPATH"
-      export GI_TYPELIB_PATH="$SNAP/usr/lib/x86_64-linux-gnu/girepository-1.0:$SNAP/usr/lib/girepository-1.0"
-      export GDK_PIXBUF_MODULE_FILE="$SNAP/usr/lib/x86_64-linux-gnu/gdk-pixbuf-2.0/2.10.0/loaders.cache"
-      export GSETTINGS_SCHEMA_DIR="$SNAP/usr/share/glib-2.0/schemas"
-      export XDG_DATA_DIRS="$SNAP/usr/share:$XDG_DATA_DIRS"
-      export PATH="$SNAP/usr/local/bin:$PATH"
-      exec python3 "$SNAP/share/clipman/clipman.py" "$@"
+      # GTK/GNOME env (GI_TYPELIB_PATH, GDK_PIXBUF_MODULE_FILE,
+      # GSETTINGS_SCHEMA_DIR, XDG_DATA_DIRS, gnome-platform python paths)
+      # is exported by the gnome extension's command-chain before this
+      # runs. Only clipman-specific bits belong here.
+      export PYTHONPATH="$SNAP/share/clipman:$PYTHONPATH"
+      # wl-copy/wl-paste (meson, /usr/local) and wtype (stage-package).
+      export PATH="$SNAP/usr/local/bin:$SNAP/usr/bin:$PATH"
+      # Interpreter: the content snap ships python3.12 (no python3
+      # symlink); the runtime env also exposes /usr/bin/python3, which
+      # the confinement smoke test verified imports Adw fine. Try the
+      # platform pythons first, PATH last.
+      PY="$SNAP/gnome-platform/usr/bin/python3"
+      [ -x "$PY" ] || PY="$SNAP/gnome-platform/usr/bin/python3.12"
+      [ -x "$PY" ] || PY=python3
+      exec "$PY" "$SNAP/share/clipman/clipman.py" "$@"
       EOF
       chmod +x $CRAFT_PART_INSTALL/bin/clipman-wrapper
+
+  # Strip anything the base or the GNOME platform snap already ships so
+  # the published snap stays minimal (standard cleanup part from the
+  # snapcraft gnome-extension docs). Without it, wtype's transitive libs
+  # (libwayland, libxkbcommon, ...) would be staged redundantly — and
+  # would needlessly reappear in the store's daily USN scan.
+  cleanup:
+    after: [clipman, wl-clipboard]
+    plugin: nil
+    build-snaps: [core24, gnome-46-2404]
+    override-prime: |
+      set -eux
+      for snap_name in core24 gnome-46-2404; do
+        cd "/snap/$snap_name/current" \
+          && find . \( -type f -o -type l \) -exec rm -f "$CRAFT_PRIME/{}" \;
+      done
