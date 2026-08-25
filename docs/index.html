@@ -589,6 +589,24 @@ html[data-theme="light"] .demo-stage iframe {
 }
 .demo-foot a { font-family: var(--mono); }
 
+/* Animated product demo (motion reel), embedded as a 16:9 live iframe. */
+.reel-stage { margin: 0 0 26px; display: flex; justify-content: center; }
+.reel-frame {
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    background: #131220;
+    box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.55),
+                0 4px 12px -4px rgba(0, 0, 0, 0.18);
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+}
+html[data-theme="light"] .reel-frame {
+    box-shadow: 0 24px 60px -22px rgba(28, 25, 23, 0.22),
+                0 4px 12px -4px rgba(28, 25, 23, 0.08);
+}
+
 /* ================================================================
    BY THE NUMBERS
    ================================================================ */
@@ -1094,9 +1112,15 @@ footer.site .legal .mono { font-size: 0.78rem; }
       <p class="eyebrow">Live preview</p>
       <h2>Clipboard history shouldn't be a <span class="accent">leap of faith</span>.</h2>
       <p class="lede">
-        This is the redesigned main popup, embedded right here. Flip through real states —
-        full history, empty, no-results, incognito paused — without installing anything.
+        Watch the whole flow — search, paste, pin, incognito — then flip through the real
+        states yourself below. Both run right in this page; nothing to install.
       </p>
+
+      <div class="reel-stage">
+        <iframe class="reel-frame" title="Clipman — animated product demo"
+                src="demo/clipman-reel.html#embed" loading="lazy"
+                referrerpolicy="no-referrer" scrolling="no"></iframe>
+      </div>
 
       <div class="demo-wrap">
         <div class="demo-bar">
