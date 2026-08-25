@@ -1,9 +1,18 @@
 name: Snap refresh
 
 # Rebuilds the snap weekly to pick up Ubuntu archive security updates
-# (resolves the "outdated stage-packages" review emails). Also builds
-# on PRs/main pushes that touch snap-relevant paths so a packaging
-# break is caught early.
+# (resolves the "outdated stage-packages" USN emails). Also builds on
+# PRs/main pushes that touch snap-relevant paths so a packaging break
+# is caught early.
+#
+# The weekly schedule refreshes EVERY published channel, not just edge:
+# the store scans each published revision, so a stable revision left
+# unrebuilt between releases accumulates a USN email per curl/libX
+# security update (see USN-8525-1/8651-1/8670-1). Channel -> source
+# mapping matters: stable/candidate/beta are rebuilt from the LATEST
+# RELEASE TAG (same code users already have, fresher archive packages),
+# while edge tracks main. Publishing a main build to stable would leak
+# unreleased work.
 #
 # Publishing to the Snap Store requires the SNAPCRAFT_STORE_CREDENTIALS
 # secret. Without it, build runs succeed and the artifact is uploaded
@@ -51,14 +60,62 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  plan:
+    name: Plan channel/source matrix
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        with:
+          egress-policy: audit
+
+      - name: Decide what to build and where it publishes
+        id: plan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT: ${{ github.event_name }}
+          CHANNEL: ${{ inputs.channel }}
+        run: |
+          latest_tag() {
+            gh api "repos/${{ github.repository }}/releases/latest" -q .tag_name
+          }
+          case "$EVENT" in
+            schedule)
+              tag="$(latest_tag)"
+              matrix=$(jq -nc --arg tag "$tag" '[
+                {ref: "main", channels: "edge",                    slug: "edge"},
+                {ref: $tag,   channels: "beta,candidate,stable",   slug: "stable"}
+              ]')
+              ;;
+            workflow_dispatch)
+              if [ "$CHANNEL" = "edge" ]; then ref="main"; else ref="$(latest_tag)"; fi
+              matrix=$(jq -nc --arg ref "$ref" --arg ch "$CHANNEL" \
+                '[{ref: $ref, channels: $ch, slug: $ch}]')
+              ;;
+            *)
+              # push / pull_request: build-only smoke of the triggering ref.
+              matrix='[{"ref": "", "channels": "", "slug": "ci"}]'
+              ;;
+          esac
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          echo "Planned: $matrix"
+
   build:
-    name: Build snap
+    name: Build snap (${{ matrix.slug }})
+    needs: plan
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: read
-    outputs:
-      snap-file: ${{ steps.build.outputs.snap }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
@@ -68,6 +125,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ matrix.ref }}
           persist-credentials: false
 
       - name: Build snap
@@ -77,19 +135,23 @@ jobs:
       - name: Upload snap artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: clipman-snap-${{ github.run_id }}
+          name: clipman-snap-${{ github.run_id }}-${{ matrix.slug }}
           path: ${{ steps.build.outputs.snap }}
           retention-days: 14
           if-no-files-found: error
 
   publish:
-    name: Publish to Snap Store
-    needs: build
+    name: Publish to Snap Store (${{ matrix.slug }})
+    needs: [plan, build]
     if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.publish) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
@@ -99,7 +161,7 @@ jobs:
       - name: Download snap artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: clipman-snap-${{ github.run_id }}
+          name: clipman-snap-${{ github.run_id }}-${{ matrix.slug }}
           path: ./snap-artifact
 
       - name: Check credentials
@@ -132,4 +194,4 @@ jobs:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
           snap: ${{ steps.resolve.outputs.snap }}
-          release: ${{ inputs.channel || 'edge' }}
+          release: ${{ matrix.channels }}
