@@ -1,0 +1,461 @@
+<title>Clipman Demo Reel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+
+<style>
+/* ============================================================
+   CLIPMAN — motion demo reel (openship / Screen-Studio style)
+   Committed dark "studio" scene: one visual world by design,
+   every color painted explicitly so it holds on any host ground.
+   ============================================================ */
+:root{
+  --page:#141420; --page-2:#1a1a28; --ink:#cdd6f4; --ink-dim:#8b8fa6; --hair:#2a2a3c;
+  /* clipman dark tokens (docs/design/tokens.css) */
+  --crust:#181825; --base:#1e1e2e; --mantle:#181825; --surface:#252536;
+  --overlay:#313244; --row-hover:rgba(205,214,244,.06);
+  --text:#cdd6f4; --subtext:#a6adc8; --muted:#6c7086; --faint:#45475a; --on-accent:#1e1e2e;
+  --border:#313244; --border-strong:#45475a; --divider:rgba(205,214,244,.06);
+  --accent:#cba6f7; --accent-hover:#dcc7fa; --accent-soft:rgba(203,166,247,.18);
+  --success:#a6e3a1; --warning:#f9e2af; --error:#f38ba8; --info:#74c7ec;
+  --pin:#f9e2af; --incognito:#b4befe;
+  --t-text:#89b4fa; --t-image:#cba6f7; --t-link:#74c7ec; --t-code:#94e2d5; --t-snip:#f9e2af;
+  --shadow-window:0 34px 90px -22px rgba(0,0,0,.78), 0 14px 34px -12px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.05) inset;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:"Inter",system-ui,sans-serif;
+  background:
+    radial-gradient(1100px 700px at 15% -5%, rgba(203,166,247,.10), transparent 55%),
+    radial-gradient(900px 600px at 100% 110%, rgba(137,180,250,.08), transparent 55%),
+    var(--page);
+  color:var(--ink); min-height:100vh; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  display:flex; flex-direction:column; align-items:center; padding:clamp(16px,3vw,40px); gap:18px;
+}
+.masthead{width:min(100%,1120px); display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap}
+.masthead h1{font-family:"Bricolage Grotesque",sans-serif; font-weight:700; letter-spacing:-.02em; font-size:clamp(20px,2.6vw,30px); margin:0; line-height:1}
+.masthead h1 .dot{color:var(--accent)}
+.masthead p{margin:6px 0 0; color:var(--ink-dim); font-size:13.5px; max-width:56ch}
+.badge{font-family:"JetBrains Mono",monospace; font-size:11px; letter-spacing:.04em; color:var(--accent); background:var(--accent-soft); border:1px solid rgba(203,166,247,.25); padding:6px 11px; border-radius:999px; white-space:nowrap}
+
+/* ================= THE STAGE (the recorded 16:9 frame) ================= */
+.stage{
+  position:relative; width:min(100%,1120px); aspect-ratio:16/9; border-radius:20px; overflow:hidden; isolation:isolate;
+  background:
+    radial-gradient(70% 52% at 50% 6%, rgba(228,216,255,.22), transparent 62%),
+    radial-gradient(46% 52% at 15% 28%, rgba(203,166,247,.34), transparent 62%),
+    radial-gradient(50% 55% at 89% 24%, rgba(116,199,236,.24), transparent 60%),
+    radial-gradient(62% 62% at 80% 98%, rgba(137,180,250,.24), transparent 62%),
+    radial-gradient(58% 62% at 20% 102%, rgba(148,226,213,.16), transparent 60%),
+    linear-gradient(180deg, #2b2842 0%, #1d1c2e 46%, #131220 100%);
+  box-shadow:0 40px 120px -30px rgba(0,0,0,.7), 0 0 0 1px var(--hair);
+}
+.stage::after{content:""; position:absolute; inset:0; pointer-events:none; z-index:6; background:radial-gradient(130% 100% at 50% 45%, transparent 58%, rgba(0,0,0,.32))}
+.aurora{position:absolute; inset:-20%; z-index:0; pointer-events:none; filter:blur(34px); opacity:.65;
+  background:radial-gradient(30% 40% at 30% 28%, rgba(203,166,247,.22), transparent 60%), radial-gradient(28% 36% at 74% 72%, rgba(116,199,236,.16), transparent 60%);
+  animation:drift 20s ease-in-out infinite alternate}
+@keyframes drift{from{transform:translate3d(-2%,-1%,0) scale(1)}to{transform:translate3d(3%,2%,0) scale(1.05)}}
+
+/* camera (auto-zoom rig) — holds ONLY the window, nothing else */
+.camera{position:absolute; left:50%; top:50%; width:420px; height:640px; margin-left:-210px; margin-top:-320px; z-index:2;
+  transform-origin:center center; transition:transform 1250ms cubic-bezier(.5,.02,.25,1); will-change:transform}
+
+/* ================= CLIPMAN WINDOW (1:1 with docs/design) ================= */
+.win{position:relative; width:420px; height:640px; background:var(--base); border-radius:15px; box-shadow:var(--shadow-window); border:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; font-size:13px; color:var(--text)}
+.headerbar{display:flex; align-items:center; padding:6px 8px; background:var(--mantle); border-bottom:1px solid var(--divider); min-height:38px}
+.headerbar .title{flex:1; text-align:center; font-size:14px; font-weight:600; letter-spacing:-.01em; color:var(--text)}
+.hbtn{width:28px; height:28px; border-radius:6px; color:var(--subtext); display:inline-flex; align-items:center; justify-content:center}
+.hbtn svg{width:16px; height:16px}
+.toolbar{padding:8px 8px 6px; background:var(--base); display:flex; flex-direction:column; gap:6px}
+.search{display:flex; align-items:center; gap:6px; background:var(--overlay); padding:8px 10px; border-radius:9px; border:1px solid transparent; transition:border-color .18s,background .18s}
+.search.focus{border-color:var(--accent); background:var(--surface)}
+.search svg{width:14px; height:14px; color:var(--muted); flex-shrink:0}
+.search input{flex:1; background:transparent; border:none; outline:none; color:var(--text); font-family:inherit; font-size:13px}
+.search input::placeholder{color:var(--muted)}
+.search .caret{width:1.5px; height:16px; background:var(--accent); border-radius:1px; opacity:0; flex-shrink:0}
+.search.typing .caret{opacity:1; animation:caret 1s steps(2) infinite}
+@keyframes caret{50%{opacity:0}}
+.search .kbd{font-family:"JetBrains Mono",monospace; font-size:10px; padding:2px 6px; background:var(--base); border:1px solid var(--border); border-radius:4px; color:var(--muted)}
+.search.typing .kbd{display:none}
+.search .kbd.pulse{animation:kbdpulse 1s ease}
+@keyframes kbdpulse{0%,100%{box-shadow:0 0 0 0 transparent}40%{box-shadow:0 0 0 4px var(--accent-soft); border-color:var(--accent); color:var(--accent)}}
+.switcher{display:flex; gap:2px; padding:2px; background:var(--overlay); border-radius:9px; align-self:flex-start}
+.switcher button{padding:5px 12px; font-size:12px; font-weight:500; color:var(--subtext); border-radius:6px; display:inline-flex; align-items:center; gap:5px; border:none; background:transparent; cursor:default}
+.switcher .count{font-size:10px; padding:1px 5px; background:var(--base); border-radius:8px; color:var(--muted); font-variant-numeric:tabular-nums}
+.switcher button.active{background:var(--base); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.15)}
+.switcher button.active .count{background:var(--accent-soft); color:var(--accent)}
+.content{flex:1; overflow:hidden; padding:6px 8px 8px}
+.group{transition:opacity .4s ease}
+.group+.group{margin-top:12px}
+.group-header{display:flex; align-items:center; justify-content:space-between; padding:6px 6px 4px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:var(--muted)}
+.group-header.pinned{color:var(--pin)}
+.group-rows{display:flex; flex-direction:column; gap:1px; background:var(--surface); border:1px solid var(--border); border-radius:9px; overflow:hidden}
+.row{display:grid; grid-template-columns:32px 1fr auto; gap:8px; align-items:center; padding:10px 8px; background:var(--surface); transition:background .18s, opacity .4s ease}
+.row+.row{box-shadow:0 -1px 0 var(--divider)}
+.row.hover{background:var(--row-hover)}
+.row.is-pinned{background:linear-gradient(90deg, rgba(249,226,175,.06) 0%, var(--surface) 12%)}
+.type-icon{width:32px; height:32px; border-radius:9px; display:inline-flex; align-items:center; justify-content:center; flex-shrink:0}
+.type-icon svg{width:16px; height:16px}
+.type-text .type-icon{background:rgba(137,180,250,.14); color:var(--t-text)}
+.type-image .type-icon{background:rgba(203,166,247,.14); color:var(--t-image)}
+.type-link .type-icon{background:rgba(116,199,236,.14); color:var(--t-link)}
+.type-code .type-icon{background:rgba(148,226,213,.14); color:var(--t-code)}
+.type-snip .type-icon{background:rgba(249,226,175,.16); color:var(--t-snip)}
+.thumb{width:32px; height:32px; border-radius:9px; background-image:linear-gradient(135deg,#74c7ec 0%,#cba6f7 60%,#f5c2e7 100%); flex-shrink:0; box-shadow:0 0 0 1px var(--border) inset}
+.body{min-width:0; display:flex; flex-direction:column; gap:2px}
+.preview{color:var(--text); font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; letter-spacing:-.005em}
+.row.is-pinned .preview::before{content:"★"; color:var(--pin); margin-right:6px; font-size:11px; vertical-align:1px}
+.row.is-sensitive .preview{font-family:"JetBrains Mono",monospace; color:var(--muted); letter-spacing:.1em}
+.meta{font-size:11px; color:var(--muted); display:flex; gap:6px; align-items:center}
+.meta .dot{color:var(--faint)}
+.actions{display:flex; gap:2px; opacity:0; transition:opacity .18s}
+.row.hover .actions, .row.is-pinned .actions{opacity:1}
+.actions button{width:28px; height:28px; border-radius:6px; color:var(--muted); display:inline-flex; align-items:center; justify-content:center; border:none; background:transparent; cursor:default; transition:transform .15s}
+.actions button.pin.is-active{color:var(--pin); opacity:1; transform:scale(1.12)}
+.actions svg{width:14px; height:14px}
+/* layout-neutral match highlight (outline, not shadow — no bleed onto neighbors) */
+.row.match{background:var(--row-hover); outline:2px solid var(--accent); outline-offset:-1px; border-radius:9px; position:relative; z-index:1}
+.row.match.pastepop{animation:pastepop .65s ease}
+@keyframes pastepop{0%,100%{outline-color:var(--accent); background:var(--row-hover)}45%{outline-color:var(--success); background:rgba(166,227,161,.12)}}
+.content.q .row:not(.match){opacity:.10}
+.content.q .group.dim{opacity:.16}
+.footer{display:flex; align-items:center; justify-content:space-between; padding:6px 8px; background:var(--mantle); border-top:1px solid var(--divider); font-size:12px; color:var(--muted)}
+.count{font-variant-numeric:tabular-nums}
+.footright{display:flex; gap:6px; align-items:center}
+.rec-pill{display:inline-flex; align-items:center; gap:6px; padding:2px 10px; background:rgba(166,227,161,.14); color:var(--success); border-radius:999px; font-size:11px; font-weight:500; transition:.35s}
+.rec-pill .live{width:6px; height:6px; border-radius:50%; background:currentColor; animation:blink 1.1s steps(2) infinite}
+@keyframes blink{50%{opacity:.25}}
+.rec-pill.paused{background:rgba(180,190,254,.16); color:var(--incognito)}
+.rec-pill.paused .live{animation:none; opacity:.9}
+.text-btn{color:var(--subtext); font-size:12px; padding:3px 8px; border-radius:6px}
+
+/* ================= synthetic cursor — STAGE space, constant size ================= */
+.cursor{position:absolute; left:0; top:0; z-index:5; width:2.4rem; height:2.4rem; transform-origin:0 0; pointer-events:none; transition:transform 820ms cubic-bezier(.45,.05,.15,1); will-change:transform}
+.cursor svg{width:2.4rem; height:2.4rem; filter:drop-shadow(0 4px 6px rgba(0,0,0,.55))}
+.cursor .halo{position:absolute; left:-0.85rem; top:-0.72rem; width:3.6rem; height:3.6rem; border-radius:50%; background:radial-gradient(circle, rgba(255,255,255,.16), rgba(203,166,247,.20) 42%, transparent 70%); opacity:0; transition:opacity .35s}
+.cursor.armed .halo{opacity:1}
+.cursor .ripple{position:absolute; left:0.32rem; top:0.2rem; width:1.28rem; height:1.28rem; border-radius:50%; border:0.16rem solid var(--accent); opacity:0}
+.cursor.click .ripple{animation:ripple .62s ease-out}
+@keyframes ripple{0%{opacity:.9; transform:scale(.35)}100%{opacity:0; transform:scale(3.2)}}
+.cursor.press svg{transform:scale(.85)}
+
+/* annotation chips — STAGE space */
+.chip{position:absolute; left:0; top:0; z-index:5; transform-origin:0 0; display:flex; align-items:center; gap:6px; padding:0.4rem 0.7rem; border-radius:999px; font-size:0.8rem; font-weight:600; font-family:"Inter",sans-serif; box-shadow:0 10px 24px -8px rgba(0,0,0,.55); opacity:0; transform:translateY(6px); transition:opacity .3s, transform .3s; white-space:nowrap; pointer-events:none}
+.chip.show{opacity:1}
+.chip.paste{background:var(--success); color:#0f2013}
+.chip.pin{background:var(--pin); color:#2a2103}
+
+/* lower-third caption + scrim */
+.capscrim{position:absolute; left:0; right:0; bottom:0; height:44%; z-index:4; pointer-events:none; opacity:0; transition:opacity .5s ease;
+  background:linear-gradient(180deg, transparent 0%, rgba(19,18,32,.30) 42%, rgba(19,18,32,.82) 100%)}
+.capscrim.show{opacity:1}
+.caption{position:absolute; left:clamp(22px,4.5%,58px); bottom:clamp(22px,5.5%,52px); z-index:7; max-width:66%; opacity:0; transform:translateY(16px); transition:opacity .55s cubic-bezier(.2,.7,.2,1), transform .55s cubic-bezier(.2,.7,.2,1)}
+.caption.show{opacity:1; transform:translateY(0)}
+.caption .eyebrow{font-family:"JetBrains Mono",monospace; font-size:0.75rem; letter-spacing:.22em; color:var(--accent); text-transform:uppercase; margin-bottom:0.55rem}
+.caption .head{font-family:"Bricolage Grotesque",sans-serif; font-weight:600; letter-spacing:-.02em; line-height:1.06; font-size:2.55rem; color:#fff; text-wrap:balance; text-shadow:0 2px 22px rgba(0,0,0,.5)}
+.stage.nocap .caption, .stage.nocap .capscrim{opacity:0 !important; visibility:hidden}
+
+/* brand-card outro */
+.outro{position:absolute; inset:0; z-index:8; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; text-align:center; padding:24px;
+  background:radial-gradient(120% 120% at 50% 34%, #262441 0%, #1a1830 55%, #121020 100%); opacity:0; visibility:hidden; transition:opacity .6s ease, visibility .6s}
+.outro.show{opacity:1; visibility:visible}
+.lockup{display:flex; align-items:center; gap:16px}
+.mark{width:60px; height:60px; border-radius:16px; display:grid; place-items:center; background:linear-gradient(155deg,#2a2340,#1e1e2e); border:1px solid rgba(203,166,247,.35); box-shadow:0 12px 30px -8px rgba(203,166,247,.35), 0 0 0 1px rgba(255,255,255,.04) inset}
+.mark svg{width:34px; height:34px; color:var(--accent)}
+.wordmark{font-family:"Bricolage Grotesque",sans-serif; font-weight:700; font-size:clamp(30px,5vw,52px); letter-spacing:-.03em; color:#fff}
+.tagline{font-family:"Bricolage Grotesque",sans-serif; font-weight:500; font-size:clamp(16px,2.4vw,24px); color:var(--accent)}
+.tagline em{color:#fff; font-style:normal}
+.chips{display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:4px}
+.chips span{font-family:"JetBrains Mono",monospace; font-size:11.5px; letter-spacing:.02em; color:var(--subtext); background:rgba(205,214,244,.05); border:1px solid var(--border); padding:6px 12px; border-radius:999px}
+
+/* controls (outside the recorded frame) */
+.controls{width:min(100%,1120px); display:flex; align-items:center; gap:10px; flex-wrap:wrap; color:var(--ink-dim); font-size:13px}
+.btn{display:inline-flex; align-items:center; gap:8px; font-family:"Inter",sans-serif; font-weight:600; font-size:13px; color:var(--ink); background:var(--page-2); border:1px solid var(--hair); padding:9px 15px; border-radius:10px; cursor:pointer; transition:border-color .15s, background .15s}
+.btn:hover{border-color:var(--accent); background:#20203a}
+.btn:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.btn .k{width:8px; height:8px; border-radius:50%; background:var(--accent)}
+.beats{display:flex; gap:6px; margin-left:auto; flex-wrap:wrap}
+.beat{font-family:"JetBrains Mono",monospace; font-size:10.5px; letter-spacing:.03em; color:var(--muted); padding:5px 9px; border-radius:999px; border:1px solid var(--hair); transition:.2s}
+.beat.on{color:var(--accent); border-color:rgba(203,166,247,.4); background:var(--accent-soft)}
+.note{width:min(100%,1120px); color:var(--ink-dim); font-size:12.5px; line-height:1.6}
+.note b{color:var(--ink); font-weight:600}
+.note code{font-family:"JetBrains Mono",monospace; font-size:11.5px; background:var(--page-2); border:1px solid var(--hair); padding:1px 6px; border-radius:5px; color:var(--accent)}
+/* full-bleed capture mode (recording only) — stage fills the frame */
+body.capture{padding:0; gap:0; overflow:hidden; background:#000}
+body.capture .masthead, body.capture .controls, body.capture .note{display:none}
+body.capture .stage{width:100vw; height:100vh; max-width:none; border-radius:0; aspect-ratio:auto; box-shadow:none}
+@media (prefers-reduced-motion:reduce){.aurora{animation:none} .camera,.cursor,.caption,.chip{transition-duration:1ms !important}}
+</style>
+
+<header class="masthead">
+  <div>
+    <h1>Clipman Demo Reel<span class="dot">.</span></h1>
+    <p>Motion-designed product demo in the openship / Screen-Studio style — floating window on a wallpaper, auto-zoom camera, smoothed cursor, click ripples, optional captions. This scene is the source that gets recorded to MP4 / WebM / GIF.</p>
+  </div>
+  <div class="badge">STYLE PREVIEW · LOOPS</div>
+</header>
+
+<div class="stage" id="stage">
+  <div class="aurora"></div>
+
+  <div class="camera" id="camera">
+    <div class="win" id="win">
+      <header class="headerbar">
+        <span class="hbtn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="4" cy="11" r="2.5"/><circle cx="12" cy="11" r="2.5"/><path d="M2 8h12M5 8c1.5-3 4.5-3 6 0"/></svg></span>
+        <span class="title">Clipman</span>
+        <span class="hbtn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 5h10M3 8h10M3 11h10"/></svg></span>
+      </header>
+      <div class="toolbar">
+        <div class="search" id="search">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5l3 3" stroke-linecap="round"/></svg>
+          <input id="searchInput" type="text" placeholder="Search clipboard history…" readonly>
+          <span class="caret"></span>
+          <span class="kbd" id="kbd">⌘ /</span>
+        </div>
+        <nav class="switcher">
+          <button class="active">All <span class="count">42</span></button>
+          <button>Text <span class="count">28</span></button>
+          <button>Images <span class="count">7</span></button>
+          <button>Snippets <span class="count">7</span></button>
+        </nav>
+      </div>
+      <div class="content" id="content">
+        <section class="group" data-grp="pinned">
+          <div class="group-header pinned"><span>★ Pinned</span><span>2</span></div>
+          <div class="group-rows">
+            <div class="row is-pinned type-snip">
+              <div class="type-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="10" height="10" rx="2"/><path d="M6 7h4M6 9.5h3" stroke-linecap="round"/></svg></div>
+              <div class="body"><div class="preview">Standup template — yesterday / today / blockers</div><div class="meta"><span>Snippet</span><span class="dot">•</span><span>used 14×</span></div></div>
+              <div class="actions"><button class="pin is-active"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button></div>
+            </div>
+            <div class="row is-pinned type-link">
+              <div class="type-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 5h4a3 3 0 010 6h-1M9 11H5a3 3 0 010-6h1" stroke-linecap="round"/></svg></div>
+              <div class="body"><div class="preview">https://github.com/MohammedEl-sayedAhmed/clipman</div><div class="meta"><span>URL</span><span class="dot">•</span><span>github.com</span></div></div>
+              <div class="actions"><button class="pin is-active"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button></div>
+            </div>
+          </div>
+        </section>
+        <section class="group" data-grp="today">
+          <div class="group-header"><span>Today</span></div>
+          <div class="group-rows">
+            <div class="row type-text" id="rowPin">
+              <div class="type-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 5h10M3 8h10M3 11h6"/></svg></div>
+              <div class="body"><div class="preview">A number is a mathematical object used to count, measure…</div><div class="meta"><span>just now</span><span class="dot">•</span><span>150 chars</span></div></div>
+              <div class="actions"><button class="pin" id="pinBtn"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button></div>
+            </div>
+            <div class="row type-image">
+              <div class="thumb"></div>
+              <div class="body"><div class="preview">Screenshot — design review notes</div><div class="meta"><span>2 min ago</span><span class="dot">•</span><span>1.2 MB</span><span class="dot">•</span><span>1280×720</span></div></div>
+              <div class="actions"><button class="pin"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button></div>
+            </div>
+            <div class="row type-code" id="rowGit">
+              <div class="type-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4L2 8l3 4M11 4l3 4-3 4"/></svg></div>
+              <div class="body"><div class="preview">git log --oneline --grep='hooks' --since='1 week ago'</div><div class="meta"><span>14 min ago</span><span class="dot">•</span><span>Code</span></div></div>
+              <div class="actions"><button class="pin"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button></div>
+            </div>
+            <div class="row type-text is-sensitive" id="rowSens">
+              <div class="type-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3.5" y="7" width="9" height="6" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 015 0v2"/></svg></div>
+              <div class="body"><div class="preview">•••••••••••••</div><div class="meta"><span>32 min ago</span><span class="dot">•</span><span style="color:var(--warning)" id="sensMeta">Sensitive — auto-clear in 27 s</span></div></div>
+              <div class="actions"><button class="pin"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button></div>
+            </div>
+          </div>
+        </section>
+        <section class="group" data-grp="yesterday">
+          <div class="group-header"><span>Yesterday</span></div>
+          <div class="group-rows">
+            <div class="row type-link">
+              <div class="type-icon"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 5h4a3 3 0 010 6h-1M9 11H5a3 3 0 010-6h1" stroke-linecap="round"/></svg></div>
+              <div class="body"><div class="preview">https://wayland.freedesktop.org/docs/html/ch04.html</div><div class="meta"><span>18:42</span><span class="dot">•</span><span>wayland.freedesktop.org</span></div></div>
+              <div class="actions"><button class="pin"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 4 4.2.4-3.2 2.9.95 4.2L8 10.9 4.25 13l.95-4.2L2 5.9l4.2-.4z"/></svg></button></div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <footer class="footer">
+        <span class="count" id="footCount">42 items</span>
+        <div class="footright">
+          <span class="rec-pill" id="recPill"><span class="live"></span><span id="recText">Recording</span></span>
+          <button class="text-btn">Clear all</button>
+        </div>
+      </footer>
+    </div><!-- /.win -->
+  </div><!-- /.camera -->
+
+  <div class="capscrim" id="capscrim"></div>
+  <div class="chip paste" id="pasteChip"><svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M3.5 8.5l3 3 6-7" stroke-linecap="round" stroke-linejoin="round"/></svg>Pasted into your editor</div>
+  <div class="chip pin" id="miniChip">★ Pinned to top</div>
+
+  <div class="cursor" id="cursor">
+    <span class="halo"></span><span class="ripple"></span>
+    <svg viewBox="0 0 24 24" fill="#fff" stroke="#15141f" stroke-width="1.3" stroke-linejoin="round"><path d="M4 2l0 17 4.2-4.2 2.6 5.9 3-1.3-2.6-5.8 6 0z"/></svg>
+  </div>
+
+  <div class="caption" id="caption">
+    <div class="eyebrow" id="capEye">CLIPMAN</div>
+    <div class="head" id="capHead">Everything you've copied — one keystroke away.</div>
+  </div>
+
+  <div class="outro" id="outro">
+    <div class="lockup">
+      <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="4" width="14" height="17" rx="2.5"/><rect x="9" y="2.5" width="6" height="3.2" rx="1.2" fill="currentColor" stroke="none"/><path d="M9 11h6M9 14.5h4" stroke-linecap="round"/></svg></div>
+      <div class="wordmark">Clipman</div>
+    </div>
+    <div class="tagline"><em>Clip once.</em> Paste forever.</div>
+    <div class="chips"><span>Snap Store</span><span>Flathub</span><span>PyPI · pipx</span><span>AUR</span><span>GNOME Extensions</span></div>
+  </div>
+</div>
+
+<div class="controls">
+  <button class="btn" id="replay"><span class="k"></span>Replay</button>
+  <button class="btn" id="toggle">Pause</button>
+  <button class="btn" id="capBtn">Captions: On</button>
+  <div class="beats" id="beats"></div>
+</div>
+
+<p class="note">
+  <b>Reviewed &amp; fixed:</b> cursor now lives in stage-space (constant size, no counter-scale jitter), the camera settles before the pointer arrives and clicks (no moving-target snap), captions sit on a lower-third <b>scrim</b> instead of overlapping the UI, and the search match is a layout-neutral outline. <b>To ship it:</b> drive this exact page with <code>npx playwright</code> at <code>deviceScaleFactor:2</code>, record natively, then <code>ffmpeg</code> to a README GIF + 4K MP4/WebM. Window rebuilt 1:1 from <code>docs/design/tokens.css</code>.
+</p>
+
+<script>
+(function(){
+  const W=420,H=640;
+  const $=id=>document.getElementById(id);
+  const stage=$('stage'), camera=$('camera'), win=$('win'), cursor=$('cursor'), content=$('content');
+  const searchInput=$('searchInput'), footCount=$('footCount'), recPill=$('recPill'), recText=$('recText'), sensMeta=$('sensMeta');
+  const search=$('search'), kbd=$('kbd'), caption=$('caption'), capEye=$('capEye'), capHead=$('capHead'), capscrim=$('capscrim');
+  const pasteChip=$('pasteChip'), miniChip=$('miniChip'), outro=$('outro');
+  const rowGit=$('rowGit'), rowPin=$('rowPin'), pinBtn=$('pinBtn'), beatsEl=$('beats');
+  const groups=[...content.querySelectorAll('.group')];
+  const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
+  const HASH=location.hash;
+  if(HASH.startsWith('#capture')){document.body.classList.add('capture'); if(HASH.includes('vertical'))document.body.classList.add('vertical');}
+  let S0=1, curScale=1, RUN=0, paused=false, capsOn=!HASH.includes('nocap');
+
+  const NAMES=['Intro','Search','Filter','Paste','Pin','Privacy','Outro'];
+  NAMES.forEach((b,i)=>{const s=document.createElement('span');s.className='beat';s.textContent=b;beatsEl.appendChild(s);});
+  const beatSpans=[...beatsEl.children];
+  const setBeat=i=>beatSpans.forEach((s,j)=>s.classList.toggle('on',j===i));
+
+  const K=()=>parseFloat(getComputedStyle(document.documentElement).fontSize)/16;
+  function fit(){const r=stage.getBoundingClientRect(); const v=document.body.classList.contains('vertical');
+    S0 = v ? Math.min((r.height*0.58)/H,(r.width*0.86)/W) : Math.min((r.height*0.76)/H,(r.width*0.52)/W);
+    document.documentElement.style.fontSize=Math.max(13,(Math.max(r.width, r.height*0.75)/1280)*16)+'px'; window.__S0=S0; window.__stage=[r.width,r.height];}
+  const sc=()=>stage.getBoundingClientRect();
+  // element center in the camera's LOCAL (content) coords — transform-independent
+  function localCenter(el){const wr=win.getBoundingClientRect(), er=el.getBoundingClientRect(); return {x:(er.left+er.width/2 - wr.left)/curScale, y:(er.top+er.height/2 - wr.top)/curScale};}
+  // element center in STAGE (screen) coords at the CURRENT transform
+  function stagePos(el){const s=sc(), er=el.getBoundingClientRect(); return {x:er.left+er.width/2 - s.left, y:er.top+er.height/2 - s.top};}
+  function camTo(el,Z){const p=localCenter(el); curScale=S0*Z; camera.style.transform=`scale(${curScale}) translate(${W/2-p.x}px, ${H/2-p.y}px)`;}
+  let cx=0, cy=0;
+  function cursorXY(x,y){cx=x;cy=y; const f=parseFloat(getComputedStyle(document.documentElement).fontSize); cursor.style.transform=`translate(${x-f*0.38}px, ${y-f*0.19}px)`;}
+  function cursorToEl(el,dx=0,dy=0){const k=K(); const p=stagePos(el); cursorXY(p.x+dx*k, p.y+dy*k);}
+  const arm=on=>cursor.classList.toggle('armed',!!on);
+  function click(){cursor.classList.remove('click'); void cursor.offsetWidth; cursor.classList.add('click','press'); setTimeout(()=>cursor.classList.remove('press'),160);}
+  function cap(eye,head){ if(!capsOn)return; caption.classList.remove('show'); capscrim.classList.add('show');
+    setTimeout(()=>{capEye.textContent=eye; capHead.textContent=head; caption.classList.add('show');}, reduce?0:200);}
+  function showChip(chip,el,dx,dy){const k=K(); const p=stagePos(el); chip.style.transform=`translate(${p.x+dx*k}px, ${p.y+dy*k}px)`; chip.classList.add('show');}
+  const hide=el=>el.classList.remove('show');
+
+  const sleep=ms=>new Promise(r=>setTimeout(r,reduce?Math.min(ms,80):ms));
+  const ok=(me,ms)=>sleep(ms).then(()=>me===RUN);
+
+  function reset(){
+    content.classList.remove('q'); groups.forEach(g=>g.classList.remove('dim'));
+    rowGit.classList.remove('match','pastepop','hover'); rowPin.classList.remove('is-pinned','hover'); pinBtn.classList.remove('is-active');
+    search.classList.remove('focus','typing'); searchInput.value=''; searchInput.placeholder='Search clipboard history…';
+    footCount.textContent='42 items'; recPill.classList.remove('paused'); recText.textContent='Recording'; sensMeta.textContent='Sensitive — auto-clear in 27 s';
+    hide(pasteChip); hide(miniChip); caption.classList.remove('show'); capscrim.classList.remove('show'); outro.classList.remove('show'); arm(false);
+    const ct=camera.style.transition, kt=cursor.style.transition; camera.style.transition='none'; cursor.style.transition='none';
+    curScale=S0; camera.style.transform=`scale(${S0}) translate(0px,0px)`;
+    const s=sc(); cursorXY(s.width*0.66, s.height*0.74);
+    void camera.offsetWidth; camera.style.transition=ct; cursor.style.transition=kt;
+  }
+
+  async function typeQuery(me,str){
+    search.classList.add('typing');
+    for(const ch of str){ searchInput.value+=ch; if(!await ok(me,235))return false; }
+    return true;
+  }
+
+  async function play(){
+    const me=++RUN; paused=false; $('toggle').textContent='Pause'; fit(); reset();
+    if(!await ok(me,500))return;
+
+    // 1 — INTRO (full window on the wallpaper)
+    setBeat(0); cap('Clipman',"Everything you've copied — one keystroke away.");
+    if(!await ok(me,1750))return;
+
+    // 2 — SEARCH: zoom to the field, THEN the pointer arrives & clicks
+    setBeat(1); camTo(search,1.5);
+    if(!await ok(me,1250))return;                       // camera settles first
+    cursorToEl(search,46,2); arm(true);
+    if(!await ok(me,780))return;                        // pointer arrives
+    kbd.classList.add('pulse'); setTimeout(()=>kbd.classList.remove('pulse'),1000);
+    click(); search.classList.add('focus');
+    cap('Instant recall','Hit the shortcut. Start typing.');
+    if(!await ok(me,640))return;
+
+    // 3 — FILTER: type, collapse to the single match
+    setBeat(2);
+    if(!await typeQuery(me,'git'))return;
+    search.classList.remove('typing');
+    content.classList.add('q'); rowGit.classList.add('match');
+    groups.forEach(g=>{ if(g.dataset.grp!=='today') g.classList.add('dim'); });
+    footCount.textContent='1 result';
+    cap('Fuzzy search','Find any clip in a heartbeat.');
+    if(!await ok(me,1200))return;
+
+    // 4 — PASTE: push onto the match, pointer arrives, click, confirm
+    setBeat(3); camTo(rowGit,1.5);
+    if(!await ok(me,1250))return;
+    cursorToEl(rowGit,8,0); rowGit.classList.add('hover');
+    if(!await ok(me,760))return;
+    click(); rowGit.classList.add('pastepop'); showChip(pasteChip,rowGit,-26,-46);
+    cap('Paste anywhere','Drops straight back into your editor.');
+    if(!await ok(me,1550))return;
+    hide(pasteChip); rowGit.classList.remove('hover');
+
+    // 5 — PIN: clear filter, zoom the Today row, click its star
+    setBeat(4);
+    content.classList.remove('q'); groups.forEach(g=>g.classList.remove('dim')); rowGit.classList.remove('match','pastepop');
+    searchInput.value=''; search.classList.remove('focus'); footCount.textContent='42 items';
+    camTo(rowPin,1.5);
+    if(!await ok(me,1250))return;
+    cursorToEl(pinBtn,2,0); rowPin.classList.add('hover');
+    if(!await ok(me,760))return;
+    click(); pinBtn.classList.add('is-active'); rowPin.classList.add('is-pinned'); showChip(miniChip,pinBtn,-52,-44);
+    cap('Pin favorites','The stuff you reuse stays on top.');
+    if(!await ok(me,1500))return;
+    hide(miniChip); rowPin.classList.remove('hover');
+
+    // 6 — PRIVACY: zoom the footer, toggle Recording → Paused
+    setBeat(5); camTo(recPill,1.55);
+    if(!await ok(me,1250))return;
+    cursorToEl(recPill,4,0);
+    if(!await ok(me,760))return;
+    click(); recPill.classList.add('paused'); recText.textContent='Paused'; sensMeta.textContent='Cleared — nothing stored';
+    cap('Private by default','Incognito actually pauses recording.');
+    if(!await ok(me,1600))return;
+
+    // 7 — OUTRO: pull back, brand card, loop
+    setBeat(6); arm(false); camTo(win,1); caption.classList.remove('show'); capscrim.classList.remove('show');
+    if(!await ok(me,700))return;
+    outro.classList.add('show');
+    if(!await ok(me,2700))return;
+    if(document.body.classList.contains('capture')){ window.__done=true; return; } // hold the card for a clean recording end
+    outro.classList.remove('show');
+    if(!await ok(me,650))return;
+    window.__loop=(window.__loop||0)+1;
+    if(me===RUN && !paused) play();
+  }
+
+  $('replay').addEventListener('click',()=>play());
+  $('toggle').addEventListener('click',e=>{ if(paused){play();} else {paused=true;RUN++;e.target.textContent='Play';setBeat(-1);} });
+  $('capBtn').addEventListener('click',e=>{ capsOn=!capsOn; stage.classList.toggle('nocap',!capsOn); e.target.textContent='Captions: '+(capsOn?'On':'Off'); if(!capsOn){caption.classList.remove('show');capscrim.classList.remove('show');} });
+  let rt; addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{fit();},160);});
+
+  fit(); play();                       // start immediately; fonts swap in (no blank lead-in)
+  if(document.fonts&&document.fonts.ready){document.fonts.ready.then(fit);}
+})();
+</script>

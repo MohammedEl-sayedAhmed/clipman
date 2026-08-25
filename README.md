@@ -34,6 +34,12 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 
 <br>
 
+<a href="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/demo/clipman-demo.mp4"><img src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/demo/clipman-demo.gif" alt="Clipman — search your clipboard history and paste with one keystroke" width="720"></a>
+
+<sub><i>▶ <a href="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/demo/clipman-demo.mp4">Watch the full-quality video</a></i></sub>
+
+<br>
+
 <img src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/dark-theme.png" alt="Dark theme" width="320">&nbsp;&nbsp;<img src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/main/docs/light-theme.png" alt="Light theme" width="320">
 
 <br>
