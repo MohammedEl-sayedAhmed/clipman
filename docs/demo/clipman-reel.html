@@ -1,3 +1,10 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+</head>
+<body>
 <title>Clipman Demo Reel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -329,7 +336,9 @@ body.capture .stage{width:100vw; height:100vh; max-width:none; border-radius:0; 
   const groups=[...content.querySelectorAll('.group')];
   const reduce=matchMedia('(prefers-reduced-motion:reduce)').matches;
   const HASH=location.hash;
-  if(HASH.startsWith('#capture')){document.body.classList.add('capture'); if(HASH.includes('vertical'))document.body.classList.add('vertical');}
+  const RECORDING=HASH.startsWith('#capture');  // full-bleed, stop on the outro card (for recording)
+  const EMBED=HASH.startsWith('#embed');        // full-bleed, looping (for site iframe embed)
+  if(RECORDING||EMBED){document.body.classList.add('capture'); if(HASH.includes('vertical'))document.body.classList.add('vertical');}
   let S0=1, curScale=1, RUN=0, paused=false, capsOn=!HASH.includes('nocap');
 
   const NAMES=['Intro','Search','Filter','Paste','Pin','Privacy','Outro'];
@@ -443,7 +452,7 @@ body.capture .stage{width:100vw; height:100vh; max-width:none; border-radius:0; 
     if(!await ok(me,700))return;
     outro.classList.add('show');
     if(!await ok(me,2700))return;
-    if(document.body.classList.contains('capture')){ window.__done=true; return; } // hold the card for a clean recording end
+    if(RECORDING){ window.__done=true; return; } // hold the card for a clean recording end
     outro.classList.remove('show');
     if(!await ok(me,650))return;
     window.__loop=(window.__loop||0)+1;
@@ -459,3 +468,6 @@ body.capture .stage{width:100vw; height:100vh; max-width:none; border-radius:0; 
   if(document.fonts&&document.fonts.ready){document.fonts.ready.then(fit);}
 })();
 </script>
+
+</body>
+</html>

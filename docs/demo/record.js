@@ -9,7 +9,7 @@ const fs = require('fs');
   const base = process.argv[3] || 'clipman-demo';
   const dir = path.resolve(__dirname, 'rec');
   fs.mkdirSync(dir, { recursive: true });
-  const file = 'file://' + path.resolve(__dirname, 'clipman-reel-standalone.html') + hash;
+  const file = 'file://' + path.resolve(__dirname, 'clipman-reel.html') + hash;
 
   const browser = await chromium.launch({
     channel: 'chrome',
