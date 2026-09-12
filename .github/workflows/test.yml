@@ -52,3 +52,40 @@ jobs:
 
       - name: Run tests
         run: scripts/dev.sh test
+
+  package:
+    name: package (wheel smoke)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: pip install build && python -m build
+
+      - name: Install the wheel into a clean venv and run the entry point
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --no-deps dist/*.whl
+          tar tzf dist/*.tar.gz > /tmp/sdist-files.txt
+          grep -q 'clipman/style.css' /tmp/sdist-files.txt
+          # Leave the checkout so the installed package, not the source tree, is imported.
+          cd /tmp
+          /tmp/smoke/bin/clipman --version
+          /tmp/smoke/bin/python -m clipman --version
+          /tmp/smoke/bin/python -c "from importlib.resources import files; assert files('clipman').joinpath('style.css').is_file()"

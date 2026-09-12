@@ -39,6 +39,20 @@ All notable changes to Clipman are documented in this file.
   no terminal and, without one, only replaces a foreign
   `core.hooksPath` when `--replace` is given.
 
+### Fixed — PyPI and AppImage entry points
+
+- `pip install clipman-clipboard` produced a `clipman` command that failed
+  with `ModuleNotFoundError`: the console script pointed at
+  `clipman.clipman:main`, which did not exist. The entry point now lives in
+  `clipman.cli` (`clipman`, `clipman toggle`, `clipman --version`,
+  `python -m clipman`); the checkout script `clipman.py` is a thin shim.
+- The wheel and sdist did not include `clipman/style.css`, so a pip install
+  would crash on its first window. It is declared as package data, and a
+  new CI job builds the wheel, installs it into a clean venv and runs the
+  entry point.
+- The AppImage entrypoint ran `python -m clipman.app`, which has no
+  `__main__` and exited at once; it now runs `python -m clipman`.
+
 ### Changed — Snap packaging (#237, #238)
 
 - The snap now uses the `gnome` extension: the GTK4/libadwaita runtime
