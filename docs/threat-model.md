@@ -15,13 +15,17 @@ should still be reported through the private channel in
 | History database     | high (transitive — contains past clipboard)        | `~/.local/share/clipman/clipman.db` (SQLite WAL)               |
 | Image files          | medium                                             | `~/.local/share/clipman/images/`                               |
 | Daemon D-Bus surface | medium (injection + control vector)                | session bus, `com.clipman.Daemon`                              |
+| Extension D-Bus surface | high (keystroke synthesis and window focus inside the compositor) | session bus, `org.gnome.Shell.Extensions.clipman`       |
 
 ## Adversaries
 
 - **Local non-clipman processes running as the same UID.** Anything
-  on the session bus can call `NewEntry` to inject fake clipboard
-  content, or `Quit` to terminate the daemon. This is the design;
-  the session bus is the trust boundary, not a defence.
+  on the session bus can call the daemon's `NewEntry` to inject fake
+  clipboard content, or `Quit` to terminate the daemon. This is the
+  design; the session bus is the trust boundary, not a defence. The
+  extension's methods are different: they can type keystrokes and
+  move focus, which Wayland denies to normal apps, so they accept
+  calls only from the connection that owns `com.clipman.Daemon`.
 - **Malicious GNOME Shell extensions.** Extensions run inside the
   Shell's gjs process and can talk to anything on the session bus.
   A malicious extension could read the daemon's D-Bus surface or
@@ -77,10 +81,12 @@ should still be reported through the private channel in
 - **Physical access** to an unlocked machine.
 - **Cold-boot / offline disk forensics.** clipman does not assume
   full-disk encryption.
-- **D-Bus name-squatting by a malicious GNOME extension.** The
-  session bus grants well-known names on a first-come basis;
-  clipman does not attempt to detect impersonation beyond its own
-  `NewEntry` payload validation.
+- **D-Bus name-squatting.** The session bus grants well-known names
+  on a first-come basis. A process that owns `com.clipman.Daemon`
+  before the daemon starts receives every clipboard text the
+  extension forwards, and is the caller the extension trusts. The
+  daemon refuses to start when the name is already owned; nothing
+  else detects a squatter.
 - **Sandboxed-app clipboard** under Flatpak/Snap confinement —
   whether the host clipboard is readable inside another app's
   sandbox is a question for that sandbox's policy, not clipman's.

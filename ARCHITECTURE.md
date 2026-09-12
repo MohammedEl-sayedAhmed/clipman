@@ -109,9 +109,10 @@ written with `sensitive = 1` and auto-deleted by
 
 ## IPC contract
 
-All IPC is on the session bus. Both interfaces are unauthenticated by
-design - access is gated by the user's session bus, which is the same
-trust boundary as GNOME Shell itself.
+All IPC is on the session bus. The daemon's interface is open to any
+process on that bus by design. The extension's interface accepts calls
+only from the connection that owns `com.clipman.Daemon`, because it
+can type keystrokes and move focus inside the compositor.
 
 ### Daemon
 
@@ -138,13 +139,15 @@ trust boundary as GNOME Shell itself.
 | Method                        | Signature   | Description                                                                                                                                                               |
 | ----------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SimulatePaste(s mode)`       | `(s) -> ()` | Simulates a paste keystroke through a Clutter virtual keyboard. `mode` is one of `auto`, `ctrl-v`, `ctrl-shift-v`, or `shift-insert`; unknown values fall back to `auto`. |
-| `MoveWindowToCursor(s title)` | `(s) -> ()` | Moves the GTK popup window (looked up by `title`) to the current cursor position.                                                                                         |
+| `MoveWindowToCursor(s title)` | `(s) -> ()` | Moves the daemon's popup (matched by `wm_class`, pid and `title`) to the cursor and gives it focus.                                                                     |
+| `RestorePreviousFocus()`      | `() -> ()`  | Gives focus back to the window the user came from, right before the paste.                                                                                                |
+| `SetPaused(b paused)`         | `(b) -> ()` | Stops or resumes clipboard reads; the daemon calls it when incognito changes.                                                                                             |
 
-The `SimulatePaste(s mode)` argument was added later; older
-extensions exposed the no-argument shape. The daemon attempts the
-modern signature first and silently retries without the argument on
-`UnknownMethod`. The rationale and back-compat path are recorded in
-[ADR 0005](docs/adr/0005-paste-mode-as-dbus-arg.md).
+All four methods accept calls only from the connection that owns
+`com.clipman.Daemon`; other callers get `AccessDenied`. The
+`SimulatePaste(s mode)` argument was added in extension v5; the daemon
+calls the current signature only (see
+[ADR 0005](docs/adr/0005-paste-mode-as-dbus-arg.md)).
 
 ## Trust boundaries
 
