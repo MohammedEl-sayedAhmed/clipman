@@ -20,7 +20,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -49,37 +49,51 @@ jobs:
 
       - name: Derive tag/version
         id: derive
+        env:
+          # Read the dispatch input through env; never expand it in the script.
+          INPUT_TAG: ${{ inputs.tag }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            tag="${{ inputs.tag }}"
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            tag="$INPUT_TAG"
           else
             tag="${GITHUB_REF#refs/tags/}"
+          fi
+          if ! printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::tag '$tag' is not of the form vX.Y.Z"
+            exit 1
           fi
           version="${tag#v}"
           echo "tag=$tag"        >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Check pyproject.toml version matches tag
+      - name: Check every version carrier matches the tag
         env:
           EXPECTED: ${{ steps.derive.outputs.version }}
         run: |
-          actual=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
-          if [ "$actual" != "$EXPECTED" ]; then
-            echo "::error::pyproject.toml version ($actual) does not match tag ($EXPECTED)"
-            exit 1
+          fail=0
+          check() {  # check <label> <actual>
+            if [ "$2" != "$EXPECTED" ]; then
+              echo "::error::$1 version '$2' does not match tag ($EXPECTED)"
+              fail=1
+            else
+              echo "OK: $1 $2"
+            fi
+          }
+          check pyproject.toml       "$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
+          check clipman/_version.py  "$(grep -m1 '^__version__ = ' clipman/_version.py | cut -d'"' -f2)"
+          check snap/snapcraft.yaml  "$(grep -m1 '^version: ' snap/snapcraft.yaml | sed -E "s/version: ['\"]?([^'\"]+)['\"]?/\1/")"
+          check CITATION.cff         "$(grep -m1 '^version: ' CITATION.cff | cut -d' ' -f2)"
+          check aur/PKGBUILD         "$(grep -m1 '^pkgver=' aur/PKGBUILD | cut -d= -f2)"
+          check aur/.SRCINFO         "$(awk -F' = ' '/^[[:space:]]*pkgver = /{print $2; exit}' aur/.SRCINFO)"
+          check flathub-manifest     "$(cat flathub/*.json | grep -m1 -o 'clipman/archive/refs/tags/v[^"]*\.tar\.gz' | sed -E 's|.*/v(.*)\.tar\.gz|\1|')"
+          for f in data/*.metainfo.xml; do
+            check "$f (first <release>)" "$(grep -m1 -o '<release version="[^"]*"' "$f" | cut -d'"' -f2)"
+          done
+          if ! grep -Eq "^## \[${EXPECTED//./\\.}\] - [0-9]{4}-[0-9]{2}-[0-9]{2}" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$EXPECTED] - <date>' section"
+            fail=1
           fi
-          echo "OK: pyproject.toml $actual == tag $EXPECTED"
-
-      - name: Check snap/snapcraft.yaml version matches tag
-        env:
-          EXPECTED: ${{ steps.derive.outputs.version }}
-        run: |
-          actual=$(grep -m1 "^version: " snap/snapcraft.yaml | sed -E "s/version: ['\"]?([^'\"]+)['\"]?/\1/")
-          if [ "$actual" != "$EXPECTED" ]; then
-            echo "::error::snap/snapcraft.yaml version ($actual) does not match tag ($EXPECTED)"
-            exit 1
-          fi
-          echo "OK: snap version $actual == tag $EXPECTED"
+          exit $fail
 
       - name: Extract release notes for this version from CHANGELOG.md
         id: changelog
@@ -203,6 +217,8 @@ jobs:
 
       - name: Publish to PyPI (OIDC trusted publishing)
         uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # v1.14.2
+        with:
+          skip-existing: true
 
   build-snap:
     name: Build snap
@@ -308,9 +324,11 @@ jobs:
           persist-credentials: false
 
       - name: Install fpm + rpm tooling
+        timeout-minutes: 4
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ruby ruby-dev rubygems build-essential rpm
+          opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=60)
+          sudo apt-get update "${opts[@]}"
+          sudo apt-get install -y "${opts[@]}" ruby ruby-dev rubygems build-essential rpm
           sudo gem install --no-document fpm -v 1.16.0
 
       - name: Stage filesystem tree
@@ -379,7 +397,9 @@ jobs:
             --depends python3 \
             --depends python3-gi \
             --depends python3-dbus \
-            --depends gir1.2-gtk-3.0 \
+            --depends gir1.2-gtk-4.0 \
+            --depends gir1.2-adw-1 \
+            --depends libadwaita-1-0 \
             --depends wl-clipboard \
             -C staging .
 
@@ -398,7 +418,8 @@ jobs:
             --depends python3 \
             --depends python3-gobject \
             --depends python3-dbus \
-            --depends gtk3 \
+            --depends gtk4 \
+            --depends libadwaita \
             --depends wl-clipboard \
             -C staging .
 
@@ -443,11 +464,13 @@ jobs:
           path: dist
 
       - name: Install python-appimage + FUSE2
+        timeout-minutes: 4
         run: |
-          sudo apt-get update
+          opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=60)
+          sudo apt-get update "${opts[@]}"
           # Ubuntu 24.04 (noble) renamed libfuse2 -> libfuse2t64 (time_t transition).
           # Prefer the t64 package; fall back to libfuse2 for older runners.
-          sudo apt-get install -y libfuse2t64 || sudo apt-get install -y libfuse2
+          sudo apt-get install -y "${opts[@]}" libfuse2t64 || sudo apt-get install -y "${opts[@]}" libfuse2
           pip install python-appimage==1.4.5
 
       - name: Stage app recipe
@@ -489,7 +512,7 @@ jobs:
         run: |
           # python-appimage bundles Python 3.12 + wheel. NOT bundled: GTK
           # runtime, PyGObject bindings — those still need to be installed
-          # system-wide (python3-gi + gir1.2-gtk-3.0). Documented in the
+          # system-wide (python3-gi + gir1.2-gtk-4.0 + gir1.2-adw-1). Documented in the
           # release notes Assets section.
           python-appimage build app -p 3.12 appimage-src/ || \
             echo "::warning::AppImage build failed — Python-GTK packaging is brittle. \
@@ -530,9 +553,15 @@ jobs:
           persist-credentials: false
 
       - name: Install gnome-extensions tool
-        run: sudo apt-get update && sudo apt-get install -y gnome-shell-extensions
+        timeout-minutes: 4
+        run: |
+          opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=60)
+          sudo apt-get update "${opts[@]}"
+          sudo apt-get install -y "${opts[@]}" gnome-shell-extensions
 
       - name: Pack extension
+        env:
+          TAG: ${{ needs.pre-flight.outputs.tag }}
         run: |
           gnome-extensions pack \
             --force \
@@ -540,7 +569,7 @@ jobs:
             extension
           # Rename to a version-tagged file so GH Release asset is unambiguous.
           built=$(ls clipman@clipman.com.shell-extension.zip)
-          mv "$built" "clipman-extension-${{ needs.pre-flight.outputs.tag }}.zip"
+          mv "$built" "clipman-extension-${TAG}.zip"
 
       - name: Upload extension bundle
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -553,7 +582,6 @@ jobs:
   github-release:
     name: Create GitHub Release
     needs: [pre-flight, publish-pypi, publish-snap, bundle-extension, build-distpkgs, build-appimage]
-    if: always() && needs.pre-flight.result == 'success' && needs.bundle-extension.result == 'success' && needs.build-distpkgs.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -624,7 +652,7 @@ jobs:
             **Important install caveats**
 
             - The `.deb` / `.rpm` install the daemon to `/usr/bin/clipman` and the Python module to `/usr/lib/clipman/`, but **do not** install the GNOME Shell extension or register the `Super+V` keybinding — those are per-user. After installing the package, run upstream `install.sh` from a source checkout, or follow the per-user setup in `docs/development.md`.
-            - The `AppImage` bundles a Python 3.12 runtime + clipman, but **not** GTK or PyGObject. It still requires system `python3-gi` + `gir1.2-gtk-3.0` packages installed (almost every desktop Linux already has them). GTK can't be trivially bundled in an AppImage; if a full self-contained binary is critical, the Snap or Flatpak builds are better fits.
+            - The `AppImage` bundles a Python 3.12 runtime + clipman, but **not** GTK or PyGObject. It still requires system `python3-gi`, `gir1.2-gtk-4.0` and `gir1.2-adw-1` packages installed (almost every desktop Linux already has them). GTK can't be trivially bundled in an AppImage; if a full self-contained binary is critical, the Snap or Flatpak builds are better fits.
 
             ### GNOME Shell extension (manual step — EGO has no upload API)
 
@@ -656,10 +684,6 @@ jobs:
     # cleanly - same pattern as publish-snap with SNAPCRAFT_STORE_CREDENTIALS.
     name: Publish to AUR
     needs: [pre-flight, github-release]
-    if: >-
-      always()
-      && needs.pre-flight.result == 'success'
-      && needs.github-release.result == 'success'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -673,6 +697,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ needs.pre-flight.outputs.tag }}
           persist-credentials: false
 
       - name: Check credentials
