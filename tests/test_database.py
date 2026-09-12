@@ -494,25 +494,18 @@ class TestClipboardDB(unittest.TestCase):
         val = self.db.get_setting("nonexistent_key", "42")
         self.assertEqual(val, "42")
 
-    # ── Update entry text ─────────────────────────────────────────
+    # ── Latest text clip ──────────────────────────────────────────
 
-    def test_update_entry_text(self):
-        entry_id = self.db.add_entry("text", content_text="original text")
-        self.db.update_entry_text(entry_id, "updated text")
+    def test_get_latest_text_ignores_pins(self):
+        pinned = self.db.add_entry("text", content_text="old pinned note")
+        self.db.toggle_pin(pinned)
+        self.db.add_entry("text", content_text="newest copy")
+        self.db.add_entry("image", image_data=b"\x89PNG\r\n\x1a\nxx")
 
-        entries = self.db.get_entries()
-        self.assertEqual(entries[0]["content_text"], "updated text")
+        self.assertEqual(self.db.get_latest_text(), "newest copy")
 
-    def test_update_entry_text_changes_hash(self):
-        from clipman.database import content_hash
-        entry_id = self.db.add_entry("text", content_text="original")
-        original_hash = content_hash(b"original")
-
-        self.db.update_entry_text(entry_id, "modified")
-
-        entries = self.db.get_entries()
-        self.assertNotEqual(entries[0]["content_hash"], original_hash)
-        self.assertEqual(entries[0]["content_hash"], content_hash(b"modified"))
+    def test_get_latest_text_empty_history(self):
+        self.assertEqual(self.db.get_latest_text(), "")
 
     # ── Backup / Restore ──────────────────────────────────────────
 
@@ -855,11 +848,22 @@ class TestClipboardDB(unittest.TestCase):
         self.assertEqual(len(entries), 1)
         self.assertIsNone(entries[0]["image_path"])
 
-    # ── update_entry_text on non-existent id ───────────────────────
+    # ── Robustness: settings and file modes ───────────────────────
 
-    def test_update_entry_text_nonexistent_is_noop(self):
-        self.db.update_entry_text(99999, "ghost update")
-        self.assertEqual(self.db.count_entries(), 0)
+    def test_max_entries_stored_as_float_string_still_works(self):
+        self.db.set_setting("max_entries", "2.0")
+        for i in range(3):
+            self.db.add_entry("text", content_text=f"clip {i}")
+        self.assertEqual(self.db.count_entries(), 2)
+
+    def test_max_entries_garbage_falls_back_to_default(self):
+        self.db.set_setting("max_entries", "lots")
+        self.db.add_entry("text", content_text="still stored")
+        self.assertEqual(self.db.count_entries(), 1)
+
+    def test_database_file_is_private(self):
+        mode = os.stat(self.db_path).st_mode & 0o777
+        self.assertEqual(mode, 0o600)
 
     # ── Security: image magic bytes validation ─────────────────────
 

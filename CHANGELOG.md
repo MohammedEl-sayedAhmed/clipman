@@ -91,6 +91,23 @@ All notable changes to Clipman are documented in this file.
 - Reading an image from the clipboard ran `wl-paste` on the main loop
   and could freeze the popup for up to five seconds. It now runs on a
   background thread and stores the result on the main loop.
+### Fixed — storage and update check
+
+- A `max_entries` setting stored as a float string (for example
+  `500.0`) made every copy fail with `ValueError`. The value is now
+  parsed the same way the Preferences pane reads it.
+- The database file itself was created with the process umask (0644
+  on most systems); only the directory and the WAL side files were
+  0600. It is now clamped to 0600 on every start, as the FAQ said.
+- The update check wrote its result to SQLite from a background
+  thread. It now hands the result to the GLib main loop first, so all
+  database access stays on one thread.
+- Comparing a release tag that is not a valid version (for example
+  `1.2.3-hotfix`) against a valid one could raise inside the update
+  check. Both sides now fall back to the same simple comparison.
+- `update_entry_text` had no caller and could break the unique hash
+  constraint; removed. `get_latest_text` returns the newest text clip
+  regardless of pins, for the `${clipboard}` snippet token.
 
 ### Changed — Snap packaging (#237, #238)
 

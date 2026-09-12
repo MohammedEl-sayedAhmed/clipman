@@ -27,6 +27,7 @@ def _ensure_dirs():
     # that already exist; new ones are clamped by ClipboardDB.__init__
     # right after the WAL pragma fires.
     for sidecar in (
+        DB_PATH,
         DB_PATH.with_name(DB_PATH.name + "-wal"),
         DB_PATH.with_name(DB_PATH.name + "-shm"),
     ):
@@ -252,7 +253,12 @@ class ClipboardDB:
         self.conn.commit()
 
     def enforce_max_entries(self):
-        max_entries = int(self.get_setting("max_entries", str(MAX_ENTRIES)))
+        # Older builds stored the value as a float string; never let a
+        # bad setting break every copy.
+        try:
+            max_entries = int(float(self.get_setting("max_entries", str(MAX_ENTRIES))))
+        except (TypeError, ValueError):
+            max_entries = MAX_ENTRIES
         count = self.conn.execute(
             "SELECT COUNT(*) as cnt FROM entries WHERE pinned = 0"
         ).fetchone()["cnt"]
@@ -296,14 +302,14 @@ class ClipboardDB:
             self.conn.commit()
         return len(rows)
 
-    def update_entry_text(self, entry_id: int, new_text: str):
-        h = content_hash(new_text.encode("utf-8"))
-        self.conn.execute(
-            """UPDATE entries SET content_text = ?, content_hash = ?,
-               accessed_at = ? WHERE id = ?""",
-            (new_text, h, time.time(), entry_id)
-        )
-        self.conn.commit()
+    def get_latest_text(self) -> str:
+        """Return the most recently used text clip, pinned or not."""
+        row = self.conn.execute(
+            """SELECT content_text FROM entries
+               WHERE content_type = 'text' AND content_text IS NOT NULL
+               ORDER BY accessed_at DESC LIMIT 1"""
+        ).fetchone()
+        return row["content_text"] if row else ""
 
     def export_backup(self, path: str):
         import shutil

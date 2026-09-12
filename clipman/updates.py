@@ -73,32 +73,38 @@ def default_enabled() -> bool:
     return install_kind() == "other"
 
 
-def _parse_version(s: str) -> tuple:
-    """Best-effort semantic-version parse.
+def _tuple_version(s: str) -> tuple:
+    """Parse ``X.Y.Z`` into an integer tuple (the fallback).
 
-    Prefers ``packaging.version.parse`` when available (it understands
-    pre-releases, dev tags, epochs). Falls back to a plain
-    integer-tuple comparator that handles ``X.Y.Z`` well enough for
-    Clipman's tag scheme. Returns a value that's safely comparable to
-    another value from the same function.
+    Each chunk contributes its leading digits, so ``1.2.3-hotfix``
+    compares like ``1.2.3``.
     """
+    parts: list[int] = []
+    for chunk in (s or "").strip().lstrip("v").split("."):
+        match = re.match(r"\d+", chunk)
+        if match is None:
+            break
+        parts.append(int(match.group()))
+    return tuple(parts) if parts else (0,)
+
+
+def _parse_version(s: str):
+    """Return a packaging Version, or None if missing or invalid."""
     s = (s or "").strip().lstrip("v")
     try:
         from packaging.version import parse as _pv  # type: ignore
         return _pv(s)
     except Exception:
-        parts: list[int] = []
-        for chunk in s.split("."):
-            try:
-                parts.append(int(chunk))
-            except ValueError:
-                break
-        return tuple(parts) if parts else (0,)
+        return None
 
 
 def _is_newer(candidate: str, current: str) -> bool:
     """``True`` iff ``candidate`` is strictly newer than ``current``."""
-    return _parse_version(candidate) > _parse_version(current)
+    a, b = _parse_version(candidate), _parse_version(current)
+    if a is None or b is None:
+        # One side did not parse; compare both the simple way.
+        return _tuple_version(candidate) > _tuple_version(current)
+    return a > b
 
 
 def _http_get(url: str = RELEASES_URL) -> dict | None:
@@ -183,11 +189,10 @@ def check_async(db, callback=None) -> threading.Thread:
       1. Marks ``last_update_check`` immediately so a flapping check
          doesn't fan out into N concurrent fetches if called rapidly.
       2. Fetches + parses the latest release.
-      3. Persists ``latest_known_version`` if the API gave us one.
-      4. Schedules ``callback(is_newer, latest_version, url)`` on the
-         GTK main loop via ``GLib.idle_add`` (so the caller can update
-         UI without touching threading primitives). ``callback`` may be
-         ``None``; in that case the persisted state is the only output.
+      3. Hands the result to the GTK main loop via ``GLib.idle_add``,
+         which persists ``latest_known_version`` and then calls
+         ``callback(is_newer, latest_version, url)``. SQLite is never
+         touched from the thread. ``callback`` may be ``None``.
 
     Returns the started thread (useful for tests that want to ``join``).
     """
@@ -195,15 +200,21 @@ def check_async(db, callback=None) -> threading.Thread:
 
     def _run() -> None:
         is_newer, latest, url = check_for_update()
-        if latest:
-            db.set_setting(SETTING_LATEST_VERSION, latest)
-        if callback is not None:
-            try:
-                from gi.repository import GLib
-                GLib.idle_add(callback, is_newer, latest, url)
-            except Exception:
-                # No GTK loop (test context) — call inline.
+
+        def _finish():
+            # SQLite is only touched from the main loop.
+            if latest:
+                db.set_setting(SETTING_LATEST_VERSION, latest)
+            if callback is not None:
                 callback(is_newer, latest, url)
+            return False
+
+        try:
+            from gi.repository import GLib
+            GLib.idle_add(_finish)
+        except Exception:
+            # No GTK loop (test context) — run inline.
+            _finish()
 
     thread = threading.Thread(target=_run, daemon=True, name="clipman-update-check")
     thread.start()
