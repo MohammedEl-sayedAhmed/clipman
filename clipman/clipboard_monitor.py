@@ -1,56 +1,17 @@
 import logging
 import os
-import string
 import subprocess
 import time
 
 from gi.repository import GLib
+
+from clipman.sensitive import is_sensitive as _is_sensitive
 
 logger = logging.getLogger(__name__)
 
 MAX_TEXT_SIZE = 10 * 1024 * 1024   # 10 MB
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
 MIN_EVENT_INTERVAL = 0.1  # seconds — ignore events faster than this
-
-_TOKEN_PREFIXES = ("ghp_", "gho_", "ghs_", "github_pat_", "sk-", "sk_live_",
-                   "pk_live_", "Bearer ", "eyJ", "xox", "AKIA", "AIza",
-                   "npm_", "-----BEGIN ")
-
-_SENSITIVE_INFIXES = ("postgresql://", "mysql://", "mongodb://", "redis://",
-                      "ssh-rsa ", "ssh-ed25519 ")
-
-
-def _is_sensitive(text: str) -> bool:
-    if "\n" in text.strip():
-        # Still check multiline text for private keys and connection strings
-        t = text.strip()
-        if any(t.startswith(p) for p in _TOKEN_PREFIXES):
-            return True
-        if any(infix in t for infix in _SENSITIVE_INFIXES):
-            return True
-        return False
-    t = text.strip()
-    if not t or len(t) < 8 or len(t) > 128:
-        return False
-    if any(t.startswith(p) for p in _TOKEN_PREFIXES):
-        return True
-    if any(infix in t for infix in _SENSITIVE_INFIXES):
-        return True
-    if " " in t:
-        return False
-    cats = set()
-    for ch in t:
-        if ch in string.ascii_lowercase:
-            cats.add("lower")
-        elif ch in string.ascii_uppercase:
-            cats.add("upper")
-        elif ch in string.digits:
-            cats.add("digit")
-        elif ch in string.punctuation:
-            cats.add("punct")
-    if len(cats) >= 3 and len(t) >= 8:
-        return True
-    return False
 
 
 class _WlPasteWatcher:
