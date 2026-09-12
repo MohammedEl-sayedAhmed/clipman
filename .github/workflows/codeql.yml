@@ -57,6 +57,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
@@ -284,6 +286,7 @@ jobs:
 
       - name: Commit and push if changed
         env:
+          GH_TOKEN: ${{ github.token }}
           GH_COMMIT_AUTHOR: github-actions[bot]
           GH_COMMIT_EMAIL: github-actions[bot]@users.noreply.github.com
           # Pass head-commit message through env, NEVER interpolate it
@@ -306,5 +309,29 @@ jobs:
           # paragraph bodies into this commit message.
           head_subject="${HEAD_COMMIT_MESSAGE%%$'\n'*}"
           git commit -m "chore(baseline): refresh from main @ ${GITHUB_SHA::7}" \
-                     -m "Auto-updated by codeql.yml update-baseline job after the merge of: ${head_subject}"
-          git push origin HEAD:security-baseline
+                     -m "Auto-updated by codeql.yml update-baseline job after the merge of: ${head_subject}" \
+                     -m "Source-Commit: ${GITHUB_SHA}"
+          # Two merges close together run this job twice. The loser of the
+          # push race rebases and retries, but it keeps the remote baseline
+          # when that one comes from a newer main commit.
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:security-baseline; then
+              exit 0
+            fi
+            echo "Push rejected (attempt $attempt): another run moved security-baseline."
+            git fetch origin security-baseline
+            remote_sha=$(git log -1 --format=%B origin/security-baseline \
+              | sed -n 's/^Source-Commit: \([0-9a-f]\{40\}\)$/\1/p')
+            if [ -n "$remote_sha" ]; then
+              status=$(gh api "repos/${GITHUB_REPOSITORY}/compare/${remote_sha}...${GITHUB_SHA}" -q .status || echo unknown)
+              if [ "$status" = "behind" ] || [ "$status" = "identical" ]; then
+                echo "Remote baseline is from ${remote_sha:0:7}, at or ahead of ${GITHUB_SHA::7}; keeping it."
+                exit 0
+              fi
+            fi
+            # Our main commit is newer (or unknown): replay our commit on top
+            # and keep our file for the one conflicting path.
+            git rebase -X theirs origin/security-baseline
+          done
+          echo "::error::Could not push security-baseline after 5 attempts."
+          exit 1

@@ -5,7 +5,7 @@
 #   scripts/dev.sh deps [args]          system package manifest (deps.sh)
 #   scripts/dev.sh test [args]          the suite, exactly as CI runs it
 #   scripts/dev.sh lint                 ruff + shellcheck
-#   scripts/dev.sh ruff                 ruff check clipman tests
+#   scripts/dev.sh ruff                 ruff check clipman tests scripts clipman.py
 #   scripts/dev.sh shellcheck           shellcheck on the repo's shell scripts
 #   scripts/dev.sh screenshot [args]    headless render (scripts/screenshot.py)
 #   scripts/dev.sh hooks-test           the git-hook footprint-scanner corpus
@@ -88,7 +88,7 @@ cmd_ruff() {
         die "ruff not found (.venv/bin/ruff or on PATH); run: scripts/dev.sh setup"
     fi
     log "ruff: $ruff"
-    "$ruff" check clipman tests
+    "$ruff" check clipman tests scripts clipman.py
 }
 
 cmd_shellcheck() {

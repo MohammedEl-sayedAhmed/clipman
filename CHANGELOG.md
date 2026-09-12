@@ -133,6 +133,63 @@ All notable changes to Clipman are documented in this file.
 - Masked rows say only "Sensitive" when "Auto-clear sensitive clips"
   is off, instead of counting down to a purge that will not happen.
 
+### Fixed — packaging and release scripts
+
+- `scripts/update-aur.sh` wrote a hard-coded `.SRCINFO` that listed
+  `gtk3` and no `libadwaita`, so every release pushed a GTK 3 dependency
+  list for a GTK 4 app to AUR. It now builds `.SRCINFO` from `PKGBUILD`
+  and also refreshes the tarball hash in the Flatpak manifest.
+  `--print-srcinfo` prints the result for the tests.
+- `aur/PKGBUILD` and `aur/.SRCINFO` still carried the 1.0.6 tarball hash
+  (and `.SRCINFO` said 1.1.0). Regenerated for 1.2.1.
+- `aur/PKGBUILD` installed the systemd unit with the literal
+  `CLIPMAN_PATH_PLACEHOLDER` in `ExecStart`. It now gets the same path
+  substitution as the desktop file.
+- `scripts/bump-version.sh` adds an empty `<release>` entry to both
+  metainfo files and prints the release steps from AGENTS.md (release
+  PR, tag through the GitHub API, then `update-aur.sh`) instead of
+  `git push --tags`, which the pre-push hook rejects.
+- The Flatpak manifest lacked `--own-name` for `com.clipman.Daemon` and
+  `com.clipman.Clipman`, so the daemon could not take its bus names
+  inside the sandbox.
+- The snap no longer copies the whole checkout (docs, tests, CI files)
+  into the package; only the runtime files, the licence and the notice
+  ship.
+- New `tests/test_release_metadata.py`: the version must be the same in
+  every packaging file, `.SRCINFO` must match `PKGBUILD`, and AUR and
+  Flatpak must pin the same tarball hash.
+
+### Fixed — release workflow and CI
+
+- The GitHub Release was marked Latest even when the PyPI or Snap
+  publish job had failed; the AUR push then followed. The release job
+  now needs every publish job to succeed. A dispatch re-run skips wheels
+  that are already on PyPI instead of failing.
+- The `.deb` and `.rpm` declared GTK 3 dependencies (`gir1.2-gtk-3.0`,
+  `gtk3`) for a GTK 4 app. They now depend on GTK 4 and libadwaita.
+- The pre-flight check compared the tag with `pyproject.toml` and the
+  snap only. It now checks every file that carries the version
+  (`_version.py`, `CITATION.cff`, `PKGBUILD`, `.SRCINFO`, the Flatpak
+  manifest, both metainfo files) and requires a matching CHANGELOG
+  section.
+- The AUR job checked out the default branch on a manual dispatch, so it
+  could publish main's files under a release tag. It checks out the tag.
+- The dispatch input `tag` was expanded straight into a shell script; it
+  is now read through the environment and must look like `vX.Y.Z`. The
+  same env pass-through is used in the baseline guard's issue body and
+  the branch-cleanup job.
+- The apt steps in the release, lint and extension-bundle jobs now have a
+  step timeout and retries, like the test job.
+- The security-baseline update raced when two merges landed close
+  together: the loser's push was rejected and the baseline went stale.
+  It now rebases and retries, and keeps the remote baseline when that
+  one comes from a newer commit.
+- `snap-refresh` fails clearly when the latest release tag cannot be
+  resolved, instead of risking a build of main on the stable channel.
+- ruff also lints `scripts/` and the root `clipman.py`. Two jobs moved
+  from `ubuntu-latest` to the pinned `ubuntu-24.04`. Issue templates use
+  the `type:bug` and `type:feature` labels that `labels.yml` defines.
+
 ### Security — GNOME Shell extension (metadata version 8)
 
 - The extension's D-Bus methods (`SimulatePaste`, `MoveWindowToCursor`,
