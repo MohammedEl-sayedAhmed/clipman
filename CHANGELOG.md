@@ -74,6 +74,24 @@ All notable changes to Clipman are documented in this file.
 - The benchmark corpus ships as `tests/sensitive_corpus.py` and
   `tests/test_sensitive.py` asserts zero false positives on it.
 
+### Fixed — daemon start-up and incognito on the bus
+
+- A second daemon was never refused the `com.clipman.Daemon` name. It
+  waited in the bus queue, and the code that should have logged and
+  quit never ran. The name is now requested with `do_not_queue`, so a
+  second daemon exits at once. A new test starts two daemons on a
+  private bus and checks that the second one is refused.
+- When the session bus could not be reached, the error escaped the
+  start-up code as a traceback while the window kept the process
+  alive. The daemon now logs the error and quits.
+- Incognito mode also pauses the GNOME Shell extension (contract v8) so
+  clips never cross the bus while it is on. The daemon calls
+  `SetPaused` when incognito changes, at start-up, and again whenever
+  the extension reappears. Older extensions ignore the call.
+- Reading an image from the clipboard ran `wl-paste` on the main loop
+  and could freeze the popup for up to five seconds. It now runs on a
+  background thread and stores the result on the main loop.
+
 ### Changed — Snap packaging (#237, #238)
 
 - The snap now uses the `gnome` extension: the GTK4/libadwaita runtime

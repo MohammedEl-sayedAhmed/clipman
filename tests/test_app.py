@@ -164,6 +164,21 @@ class TestClipmanAppHelpers(unittest.TestCase):
             app._shutdown()
         q.assert_called_once()
 
+    # -- _on_extension_owner_changed ------------------------------------
+
+    def test_extension_reappearing_pushes_the_pause_state(self):
+        app = self._make_app()
+        app.monitor.incognito = True
+        with patch("clipman.app.shell_bridge.set_paused") as set_paused:
+            app._on_extension_owner_changed(":1.77")
+        set_paused.assert_called_once_with(True)
+
+    def test_extension_vanishing_pushes_nothing(self):
+        app = self._make_app()
+        with patch("clipman.app.shell_bridge.set_paused") as set_paused:
+            app._on_extension_owner_changed("")
+        set_paused.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
