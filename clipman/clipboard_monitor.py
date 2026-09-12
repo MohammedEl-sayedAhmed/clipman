@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 MAX_TEXT_SIZE = 10 * 1024 * 1024   # 10 MB
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
 MIN_EVENT_INTERVAL = 0.1  # seconds — ignore events faster than this
+SELF_COPY_TTL = 2.0  # seconds — how long a self-copy skip stays armed
 
 
 class _WlPasteWatcher:
@@ -175,6 +176,7 @@ class ClipboardMonitor:
         self._run_in_background = _run_in_thread
         self._run_on_main_loop = GLib.idle_add
         self._self_copy = False
+        self._self_copy_at = 0.0
         self._incognito = False
         self._last_event_time = 0.0
         self._watcher = None
@@ -202,7 +204,20 @@ class ClipboardMonitor:
                 logger.debug("on_watcher_dead callback failed", exc_info=True)
 
     def set_self_copy(self, val: bool):
-        self._self_copy = val
+        """Arm or clear the skip for a clipboard change we caused."""
+        self._self_copy = bool(val)
+        self._self_copy_at = time.monotonic() if val else 0.0
+
+    def _consume_self_copy(self) -> bool:
+        """Clear the skip flag; return True only while it is still fresh.
+
+        Without the time limit, a self-copy that no clipboard event
+        followed would swallow the user's next real copy.
+        """
+        if not self._self_copy:
+            return False
+        self._self_copy = False
+        return time.monotonic() - self._self_copy_at < SELF_COPY_TTL
 
     @property
     def incognito(self) -> bool:
@@ -226,8 +241,7 @@ class ClipboardMonitor:
 
     def handle_new_text(self, text):
         """Called from D-Bus when the extension detects a text copy."""
-        if self._self_copy:
-            self._self_copy = False
+        if self._consume_self_copy():
             return
 
         if self._incognito or self._rate_limited():
@@ -243,8 +257,7 @@ class ClipboardMonitor:
 
     def handle_new_image(self):
         """Called from D-Bus when an image was copied."""
-        if self._self_copy:
-            self._self_copy = False
+        if self._consume_self_copy():
             return
 
         if self._incognito or self._rate_limited():

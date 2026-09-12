@@ -64,7 +64,7 @@ class StateSpec:
 
 
 # ---------------------------------------------------------------------
-# The specs (16 mockup states + 3 plumbed error states). Order matches the mockup picker (states.html), reading
+# The specs (16 mockup states + 4 plumbed error states). Order matches the mockup picker (states.html), reading
 # top-to-bottom: Baseline / Informational / Privacy / Setup / Errors.
 # "populated" is a sentinel: it represents the normal list-view popup,
 # is never actually rendered through ``render_edge_state`` (the list
@@ -227,6 +227,18 @@ STATES: dict[str, StateSpec] = {
                "on your clipboard. Paste it manually with Ctrl+V."),
         primary_action=(_("Got it"), "close-dialog"),
         secondary_action=(_("Install help"), "open-install-guide"),
+    ),
+    "paste-failed": StateSpec(
+        id="paste-failed",
+        kind="alertdialog",
+        tone="warning",
+        icon_name="input-keyboard-symbolic",
+        title=_("Couldn't auto-paste"),
+        body=_("The GNOME Shell extension did not accept the paste "
+               "request, so we left the clip on your clipboard. Paste "
+               "it manually with Ctrl+V."),
+        primary_action=(_("Got it"), "close-dialog"),
+        secondary_action=(_("Open Extensions"), "open-extensions"),
     ),
     "clipboard-blocked": StateSpec(
         id="clipboard-blocked",

@@ -344,6 +344,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._sensitive_timeout = max(10, min(300, int(float(saved_sensitive))))
         except (TypeError, ValueError):
             self._sensitive_timeout = DEFAULT_SENSITIVE_TIMEOUT
+        self._sensitive_autoclear = str(
+            self.db.get_setting("sensitive_autoclear", "true")
+        ).lower() == "true"
 
         self._apply_theme()
         self._apply_css()
@@ -827,18 +830,18 @@ class ClipmanWindow(Adw.ApplicationWindow):
             items = [ClipItem(e, "snippet") for e in entries]
         else:
             if self._search_query:
-                entries = self.db.search(self._search_query)
+                # search() covers text only, so the Images tab has no
+                # search results.
+                entries = (
+                    [] if self._active_filter == "images"
+                    else self.db.search(self._search_query)
+                )
+            elif self._active_filter == "text":
+                entries = self.db.get_entries(limit=200, content_type="text")
+            elif self._active_filter == "images":
+                entries = self.db.get_entries(limit=200, content_type="image")
             else:
                 entries = self.db.get_entries(limit=200)
-            if self._active_filter == "text":
-                entries = [
-                    e for e in entries
-                    if (e.get("content_type") or "text") == "text"
-                ]
-            elif self._active_filter == "images":
-                entries = [
-                    e for e in entries if e.get("content_type") == "image"
-                ]
             items = [ClipItem(e, "entry") for e in entries]
 
         # Cancel any in-flight incremental fill from a previous refresh.
@@ -1029,7 +1032,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
     )
     _SNAP_NOTES_URL = (
         "https://github.com/MohammedEl-sayedAhmed/clipman"
-        "/blob/main/docs/snap-confinement.md"
+        "#alternative-installation"
     )
 
     # Authoritative list of action_ids the dispatcher handles. The
@@ -1203,10 +1206,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._on_prefs_clicked(None)
 
     def _action_reveal_db_folder(self):
-        # xdg-open a directory hands off to the user's file manager.
         from clipman.database import DATA_DIR
 
-        self._open_url(str(DATA_DIR))
+        self._reveal_path(str(DATA_DIR))
 
     def _action_retry_update_check(self):
         self.refresh_update_banner()
@@ -1234,14 +1236,24 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._current_edge_banner = None
 
     def _open_url(self, url):
+        """Open a web link in the browser. Other schemes are dropped."""
+        from clipman.preferences import open_url
+
+        open_url(url)
+
+    def _reveal_path(self, path):
+        """Show an existing local folder in the file manager."""
+        if not os.path.isdir(path):
+            logger.debug("not a folder, not revealing: %r", path)
+            return
         try:
             subprocess.Popen(
-                ["xdg-open", url],
+                ["xdg-open", path],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
         except OSError:
-            logger.debug("xdg-open failed for %s", url, exc_info=True)
+            logger.debug("xdg-open failed for %s", path, exc_info=True)
 
     def _thumbnail_texture(self, image_path, size=48):
         """Decode a stored image to a small, HiDPI-crisp ``Gdk.Texture``.
@@ -1499,12 +1511,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # --- title + meta line (mockup .preview / .meta) -----------------
         if sensitive:
             # Masked preview: never render sensitive content, its length,
-            # or its thumbnail. Meta carries the auto-clear countdown.
+            # or its thumbnail.
             title = _SENSITIVE_MASK
             row._clip_title.add_css_class("masked")
             row._clip_subtitle.add_css_class("warning")
-            remaining = self._sensitive_remaining(entry)
-            subtitle = _("Sensitive — auto-clear in {n} s").format(n=remaining)
+            subtitle = self._sensitive_subtitle(entry)
         else:
             row._clip_title.remove_css_class("masked")
             row._clip_subtitle.remove_css_class("warning")
@@ -1578,6 +1589,13 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """Seconds until the purge loop removes this sensitive entry."""
         created = entry.get("created_at") or time.time()
         return max(0, int(self._sensitive_timeout - (time.time() - created)))
+
+    def _sensitive_subtitle(self, entry):
+        """Meta text for a masked row; no countdown when auto-clear is off."""
+        if not self._sensitive_autoclear:
+            return _("Sensitive")
+        remaining = self._sensitive_remaining(entry)
+        return _("Sensitive — auto-clear in {n} s").format(n=remaining)
 
     def _image_info(self, image_path):
         """(bytes, width, height) for an image row's meta, cached; None if
@@ -1880,10 +1898,15 @@ class ClipmanWindow(Adw.ApplicationWindow):
         GLib.timeout_add(80, self._simulate_paste)
 
     def _paste_via_shell(self, mode):
-        """Best-effort paste via the GNOME Shell extension: restore focus,
-        then inject the keystroke through Clutter. Returns True once the
-        requests are dispatched, False if the extension isn't reachable (so
-        the caller can fall back to wtype/ydotool)."""
+        """Paste through the GNOME Shell extension.
+
+        Return True once the requests are dispatched and False when the
+        extension is not reachable, so the caller can fall back to
+        wtype/ydotool. A failed focus restore is logged and the paste
+        still goes ahead. When the extension refuses the keystroke the
+        popup comes back with the ``paste-failed`` dialog; wtype cannot
+        inject keys on Mutter, so there is no point in trying it.
+        """
         iface = self._shell_extension_iface()
         if iface is None:
             return False
@@ -1891,23 +1914,39 @@ class ClipmanWindow(Adw.ApplicationWindow):
             iface.RestorePreviousFocus()
         except Exception as exc:
             logger.debug("Shell focus-restore failed: %s", exc, exc_info=True)
-            return False
 
         # Give the compositor a frame to move focus onto the restored window
         # before the keys land, then inject via the Shell (not wtype).
         def _fire_keystroke():
-            try:
-                iface.SimulatePaste(mode)
-            except Exception as exc:
-                logger.debug(
-                    "Shell SimulatePaste failed: %s", exc, exc_info=True
-                )
+            if not self._shell_simulate_paste(iface, mode):
+                self._present_focused()
+                self._show_edge_state("paste-failed")
             return False
 
         # ~120ms: comfortably longer than a compositor focus cycle so the
         # keys land on the restored window, still imperceptible to the user.
         GLib.timeout_add(120, _fire_keystroke)
         return True
+
+    def _shell_simulate_paste(self, iface, mode):
+        """Call ``SimulatePaste(mode)``; retry without the argument.
+
+        Extensions before contract version 5 only know the no-argument
+        form (ADR 0005). Return True when either call was accepted.
+        """
+        try:
+            iface.SimulatePaste(mode)
+            return True
+        except Exception as exc:
+            logger.debug(
+                "Shell SimulatePaste(%r) failed: %s", mode, exc, exc_info=True
+            )
+        try:
+            iface.SimulatePaste()
+            return True
+        except Exception as exc:
+            logger.debug("Shell SimulatePaste() failed: %s", exc, exc_info=True)
+            return False
 
     def _extension_connected(self):
         """Whether the GNOME Shell extension owns its bus name (cached 60s —
@@ -1951,11 +1990,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """
         recent = ""
         try:
-            entries = self.db.get_entries(limit=1)
-            if entries:
-                recent = entries[0].get("content_text") or ""
+            recent = self.db.get_latest_text()
         except Exception:
-            logger.debug("get_entries failed for ${clipboard} expansion",
+            logger.debug("get_latest_text failed for ${clipboard} expansion",
                          exc_info=True)
         return Template(text).safe_substitute(
             date=time.strftime("%Y-%m-%d"),
@@ -2156,6 +2193,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 self._sensitive_timeout = max(10, min(300, int(value)))
             except (TypeError, ValueError):
                 self._sensitive_timeout = DEFAULT_SENSITIVE_TIMEOUT
+        elif key == "sensitive_autoclear":
+            self._sensitive_autoclear = str(value).lower() == "true"
+            if self.get_visible():
+                self.refresh()
         elif key in ("backup_succeeded", "restore_succeeded",
                      "sensitive_purged"):
             if self.get_visible():
