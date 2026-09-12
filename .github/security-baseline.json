@@ -3,7 +3,7 @@
   "updated": "2026-09-12",
   "description": "Known-finding fingerprints from main. PR scans compare to this snapshot; new fingerprints fail the ratchet job. Format: <rule-id>:<SARIF-partialFingerprint> (line-shift-stable). Maintained by the codeql update-baseline job on push to main; manual pushes are reverted by baseline-guard.yml.",
   "codeql": {
-    "count": 12,
+    "count": 9,
     "fingerprints": [
       "py/empty-except:16c2e81b95b7e0c6:1",
       "py/empty-except:27705709934fd174:1",
@@ -13,9 +13,6 @@
       "py/empty-except:f8f4e4633f24065b:1",
       "py/empty-except:f8f5043b82b03f38:1",
       "py/empty-except:fbac02238da302f4:1",
-      "py/print-during-import:25b756d9a51f4be3:1",
-      "py/print-during-import:766ef556e9a9b61f:1",
-      "py/print-during-import:8aa9bb762263d45c:1",
       "py/unnecessary-pass:7abbb599b8ed2f80:1"
     ]
   }
