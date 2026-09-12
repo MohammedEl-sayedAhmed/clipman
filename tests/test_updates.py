@@ -59,6 +59,23 @@ class TestIsNewer(unittest.TestCase):
         self.assertTrue(updates._is_newer("v1.0.5", "1.0.4"))
         self.assertTrue(updates._is_newer("1.0.5", "v1.0.4"))
 
+    def test_invalid_tag_against_valid_version_does_not_raise(self):
+        # With packaging present, "1.2.3-hotfix" fails to parse while
+        # "1.2.1" parses; both sides must then use the simple compare.
+        fake_pkg = MagicMock()
+
+        def _parse(s):
+            if not s.replace(".", "").isdigit():
+                raise ValueError(s)
+            return tuple(int(x) for x in s.split("."))
+
+        fake_pkg.parse.side_effect = _parse
+        with patch.dict("sys.modules", {"packaging": MagicMock(),
+                                        "packaging.version": fake_pkg}):
+            self.assertTrue(updates._is_newer("1.2.3-hotfix", "1.2.1"))
+            self.assertFalse(updates._is_newer("1.2.1", "1.2.3-hotfix"))
+            self.assertTrue(updates._is_newer("1.2.3", "1.2.1"))
+
 
 class TestInstallKind(unittest.TestCase):
     def test_snap_detected(self):
@@ -304,6 +321,26 @@ class TestCheckAsync(unittest.TestCase):
         # The value at the time of the urlopen call must already be set.
         self.assertNotEqual(seen_last[0], "0")
         self.assertNotEqual(seen_last[0], None)
+
+    def test_result_is_stored_from_the_main_loop_not_the_thread(self):
+        db = _fake_db({updates.SETTING_ENABLED: "true"})
+        scheduled = []
+        fake_glib = MagicMock()
+        fake_glib.GLib.idle_add.side_effect = lambda fn, *a: scheduled.append((fn, a))
+
+        with patch.dict("sys.modules", {"gi.repository": fake_glib}), \
+             patch("clipman.updates.urllib.request.urlopen",
+                   return_value=_FakeResponse({"tag_name": "v9.9.9",
+                                               "html_url": "u"})):
+            thread = updates.check_async(db, callback=None)
+            thread.join(timeout=5)
+
+        # The thread only scheduled the work; nothing was written yet.
+        self.assertNotIn(updates.SETTING_LATEST_VERSION, db._store)
+        self.assertEqual(len(scheduled), 1)
+        fn, args = scheduled[0]
+        self.assertFalse(fn(*args))
+        self.assertEqual(db._store[updates.SETTING_LATEST_VERSION], "9.9.9")
 
 
 class TestDismissAndLatestKnown(unittest.TestCase):
