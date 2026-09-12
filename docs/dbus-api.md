@@ -18,9 +18,10 @@ surface is intentionally small.
 
 - **stable** — signature is part of the project's public contract;
   removal or rename triggers a MAJOR version bump (see
-  [ADR 0010](adr/0010-versioning-policy.md)). Argument *addition*
-  with a daemon-side try-with-arg / retry-without-arg fallback is
-  a MINOR (precedent: [ADR 0005](adr/0005-paste-mode-as-dbus-arg.md)).
+  [ADR 0010](adr/0010-versioning-policy.md)). Adding an argument or
+  a method is a MINOR bump, and the extension's `metadata.json`
+  version goes up with it (precedent:
+  [ADR 0005](adr/0005-paste-mode-as-dbus-arg.md)).
 - **experimental** — reserved; no current methods are experimental.
 
 ## com.clipman.Daemon (the daemon)
@@ -137,10 +138,17 @@ gdbus call --session --dest com.clipman.Daemon \
 | Object path      | `/org/gnome/Shell/Extensions/clipman`           |
 | Interface        | `org.gnome.Shell.Extensions.clipman`            |
 
-Note: the extension's `metadata.json` `version` integer (currently 5)
+Note: the extension's `metadata.json` `version` integer (currently 8)
 is the **extension D-Bus contract version**, not the product SemVer.
 See [ADR 0005](adr/0005-paste-mode-as-dbus-arg.md) for the rationale
 behind bumping it on contract changes.
+
+**Access control (v8+).** Every method below is accepted only from the
+connection that owns `com.clipman.Daemon`. Any other caller gets
+`org.freedesktop.DBus.Error.AccessDenied`, and the refusal is logged once
+per sender. When no daemon is running, every call is refused. The
+`gdbus` examples below therefore fail from a plain shell; they are here
+to show the signatures.
 
 ### SimulatePaste
 
@@ -168,11 +176,11 @@ gdbus call --session --dest org.gnome.Shell.Extensions.clipman \
     --method org.gnome.Shell.Extensions.clipman.SimulatePaste 'ctrl-shift-v'
 ```
 
-The previous extension `metadata.json` v4 exposed
-`SimulatePaste()` with no arguments. New daemons paired with an
-unupgraded v4 extension still paste correctly: the daemon catches
-the `DBusException` and retries `SimulatePaste()` with no
-arguments. See [ADR 0005](adr/0005-paste-mode-as-dbus-arg.md).
+The daemon calls the current signature only. If the installed extension
+is older than the daemon, update it from extensions.gnome.org; the
+popup still works but paste falls back to `wtype`, which does not work
+on GNOME Wayland. See [ADR 0005](adr/0005-paste-mode-as-dbus-arg.md)
+for the history of the `mode` argument.
 
 ### MoveWindowToCursor
 
@@ -182,17 +190,45 @@ arguments. See [ADR 0005](adr/0005-paste-mode-as-dbus-arg.md).
 | Introduced   | 1.0.0                                                       |
 | Stability    | stable                                                      |
 
-Finds the window with the given title and moves it to the cursor
-position, clamped so the window stays inside the active workspace's
-work area. The match is exact (full string equality on
-`meta_window.get_title()`); if no window matches, the call is a
-silent no-op.
+Finds the daemon's popup and moves it to the cursor position, clamped so
+the window stays inside the active workspace's work area. A window
+matches only when its `wm_class` is `com.clipman.Clipman`, its process
+is the daemon (when the pid is known) and its title equals `title`. If
+no window matches, the call is a silent no-op. On GNOME 49+ the popup is
+also removed from Alt+Tab and the dash with `hide_from_window_list()`;
+`disable()` shows it again.
 
 ```bash
 gdbus call --session --dest org.gnome.Shell.Extensions.clipman \
     --object-path /org/gnome/Shell/Extensions/clipman \
     --method org.gnome.Shell.Extensions.clipman.MoveWindowToCursor 'Clipman'
 ```
+
+### RestorePreviousFocus
+
+| Field        | Value                                                       |
+|--------------|-------------------------------------------------------------|
+| Signature    | `()` → `()`                                                 |
+| Introduced   | 1.2.0 (extension metadata.json v6)                          |
+| Stability    | stable                                                      |
+
+Gives focus back to the window that had it before `MoveWindowToCursor`
+focused the popup. The daemon calls it right before `SimulatePaste`, so
+the keystroke lands in the user's window. Only the Shell can move focus
+on Wayland.
+
+### SetPaused
+
+| Field        | Value                                                       |
+|--------------|-------------------------------------------------------------|
+| Signature    | `(b)` → `()` — `paused`                                     |
+| Introduced   | 1.2.2 (extension metadata.json v8)                          |
+| Stability    | stable                                                      |
+
+While paused the extension does not read the clipboard at all, so
+nothing crosses the session bus. The daemon calls it when incognito
+mode is switched on or off. A pending clipboard read is cancelled when
+pausing.
 
 ## Smoke-testing
 

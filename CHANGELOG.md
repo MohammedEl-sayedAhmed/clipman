@@ -108,6 +108,30 @@ All notable changes to Clipman are documented in this file.
 - `update_entry_text` had no caller and could break the unique hash
   constraint; removed. `get_latest_text` returns the newest text clip
   regardless of pins, for the `${clipboard}` snippet token.
+### Security — GNOME Shell extension (metadata version 8)
+
+- The extension's D-Bus methods (`SimulatePaste`, `MoveWindowToCursor`,
+  `RestorePreviousFocus`) could be called by any process on the session
+  bus, including through the Shell's own bus name. They could type a
+  paste keystroke into the focused window or focus any window by title.
+  Every method now accepts calls only from the connection that owns
+  `com.clipman.Daemon`; other callers get `AccessDenied`.
+- `MoveWindowToCursor` matched windows by title alone. It now requires
+  the popup's `wm_class`, the daemon's pid and the title. Windows it
+  hides from Alt+Tab on GNOME 49+ are shown again when the extension is
+  disabled.
+- New `SetPaused(b)` method: while paused the extension does not read
+  the clipboard, so incognito can stop clips before they cross the bus.
+- Lifecycle fixes: null-prototype recipe tables (a `__proto__` mode no
+  longer throws), one virtual keyboard instead of one per paste,
+  modifiers are always released, `disable()` clears every reference and
+  cancels in-flight work, and the Alt+Tab/dash patches are installed
+  only on GNOME 45 to 48 where the real API is missing.
+- Clips longer than the daemon's 10 MB limit are no longer sent over the
+  bus; delivery failures are logged.
+- `scripts/extension-smoke.sh` checks the access rule on a real session.
+- Docs: `docs/dbus-api.md` lists all four methods and version 8,
+  `docs/threat-model.md` covers the extension surface.
 
 ### Changed — Snap packaging (#237, #238)
 

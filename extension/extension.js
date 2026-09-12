@@ -7,8 +7,17 @@ import Shell from 'gi://Shell';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
 // The popup's Wayland app_id / wm_class (clipman/app.py application_id).
-// Used to keep our ephemeral popup out of alt-tab and the dash, like Win+V.
 const CLIPMAN_WM_CLASS = 'com.clipman.Clipman';
+
+// Only the process that owns this name may call the methods below.
+const DAEMON_BUS_NAME = 'com.clipman.Daemon';
+const DAEMON_OBJECT_PATH = '/com/clipman/Daemon';
+
+// Same limit as the daemon's MAX_TEXT_SIZE; it drops longer clips anyway.
+const MAX_TEXT_LENGTH = 10 * 1024 * 1024;
+
+const OWN_BUS_NAME = 'org.gnome.Shell.Extensions.clipman';
+const OWN_OBJECT_PATH = '/org/gnome/Shell/Extensions/clipman';
 
 function _isClipmanWindow(win) {
     if (!win)
@@ -27,6 +36,9 @@ const PASTE_DBUS_IFACE = `
       <arg type="s" direction="in" name="title"/>
     </method>
     <method name="RestorePreviousFocus"/>
+    <method name="SetPaused">
+      <arg type="b" direction="in" name="paused"/>
+    </method>
   </interface>
 </node>`;
 
@@ -37,51 +49,101 @@ const TERMINAL_WM_CLASSES = [
     'lxterminal', 'guake', 'tilda', 'cool-retro-term',
 ];
 
-// Keystroke recipes: ordered list of (keyval, modifiers-implied-by-keystroke).
-// The first element of each pair is the actual keyval to press; modifier
-// keys are emitted around the press/release.
-const PASTE_RECIPES = {
+// Null-prototype tables: a mode such as "__proto__" must not resolve.
+const PASTE_RECIPES = Object.assign(Object.create(null), {
     'ctrl-v': {modifiers: ['Control_L'], key: 'v'},
     'ctrl-shift-v': {modifiers: ['Control_L', 'Shift_L'], key: 'v'},
     'shift-insert': {modifiers: ['Shift_L'], key: 'Insert'},
-};
+});
 
-const KEY_LOOKUP = {
+const KEY_LOOKUP = Object.assign(Object.create(null), {
     'Control_L': Clutter.KEY_Control_L,
     'Shift_L': Clutter.KEY_Shift_L,
-    'Alt_L': Clutter.KEY_Alt_L,
-    'Super_L': Clutter.KEY_Super_L,
     'v': Clutter.KEY_v,
     'Insert': Clutter.KEY_Insert,
-};
+});
 
 export default class ClipmanExtension extends Extension {
     enable() {
+        this._destroyed = false;
+        this._paused = false;
+        this._prevFocus = null;
+        this._hiddenWindows = new Set();
+        this._daemonOwner = null;
+        this._daemonPid = 0;
+        this._deniedSenders = new Set();
+        this._virtualKeyboard = null;
+        this._clipboardTimeout = null;
+
         this._selection = global.display.get_selection();
         this._ownerChangedId = this._selection.connect(
             'owner-changed',
             this._onOwnerChanged.bind(this)
         );
 
-        // Own a bus name so the daemon can find us
-        this._busNameId = Gio.bus_own_name_on_connection(
-            Gio.DBus.session,
-            'org.gnome.Shell.Extensions.clipman',
-            Gio.BusNameOwnerFlags.NONE,
-            null, null
+        // Learn which connection owns the daemon name; only it may call us.
+        this._daemonWatchId = Gio.bus_watch_name(
+            Gio.BusType.SESSION,
+            DAEMON_BUS_NAME,
+            Gio.BusNameWatcherFlags.NONE,
+            (_connection, _name, owner) => this._onDaemonAppeared(owner),
+            () => this._onDaemonVanished()
         );
 
-        // Expose D-Bus interface so the daemon can request paste simulation
+        this._busNameId = Gio.bus_own_name_on_connection(
+            Gio.DBus.session,
+            OWN_BUS_NAME,
+            Gio.BusNameOwnerFlags.NONE,
+            null,
+            () => console.warn(`clipman: lost the bus name ${OWN_BUS_NAME}`)
+        );
+
         this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(
             PASTE_DBUS_IFACE, this
         );
-        this._dbusImpl.export(Gio.DBus.session, '/org/gnome/Shell/Extensions/clipman');
+        this._dbusImpl.export(Gio.DBus.session, OWN_OBJECT_PATH);
 
-        // Win+V parity: keep the ephemeral popup out of alt-tab and the
-        // dash. There is no writable skip-taskbar API before GNOME 49, so
-        // we monkey-patch the two JS entry points that build those lists
-        // and filter our window out. On 49+ the daemon-side move loop uses
-        // the real Meta.Window.hide_from_window_list() instead (see below).
+        // Before GNOME 49 there is no hide_from_window_list(); filter the
+        // alt-tab and dash lists instead.
+        if (!Meta.Window.prototype.hide_from_window_list)
+            this._installWindowListPatches();
+    }
+
+    disable() {
+        this._destroyed = true;
+        this._removeWindowListPatches();
+        if (this._clipboardTimeout) {
+            GLib.source_remove(this._clipboardTimeout);
+            this._clipboardTimeout = null;
+        }
+        if (this._ownerChangedId) {
+            this._selection.disconnect(this._ownerChangedId);
+            this._ownerChangedId = null;
+        }
+        this._selection = null;
+        if (this._dbusImpl) {
+            this._dbusImpl.unexport();
+            this._dbusImpl = null;
+        }
+        if (this._busNameId) {
+            Gio.bus_unown_name(this._busNameId);
+            this._busNameId = null;
+        }
+        if (this._daemonWatchId) {
+            Gio.bus_unwatch_name(this._daemonWatchId);
+            this._daemonWatchId = 0;
+        }
+        this._showHiddenWindows();
+        this._prevFocus = null;
+        this._daemonOwner = null;
+        this._daemonPid = 0;
+        this._deniedSenders.clear();
+        this._virtualKeyboard = null;
+    }
+
+    // ---- Window list patches (GNOME 45 to 48) -------------------------
+
+    _installWindowListPatches() {
         this._origGetTabList = global.display.get_tab_list;
         const origGetTabList = this._origGetTabList;
         global.display.get_tab_list = function (type, workspace) {
@@ -96,13 +158,9 @@ export default class ClipmanExtension extends Extension {
                 .filter(w => !_isClipmanWindow(w));
         };
 
-        // The dash/dock (incl. Ubuntu Dock / Dash-to-Dock) lists running
-        // apps from AppSystem.get_running(). Our popup has no installed
-        // .desktop, so the Shell tracks it as a window-backed app that
-        // shows up there. Filter that app out of the running list so the
-        // ephemeral popup never appears in the dock — Win+V parity. We use
-        // the ORIGINAL get_windows here (the patched one above hides
-        // clipman windows, which would make this app look window-less).
+        // The dash lists running apps; the popup has no .desktop file, so
+        // it would show up as a window-backed app. Use the original
+        // get_windows here, or the app would look window-less.
         this._origGetRunning = Shell.AppSystem.prototype.get_running;
         const origGetRunning = this._origGetRunning;
         Shell.AppSystem.prototype.get_running = function () {
@@ -118,7 +176,7 @@ export default class ClipmanExtension extends Extension {
         };
     }
 
-    disable() {
+    _removeWindowListPatches() {
         if (this._origGetTabList) {
             global.display.get_tab_list = this._origGetTabList;
             this._origGetTabList = null;
@@ -131,62 +189,162 @@ export default class ClipmanExtension extends Extension {
             Shell.AppSystem.prototype.get_running = this._origGetRunning;
             this._origGetRunning = null;
         }
-        if (this._clipboardTimeout) {
+    }
+
+    // ---- Caller authentication ---------------------------------------
+
+    _onDaemonAppeared(owner) {
+        this._daemonOwner = owner;
+        this._daemonPid = 0;
+        this._deniedSenders.clear();
+        // The pid lets MoveWindowToCursor check that a window is ours.
+        Gio.DBus.session.call(
+            'org.freedesktop.DBus',
+            '/org/freedesktop/DBus',
+            'org.freedesktop.DBus',
+            'GetConnectionUnixProcessID',
+            new GLib.Variant('(s)', [owner]),
+            new GLib.VariantType('(u)'),
+            Gio.DBusCallFlags.NONE,
+            -1,
+            null,
+            (connection, result) => {
+                try {
+                    const [pid] = connection.call_finish(result).deepUnpack();
+                    if (this._daemonOwner === owner)
+                        this._daemonPid = pid;
+                } catch (e) {
+                    console.warn(`clipman: pid lookup failed: ${e.message}`);
+                }
+            }
+        );
+    }
+
+    _onDaemonVanished() {
+        this._daemonOwner = null;
+        this._daemonPid = 0;
+    }
+
+    // Reply with AccessDenied unless the caller owns the daemon name.
+    _authorize(invocation) {
+        const sender = invocation.get_sender();
+        if (this._daemonOwner !== null && sender === this._daemonOwner)
+            return true;
+        if (!this._deniedSenders.has(sender)) {
+            this._deniedSenders.add(sender);
+            console.warn(
+                `clipman: denied ${invocation.get_method_name()} from ` +
+                `${sender}: not the owner of ${DAEMON_BUS_NAME}`
+            );
+        }
+        invocation.return_error_literal(
+            Gio.DBusError,
+            Gio.DBusError.ACCESS_DENIED,
+            `Only the owner of ${DAEMON_BUS_NAME} may call this method`
+        );
+        return false;
+    }
+
+    // ---- D-Bus methods -----------------------------------------------
+
+    SimulatePasteAsync([mode], invocation) {
+        if (!this._authorize(invocation))
+            return;
+        try {
+            this._dispatchKeystroke(this._resolveRecipe(mode));
+            invocation.return_value(null);
+        } catch (e) {
+            invocation.return_dbus_error(
+                'org.gnome.Shell.Extensions.clipman.Error', e.message);
+        }
+    }
+
+    MoveWindowToCursorAsync([title], invocation) {
+        if (!this._authorize(invocation))
+            return;
+        try {
+            this._moveWindowToCursor(title);
+            invocation.return_value(null);
+        } catch (e) {
+            invocation.return_dbus_error(
+                'org.gnome.Shell.Extensions.clipman.Error', e.message);
+        }
+    }
+
+    RestorePreviousFocusAsync(_params, invocation) {
+        if (!this._authorize(invocation))
+            return;
+        const prev = this._prevFocus;
+        this._prevFocus = null;
+        if (prev && !_isClipmanWindow(prev)) {
+            try {
+                prev.activate(global.get_current_time());
+            } catch {
+                // The window closed meanwhile; the paste goes to the
+                // current focus.
+            }
+        }
+        invocation.return_value(null);
+    }
+
+    SetPausedAsync([paused], invocation) {
+        if (!this._authorize(invocation))
+            return;
+        this._paused = Boolean(paused);
+        if (this._paused && this._clipboardTimeout) {
             GLib.source_remove(this._clipboardTimeout);
             this._clipboardTimeout = null;
         }
-        if (this._ownerChangedId) {
-            this._selection.disconnect(this._ownerChangedId);
-            this._ownerChangedId = null;
-        }
-        if (this._dbusImpl) {
-            this._dbusImpl.unexport();
-            this._dbusImpl = null;
-        }
-        if (this._busNameId) {
-            Gio.bus_unown_name(this._busNameId);
-            this._busNameId = null;
-        }
+        invocation.return_value(null);
     }
 
-    SimulatePaste(mode) {
-        const recipe = this._resolveRecipe(mode);
-        this._dispatchKeystroke(recipe);
-    }
+    // ---- Paste -------------------------------------------------------
 
     _resolveRecipe(mode) {
-        // 'auto' (or missing) -> Ctrl+V unless focused window is a terminal,
-        // in which case Ctrl+Shift+V. Explicit modes override.
-        if (mode && PASTE_RECIPES[mode])
+        if (typeof mode === 'string' && Object.hasOwn(PASTE_RECIPES, mode))
             return PASTE_RECIPES[mode];
 
+        // 'auto': Ctrl+V, or Ctrl+Shift+V when a terminal has focus.
         const focusWin = global.display.get_focus_window();
         const wmClass = focusWin?.get_wm_class()?.toLowerCase() ?? '';
         const isTerminal = TERMINAL_WM_CLASSES.some(c => wmClass.includes(c));
         return isTerminal ? PASTE_RECIPES['ctrl-shift-v'] : PASTE_RECIPES['ctrl-v'];
     }
 
-    _dispatchKeystroke(recipe) {
-        const seat = Clutter.get_default_backend().get_default_seat();
-        const vk = seat.create_virtual_device(
-            Clutter.InputDeviceType.KEYBOARD_DEVICE
-        );
-
-        for (const mod of recipe.modifiers) {
-            vk.notify_keyval(Clutter.CURRENT_TIME,
-                KEY_LOOKUP[mod], Clutter.KeyState.PRESSED);
+    _getVirtualKeyboard() {
+        if (!this._virtualKeyboard) {
+            const seat = Clutter.get_default_backend().get_default_seat();
+            this._virtualKeyboard = seat.create_virtual_device(
+                Clutter.InputDeviceType.KEYBOARD_DEVICE);
         }
-        vk.notify_keyval(Clutter.CURRENT_TIME,
-            KEY_LOOKUP[recipe.key], Clutter.KeyState.PRESSED);
-        vk.notify_keyval(Clutter.CURRENT_TIME,
-            KEY_LOOKUP[recipe.key], Clutter.KeyState.RELEASED);
-        for (const mod of [...recipe.modifiers].reverse()) {
+        return this._virtualKeyboard;
+    }
+
+    _dispatchKeystroke(recipe) {
+        const vk = this._getVirtualKeyboard();
+        const pressed = [];
+        try {
+            for (const mod of recipe.modifiers) {
+                vk.notify_keyval(Clutter.CURRENT_TIME,
+                    KEY_LOOKUP[mod], Clutter.KeyState.PRESSED);
+                pressed.push(mod);
+            }
             vk.notify_keyval(Clutter.CURRENT_TIME,
-                KEY_LOOKUP[mod], Clutter.KeyState.RELEASED);
+                KEY_LOOKUP[recipe.key], Clutter.KeyState.PRESSED);
+            vk.notify_keyval(Clutter.CURRENT_TIME,
+                KEY_LOOKUP[recipe.key], Clutter.KeyState.RELEASED);
+        } finally {
+            // Never leave a modifier held down.
+            for (const mod of pressed.reverse()) {
+                vk.notify_keyval(Clutter.CURRENT_TIME,
+                    KEY_LOOKUP[mod], Clutter.KeyState.RELEASED);
+            }
         }
     }
 
-    MoveWindowToCursor(title) {
+    // ---- Popup placement ---------------------------------------------
+
+    _moveWindowToCursor(title) {
         const [x, y] = global.get_pointer();
         const monitor = global.display.get_current_monitor();
         const workArea = global.display.get_workspace_manager()
@@ -194,62 +352,63 @@ export default class ClipmanExtension extends Extension {
 
         for (const actor of global.get_window_actors()) {
             const metaWin = actor.get_meta_window();
-            if (metaWin.get_title() === title) {
-                const rect = metaWin.get_frame_rect();
-                let winX = Math.min(x, workArea.x + workArea.width - rect.width);
-                let winY = Math.min(y, workArea.y + workArea.height - rect.height);
-                winX = Math.max(workArea.x, winX);
-                winY = Math.max(workArea.y, winY);
-                metaWin.move_frame(true, winX, winY);
-                // Remember who had focus BEFORE we steal it below, so paste
-                // can hand focus back to the real target (see
-                // RestorePreviousFocus). Capture now: activate() has not run
-                // yet, so the focus window is still the user's app.
-                const focused = global.display.get_focus_window();
-                if (focused && !_isClipmanWindow(focused))
-                    this._prevFocus = focused;
-                // GNOME 49+: the supported way to drop the popup from the
-                // dash AND alt-tab in one call (no-op / undefined before 49,
-                // where the enable() list overrides handle it instead).
-                if (metaWin.hide_from_window_list)
-                    metaWin.hide_from_window_list();
-                // Give the popup real input focus. A background D-Bus
-                // daemon's window is mapped WITHOUT focus by Mutter's
-                // focus-stealing prevention, so its buttons/keys are inert
-                // until focused. The Shell has the privilege to focus it;
-                // GTK's present() does not. This is what makes Win+V-style
-                // click/type/dismiss work. On hide, focus returns to the
-                // previously-active window, so wtype paste still lands there.
-                metaWin.activate(global.get_current_time());
-                break;
-            }
+            if (!metaWin || !_isClipmanWindow(metaWin))
+                continue;
+            if (this._daemonPid && metaWin.get_pid() !== this._daemonPid)
+                continue;
+            if (metaWin.get_title() !== title)
+                continue;
+
+            const rect = metaWin.get_frame_rect();
+            let winX = Math.min(x, workArea.x + workArea.width - rect.width);
+            let winY = Math.min(y, workArea.y + workArea.height - rect.height);
+            winX = Math.max(workArea.x, winX);
+            winY = Math.max(workArea.y, winY);
+            metaWin.move_frame(true, winX, winY);
+
+            // Remember the user's window before we take focus, so the
+            // paste can go back to it.
+            const focused = global.display.get_focus_window();
+            if (focused && !_isClipmanWindow(focused))
+                this._prevFocus = focused;
+
+            this._hideFromWindowList(metaWin);
+            // A background daemon's window is mapped without focus; only
+            // the Shell can give it focus on Wayland.
+            metaWin.activate(global.get_current_time());
+            break;
         }
     }
 
-    RestorePreviousFocus() {
-        // The popup held input focus (so its buttons/keys worked); before
-        // the daemon fires the paste keystroke it must hand focus back to
-        // the window the user came from, otherwise Ctrl+V lands on nothing.
-        // Only the Shell can refocus another window on Wayland, so the
-        // daemon calls this after hiding the popup and just before wtype.
-        const prev = this._prevFocus;
-        this._prevFocus = null;
-        if (prev && !_isClipmanWindow(prev)) {
+    _hideFromWindowList(metaWin) {
+        if (!metaWin.hide_from_window_list)
+            return;
+        metaWin.hide_from_window_list();
+        this._hiddenWindows.add(metaWin);
+    }
+
+    _showHiddenWindows() {
+        for (const win of this._hiddenWindows) {
             try {
-                prev.activate(global.get_current_time());
+                if (win.show_in_window_list)
+                    win.show_in_window_list();
             } catch {
-                // The target window may have closed meanwhile; the paste
-                // keystroke then goes to whatever is now focused.
+                // The window is gone already.
             }
         }
+        this._hiddenWindows.clear();
     }
+
+    // ---- Clipboard capture -------------------------------------------
 
     _onOwnerChanged(_selection, selectionType, _selectionSource) {
         if (selectionType !== Meta.SelectionType.SELECTION_CLIPBOARD)
             return;
+        if (this._paused)
+            return;
 
-        // Debounce: wait 150ms for the new clipboard owner to make
-        // content available. Rapid copies cancel the previous read.
+        // Wait 150 ms for the new owner to make the content available.
+        // Rapid copies cancel the previous read.
         if (this._clipboardTimeout) {
             GLib.source_remove(this._clipboardTimeout);
             this._clipboardTimeout = null;
@@ -259,11 +418,12 @@ export default class ClipmanExtension extends Extension {
             GLib.PRIORITY_DEFAULT, 150, () => {
                 this._clipboardTimeout = null;
                 this._getClipboardText().then(text => {
-                    if (text) {
+                    if (this._destroyed || this._paused)
+                        return;
+                    if (text)
                         this._sendToDaemon('text', text);
-                    } else {
+                    else
                         this._sendToDaemon('image', '');
-                    }
                 }).catch(() => {});
                 return GLib.SOURCE_REMOVE;
             }
@@ -290,7 +450,7 @@ export default class ClipmanExtension extends Extension {
                     (_cb, bytes) => {
                         if (bytes && bytes.get_size() > 0) {
                             let data = bytes.get_data();
-                            // Trim trailing null byte (some X11 apps include it)
+                            // Some X11 apps include a trailing null byte.
                             if (data.length > 0 && data[data.length - 1] === 0)
                                 data = data.slice(0, -1);
                             resolve(new TextDecoder().decode(data));
@@ -306,17 +466,25 @@ export default class ClipmanExtension extends Extension {
     }
 
     _sendToDaemon(contentType, content) {
+        if (content.length > MAX_TEXT_LENGTH)
+            return;
         Gio.DBus.session.call(
-            'com.clipman.Daemon',
-            '/com/clipman/Daemon',
-            'com.clipman.Daemon',
+            DAEMON_BUS_NAME,
+            DAEMON_OBJECT_PATH,
+            DAEMON_BUS_NAME,
             'NewEntry',
             new GLib.Variant('(ss)', [contentType, content]),
             null,
-            Gio.DBusCallFlags.NONE,
+            Gio.DBusCallFlags.NO_AUTO_START,
             -1,
             null,
-            null
+            (connection, result) => {
+                try {
+                    connection.call_finish(result);
+                } catch (e) {
+                    console.debug(`clipman: NewEntry not delivered: ${e.message}`);
+                }
+            }
         );
     }
 }
