@@ -4,6 +4,41 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Added — developer tooling
+
+- `scripts/deps.sh`: one manifest of system packages (`runtime`, `test`,
+  `lint` sets; apt, dnf, pacman). `install.sh` and CI read it; the apt
+  list used to be copied by hand into `install.sh`, `test.yml` and
+  `release.yml`.
+- `scripts/dev-setup.sh`: one-command bootstrap. Installs the system
+  packages, creates `.venv` with `--system-site-packages`, installs the
+  `dev` extras and the git hooks.
+- `scripts/dev.sh`: task runner (`test`, `lint`, `check`, `screenshot`,
+  `hooks-test`, …) with an optional `Makefile` wrapper. `dev.sh test` is
+  exactly what CI runs.
+- `lint`, `test` and `dev` extras in `pyproject.toml` (ruff pinned at
+  0.15.13, pytest, PyGObject, dbus-python).
+
+### Fixed — CI ran fewer tests than it reported
+
+- The release workflow's test job installed the GTK 3 typelibs, set no
+  `CLIPMAN_REQUIRE_GTK4` and ran without xvfb, so the widget tests were
+  skipped on the release-gating run. It now runs the same three steps
+  as `test.yml`.
+- CI installed `pydbus`, but the app imports `dbus` (dbus-python), so
+  `clipman.app` failed to import under the matrix interpreter and
+  `test_app.py` skipped (8 tests). The `test` extra installs dbus-python.
+- `test_keybindings.py` probed `gi.repository.Gdk` as an attribute,
+  which only exists once another module has imported Gdk, so it skipped
+  (10 tests) depending on import order. It now imports the submodule.
+  Every CI run had reported `OK (skipped=18)`.
+- The `toggle` smoke test in `test_entry_point.py` now runs without a
+  display and against a dead session bus, so it fails fast instead of
+  starting the daemon, and cannot toggle a developer's real one.
+- `scripts/install-hooks.sh` no longer blocks on `read` when there is
+  no terminal and, without one, only replaces a foreign
+  `core.hooksPath` when `--replace` is given.
+
 ### Changed — Snap packaging (#237, #238)
 
 - The snap now uses the `gnome` extension: the GTK4/libadwaita runtime
@@ -19,6 +54,15 @@ All notable changes to Clipman are documented in this file.
   stable/candidate/beta are rebuilt from the latest release tag, edge
   from main — so store security notices self-resolve within a week
   with no manual action.
+
+### Changed — CI
+
+- `test.yml`, `lint.yml` and the release test job install system
+  packages via `scripts/deps.sh` and run the suite via
+  `scripts/dev.sh test`, so a local run and CI are the same command.
+  The apt step is capped at four minutes; apt retries with a 30 s fetch
+  timeout so a stalled mirror fails inside the cap. The last red run on
+  `main` was an apt stall that consumed the whole job budget.
 
 ## [1.2.1] - 2026-08-22
 

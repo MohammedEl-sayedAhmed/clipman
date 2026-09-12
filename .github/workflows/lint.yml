@@ -37,10 +37,10 @@ jobs:
           python-version: "3.12"
 
       - name: Install ruff
-        run: pip install ruff==0.15.13
+        run: pip install -e '.[lint]'
 
       - name: Run ruff
-        run: ruff check clipman tests
+        run: scripts/dev.sh ruff
 
   shell:
     name: Shell (shellcheck)
@@ -60,7 +60,7 @@ jobs:
           persist-credentials: false
 
       - name: Install shellcheck
-        run: sudo apt-get update && sudo apt-get install -y shellcheck
+        run: scripts/deps.sh --lint --install --yes
 
       - name: Run shellcheck
-        run: shellcheck --severity=warning install.sh uninstall.sh launcher.sh
+        run: scripts/dev.sh shellcheck

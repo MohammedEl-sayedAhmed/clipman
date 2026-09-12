@@ -42,15 +42,27 @@ specific assistant.
 
 ## Verification recipes
 
-- Use the **system Python** (`/usr/bin/python3`) — project venvs lack the
-  `gi` bindings.
-- Full suite: `CLIPMAN_REQUIRE_GTK4=1 xvfb-run -a /usr/bin/python3 -m pytest -q`
-  (CI equivalent: `xvfb-run -a python -m unittest discover -s tests`).
-- Lint scope matches CI exactly: `ruff check clipman tests`.
-- Headless visual checks: `xvfb-run -a /usr/bin/python3 scripts/screenshot.py`
-  renders the real window/preferences to PNG. Caveat: `Adw.Dialog` content
-  can't be captured through the xvfb harness ("empty render node") — snapshot
-  the dialog's child widget, or verify on a real display.
+- Setup: `scripts/dev-setup.sh` (or `make setup`) installs the system
+  packages via `scripts/deps.sh`, creates `.venv` with
+  `--system-site-packages` — so the venv *does* see `gi` and `dbus` — and
+  installs the `dev` extras. `scripts/dev.sh` picks `$CLIPMAN_PYTHON`,
+  else `.venv/bin/python`, else `python3`.
+- Full suite: `scripts/dev.sh test` — identical to CI: pytest under
+  `xvfb-run -a` with `CLIPMAN_REQUIRE_GTK4=1`, falling back to
+  `unittest discover -s tests` when pytest is not importable. Extra
+  arguments go to the runner (`scripts/dev.sh test -k database`). 331 tests.
+  The `test` extra caps PyGObject below 3.59: CI builds it from source
+  against noble's GLib 2.80, so bump the cap deliberately.
+- Lint: `scripts/dev.sh lint` = `ruff check clipman tests` +
+  `shellcheck --severity=warning install.sh uninstall.sh launcher.sh scripts/*.sh`,
+  the exact CI scopes (`ruff` / `shellcheck` subcommands run one half;
+  `check` runs lint then test). Ruff is pinned at 0.15.13 in the `lint`
+  extra — newer releases report findings CI does not.
+- Headless visual checks: `scripts/dev.sh screenshot --out /tmp/x.png`
+  renders the real window/preferences to PNG under xvfb. Caveat:
+  `Adw.Dialog` content can't be captured through the xvfb harness ("empty
+  render node") — snapshot the dialog's child widget, or verify on a real
+  display.
 - The CodeQL **security-baseline gate** fails PRs on *new* findings —
   historically `py/empty-except`, `py/multiple-definition`,
   `py/implicit-string-concatenation-in-list`,

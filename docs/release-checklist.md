@@ -38,9 +38,8 @@ git reset --hard origin/main
 #    `## [Unreleased]` block at the top.
 $EDITOR CHANGELOG.md
 
-# 4. Verify locally.
-python3 -m unittest discover -s tests
-ruff check clipman tests
+# 4. Verify locally (lint, then the suite).
+scripts/dev.sh check
 
 # 5. Commit the bump.
 git add pyproject.toml snap/snapcraft.yaml aur/PKGBUILD \
