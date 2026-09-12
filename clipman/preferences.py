@@ -517,8 +517,22 @@ class ClipmanPreferences(Adw.Dialog):
         sensitive_group = Adw.PreferencesGroup()
         sensitive_group.set_title(_("Sensitive data"))
         sensitive_group.set_description(
-            _("Auto-clear clips matching password / token / card patterns.")
+            _("Clips that look like API tokens, keys, credential URLs, "
+              "labelled passwords or card numbers are masked and "
+              "auto-cleared.")
         )
+
+        autoclear_row = Adw.SwitchRow()
+        autoclear_row.set_title(_("Auto-clear sensitive clips"))
+        autoclear_row.set_subtitle(
+            _("When off, detected clips stay masked but are kept.")
+        )
+        autoclear_row.set_active(self._get_bool("sensitive_autoclear", True))
+        autoclear_row.connect(
+            "notify::active",
+            lambda r, _p: self._save("sensitive_autoclear", r.get_active()),
+        )
+        sensitive_group.add(autoclear_row)
 
         timeout_row = Adw.SpinRow.new_with_range(10, 300, 5)
         timeout_row.set_title(_("Auto-clear delay"))

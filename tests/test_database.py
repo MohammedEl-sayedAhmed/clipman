@@ -434,6 +434,23 @@ class TestClipboardDB(unittest.TestCase):
         self.assertEqual(deleted, 0)
         self.assertEqual(len(self.db.get_entries()), 1)
 
+    def test_delete_expired_sensitive_respects_autoclear_switch(self):
+        entry_id = self.db.add_entry("text", content_text="old_secret", sensitive=True)
+        self.db.conn.execute(
+            "UPDATE entries SET created_at = ? WHERE id = ?",
+            (time.time() - 60, entry_id)
+        )
+        self.db.conn.commit()
+        self.db.set_setting("sensitive_autoclear", "false")
+
+        deleted = self.db.delete_expired_sensitive(max_age_seconds=30)
+        self.assertEqual(deleted, 0)
+        self.assertEqual(len(self.db.get_entries()), 1)
+        self.assertEqual(self.db.get_entries()[0]["sensitive"], 1)
+
+        self.db.set_setting("sensitive_autoclear", "true")
+        self.assertEqual(self.db.delete_expired_sensitive(max_age_seconds=30), 1)
+
     def test_delete_expired_sensitive_ignores_non_sensitive(self):
         entry_id = self.db.add_entry("text", content_text="normal old text")
         self.db.conn.execute(

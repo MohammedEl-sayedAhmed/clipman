@@ -196,12 +196,13 @@ class TestClipboardMonitor(unittest.TestCase):
             "text", content_text="ghp_ABC123xyzTOKEN", sensitive=True
         )
 
-    def test_sensitive_password_pattern(self):
-        # Mixed case, digits, punctuation, >= 8 chars, no spaces
+    def test_bare_password_is_not_guessed(self):
+        # A bare password has no label; guessing from character classes
+        # used to delete URLs and file names, so it is stored as-is.
         self.monitor.handle_new_text("MyP@ssw0rd!")
 
         self.mock_db.add_entry.assert_called_once_with(
-            "text", content_text="MyP@ssw0rd!", sensitive=True
+            "text", content_text="MyP@ssw0rd!", sensitive=False
         )
 
     def test_sensitive_sk_prefix(self):
@@ -312,11 +313,11 @@ class TestClipboardMonitor(unittest.TestCase):
             "text", content_text="abc12345", sensitive=False
         )
 
-    def test_sensitive_three_categories(self):
-        # lower + upper + digit = 3 categories, >= 8 chars
+    def test_three_character_classes_are_not_a_secret(self):
+        # Mixed character classes alone never mark a clip sensitive.
         self.monitor.handle_new_text("Abc12345")
         self.mock_db.add_entry.assert_called_once_with(
-            "text", content_text="Abc12345", sensitive=True
+            "text", content_text="Abc12345", sensitive=False
         )
 
     def test_not_sensitive_exactly_seven_chars(self):
@@ -326,11 +327,10 @@ class TestClipboardMonitor(unittest.TestCase):
             "text", content_text="Abc123!", sensitive=False
         )
 
-    def test_sensitive_exactly_eight_chars(self):
-        # 3 categories, exactly 8 chars
-        self.monitor.handle_new_text("Abc1234!")
+    def test_labelled_password_is_sensitive(self):
+        self.monitor.handle_new_text("PASS" + "WORD=Abc1234!xyz")
         self.mock_db.add_entry.assert_called_once_with(
-            "text", content_text="Abc1234!", sensitive=True
+            "text", content_text="PASS" + "WORD=Abc1234!xyz", sensitive=True
         )
 
     def test_not_sensitive_multiline_with_password(self):
@@ -340,13 +340,12 @@ class TestClipboardMonitor(unittest.TestCase):
             "text", content_text="MyP@ssw0rd!\nExtra line", sensitive=False
         )
 
-    def test_sensitive_boundary_128_chars(self):
-        # Exactly 128 chars with 3+ categories — should be sensitive
-        text = "A" + "a" * 125 + "1!"  # upper + lower + digit + punct = 4 cats
+    def test_long_mixed_word_is_not_a_secret(self):
+        text = "A" + "a" * 125 + "1!"
         self.assertEqual(len(text), 128)
         self.monitor.handle_new_text(text)
         self.mock_db.add_entry.assert_called_once_with(
-            "text", content_text=text, sensitive=True
+            "text", content_text=text, sensitive=False
         )
 
     # ── Rate limiting ─────────────────────────────────────────────
@@ -608,17 +607,22 @@ class TestIsSensitiveFunction(unittest.TestCase):
                 self.assertTrue(self.is_sensitive(token), f"Expected sensitive: {token[:30]}")
 
     def test_mixed_case_with_digits_and_punct(self):
-        # lower + upper + digit + punct = 4 categories
-        self.assertTrue(self.is_sensitive("Hello123!"))
+        # Character classes alone are not a secret shape.
+        self.assertFalse(self.is_sensitive("Hello123!"))
 
     def test_url_not_sensitive(self):
-        # URLs have spaces=False but typically only 2 char categories
-        self.assertFalse(self.is_sensitive("https://example.com"))
+        for url in (
+            "https://example.com",
+            "https://github.com/MohammedEl-sayedAhmed/clipman",
+            "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "https://example.com:8080/api?x=1",
+        ):
+            self.assertFalse(self.is_sensitive(url), url)
 
-    def test_exactly_128_chars_sensitive(self):
+    def test_exactly_128_chars_not_sensitive(self):
         text = "Aa1!" + "x" * 124
         self.assertEqual(len(text), 128)
-        self.assertTrue(self.is_sensitive(text))
+        self.assertFalse(self.is_sensitive(text))
 
     def test_129_chars_not_sensitive(self):
         text = "Aa1!" + "x" * 125

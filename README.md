@@ -92,7 +92,7 @@ Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extensi
 ### Privacy and Security
 
 - **Incognito mode** — pause clipboard recording entirely
-- **Sensitive data detection** — tokens and passwords auto-detected and cleared after a configurable delay (default 30 s)
+- **Sensitive data detection** — API tokens, keys, credential URLs, labelled passwords and card numbers are detected, masked and cleared after a configurable delay (default 30 s); the auto-clear can be switched off
 - **Restrictive permissions** — data directory `0o700`, image files `0o600`
 - **Path traversal protection** — all image paths validated before file operations
 - **Backup validation** — imported databases checked for schema integrity and sanitized
@@ -265,6 +265,7 @@ left sidebar). It carries six panes:
 | | Font & accent colors | Free-form color pickers with one-tap reset to theme defaults |
 | | Opacity | Window transparency (30%–100%) |
 | **Privacy** | Start in incognito mode | Launch with clipboard recording paused |
+| | Auto-clear sensitive clips | Delete detected secrets after the delay below; when off they stay masked (on by default) |
 | | Auto-clear delay | Seconds before detected sensitive entries are purged (default 30) |
 | | Purge sensitive entries now | One-tap removal of all stored sensitive entries |
 | **Shortcuts** | Toggle shortcut | Customize the popup-toggle keybinding (default Super+V) via an in-app capture dialog |

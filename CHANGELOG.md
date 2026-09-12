@@ -53,6 +53,27 @@ All notable changes to Clipman are documented in this file.
 - The AppImage entrypoint ran `python -m clipman.app`, which has no
   `__main__` and exited at once; it now runs `python -m clipman`.
 
+### Fixed — sensitive-data detection deleted ordinary clips
+
+- The old rule flagged any single word of 8 to 128 characters that mixed
+  three character classes. That covered most URLs, file names with
+  digits, timestamps and version strings. Those clips were masked and
+  then deleted for good after 30 seconds. On a benchmark of 552 everyday
+  clips it flagged 229. It also caught no card numbers, although the
+  Preferences text promised it would.
+- Detection now lives in `clipman/sensitive.py` and only matches known
+  secret shapes: vendor tokens with a unique prefix, private and SSH
+  keys, JSON Web Tokens, URLs with a password inside, labelled values
+  such as `PASSWORD=...`, `Authorization` headers, card numbers that pass
+  Luhn, TOTP seeds and a few command lines that take a password inline.
+  On the same benchmark it flags 0 of 552 everyday clips and catches 129
+  of 165 secrets. A bare password with no label is not detected on
+  purpose: it looks the same as a Wi-Fi name or a licence key.
+- New Privacy switch "Auto-clear sensitive clips" (on by default). When
+  off, detected clips stay masked but are never deleted.
+- The benchmark corpus ships as `tests/sensitive_corpus.py` and
+  `tests/test_sensitive.py` asserts zero false positives on it.
+
 ### Changed — Snap packaging (#237, #238)
 
 - The snap now uses the `gnome` extension: the GTK4/libadwaita runtime

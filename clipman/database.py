@@ -276,6 +276,9 @@ class ClipboardDB:
         self.conn.commit()
 
     def delete_expired_sensitive(self, max_age_seconds: int = 30) -> int:
+        # The Privacy pane can switch the auto-clear off; rows stay masked.
+        if self.get_setting("sensitive_autoclear", "true") != "true":
+            return 0
         cutoff = time.time() - max_age_seconds
         rows = self.conn.execute(
             """SELECT id, image_path FROM entries
