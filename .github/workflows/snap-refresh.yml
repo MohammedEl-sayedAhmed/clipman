@@ -82,18 +82,24 @@ jobs:
           CHANNEL: ${{ inputs.channel }}
         run: |
           latest_tag() {
-            gh api "repos/${{ github.repository }}/releases/latest" -q .tag_name
+            # Never fall back to main: an empty ref would publish main to stable.
+            local tag
+            tag=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" -q .tag_name) || tag=""
+            case "$tag" in
+              v[0-9]*.[0-9]*.[0-9]*) printf '%s\n' "$tag" ;;
+              *) echo "::error::could not resolve the latest release tag (got '${tag}')" >&2; return 1 ;;
+            esac
           }
           case "$EVENT" in
             schedule)
-              tag="$(latest_tag)"
+              tag="$(latest_tag)" || exit 1
               matrix=$(jq -nc --arg tag "$tag" '[
                 {ref: "main", channels: "edge",                    slug: "edge"},
                 {ref: $tag,   channels: "beta,candidate,stable",   slug: "stable"}
               ]')
               ;;
             workflow_dispatch)
-              if [ "$CHANNEL" = "edge" ]; then ref="main"; else ref="$(latest_tag)"; fi
+              if [ "$CHANNEL" = "edge" ]; then ref="main"; else ref="$(latest_tag)" || exit 1; fi
               matrix=$(jq -nc --arg ref "$ref" --arg ch "$CHANNEL" \
                 '[{ref: $ref, channels: $ch, slug: $ch}]')
               ;;

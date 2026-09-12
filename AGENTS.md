@@ -53,7 +53,7 @@ specific assistant.
   arguments go to the runner (`scripts/dev.sh test -k database`). 331 tests.
   The `test` extra caps PyGObject below 3.59: CI builds it from source
   against noble's GLib 2.80, so bump the cap deliberately.
-- Lint: `scripts/dev.sh lint` = `ruff check clipman tests` +
+- Lint: `scripts/dev.sh lint` = `ruff check clipman tests scripts clipman.py` +
   `shellcheck --severity=warning install.sh uninstall.sh launcher.sh scripts/*.sh`,
   the exact CI scopes (`ruff` / `shellcheck` subcommands run one half;
   `check` runs lint then test). Ruff is pinned at 0.15.13 in the `lint`

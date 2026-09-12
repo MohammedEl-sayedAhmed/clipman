@@ -14,7 +14,7 @@ on `main`.
 | Dependency review | `dependency-review.yml` | `pull_request` to `main` | Fails the PR on high-severity vulnerabilities or disallowed licenses introduced by dependency changes. | No (informational; no contexts on protection ruleset) |
 | Auto-label PR | `labeler.yml` | `pull_request_target` to `main` | Applies path-based labels from `.github/labeler.yml` so triage knows which area a PR touches. | No |
 | Sync labels | `labels.yml` | `push` to `main` touching `.github/labels.yml`, `workflow_dispatch` | Reconciles repository labels with the declarative `.github/labels.yml` source of truth. | No (push-only) |
-| Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`). | Yes — `Python (ruff)` and `Shell (shellcheck)` |
+| Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests scripts clipman.py`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`). | Yes — `Python (ruff)` and `Shell (shellcheck)` |
 | Release | `release.yml` | `push` of tag matching `v*.*.*`, `workflow_dispatch` | End-to-end release pipeline: pre-flight version checks, matrix tests, builds (PyPI, snap, .deb/.rpm, AppImage, extension bundle), and publishes to PyPI, Snap Store, AUR, and GitHub Releases. | No (tag-triggered only) |
 | Scorecard | `scorecard.yml` | `push` to `main`, weekly cron (`37 4 * * 1`), `branch_protection_rule` | OSSF Scorecard supply-chain analysis; uploads SARIF to the GitHub Security tab and publishes results. | No |
 | Secret scan | `secret-scan.yml` | `push` to `main`, `pull_request` to `main` | Runs `gitleaks` over full git history to catch committed credentials. | Yes — `gitleaks` |
@@ -72,11 +72,13 @@ flowchart TD
 Per-job notes (consult `release.yml` for the authoritative `needs:`
 graph and step contents):
 
-- **pre-flight** — checks that the pushed tag, `pyproject.toml`
-  `version`, and `snap/snapcraft.yaml` `version` all agree, and
-  extracts the matching `[X.Y.Z]` section from `CHANGELOG.md` to use
-  as the GitHub Release body. A mismatch fails the entire pipeline
-  before any artifacts are built.
+- **pre-flight** — checks that the tag has the form `vX.Y.Z` and
+  agrees with every file that carries the version (`pyproject.toml`,
+  `clipman/_version.py`, `snap/snapcraft.yaml`, `CITATION.cff`,
+  `aur/PKGBUILD`, `aur/.SRCINFO`, the Flatpak manifest and both
+  metainfo files), and that `CHANGELOG.md` has the matching `[X.Y.Z]`
+  section, which becomes the GitHub Release body. A mismatch fails the
+  entire pipeline before any artifacts are built.
 - **tests** — fan-out matrix on `ubuntu-24.04` for Python 3.10, 3.11,
   and 3.12. `fail-fast: true` so a regression in one interpreter
   short-circuits the whole pipeline.
@@ -101,8 +103,11 @@ graph and step contents):
 - **bundle-extension** — `gnome-extensions pack` produces a
   versioned `clipman-extension-vX.Y.Z.zip` for the GNOME Extensions
   website upload (manual; EGO has no programmatic upload API).
-- **github-release** — `softprops/action-gh-release` assembles the
-  artifacts under `release-assets/` and creates the Release with the
+- **github-release** — runs only when every job before it succeeded
+  (PyPI, Snap, extension bundle, deb/rpm, AppImage), so a Release is
+  never marked Latest with a failed publish behind it.
+  `softprops/action-gh-release` assembles the artifacts under
+  `release-assets/` and creates the Release with the
   pre-flight-extracted CHANGELOG section as the body.
   `fail_on_unmatched_files: false` lets the release ship without the
   AppImage glob match if `build-appimage` skipped its upload.

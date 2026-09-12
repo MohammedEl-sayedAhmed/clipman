@@ -60,6 +60,7 @@ jobs:
           persist-credentials: false
 
       - name: Install shellcheck
+        timeout-minutes: 4
         run: scripts/deps.sh --lint --install --yes
 
       - name: Run shellcheck

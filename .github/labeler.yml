@@ -1,5 +1,5 @@
 # Path-based auto-labels for pull requests. Applied by
-# .github/workflows/labeler.yml using actions/labeler@v5.
+# .github/workflows/labeler.yml using actions/labeler v7 (v5+ config format).
 #
 # Only AREA labels are auto-applied here. Type / priority / status
 # labels are left to the maintainer to set manually because path
