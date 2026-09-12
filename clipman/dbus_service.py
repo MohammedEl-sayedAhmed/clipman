@@ -9,7 +9,8 @@ IFACE = "com.clipman.Daemon"
 class ClipmanDBusService(dbus.service.Object):
     def __init__(self, window, app, monitor=None):
         bus = dbus.SessionBus()
-        bus_name = dbus.service.BusName(BUS_NAME, bus)
+        # do_not_queue: a second daemon fails here instead of waiting.
+        bus_name = dbus.service.BusName(BUS_NAME, bus, do_not_queue=True)
         super().__init__(bus_name, OBJ_PATH)
         self.window = window
         self.app = app

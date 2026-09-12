@@ -25,6 +25,7 @@ from clipman.database import ClipboardDB
 from clipman.clipboard_monitor import ClipboardMonitor
 from clipman.window import ClipmanWindow
 from clipman.dbus_service import ClipmanDBusService
+import clipman.shell_bridge as shell_bridge
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,8 @@ class ClipmanApp(Adw.Application):
         # Surface repeated wl-paste crashes in the popup instead of dying
         # silently (mockup watcher-crashed).
         self.monitor.on_watcher_dead = self._on_watcher_dead
+        # Incognito also pauses the extension (no clip crosses the bus).
+        self.monitor.on_incognito_changed = shell_bridge.set_paused
         # Phase 1 of the GTK 4 + libadwaita port: keyword args only, the
         # window constructor expects (application, db, monitor) now.
         self.window = ClipmanWindow(
@@ -71,11 +74,8 @@ class ClipmanApp(Adw.Application):
         ).lower() == "true":
             self.window.set_incognito(True)
 
-        # Register the D-Bus service BEFORE calling hold() — if another
-        # Clipman daemon is already on the bus, we want to log + quit
-        # cleanly rather than have a held-but-unreachable second daemon
-        # hang around. dbus-python raises NameExistsException when the
-        # well-known bus name is already owned.
+        # Register the service before hold(): a second daemon, or a bus
+        # we cannot reach, must log and quit instead of lingering.
         try:
             self.dbus_service = ClipmanDBusService(
                 self.window, self, self.monitor
@@ -87,6 +87,19 @@ class ClipmanApp(Adw.Application):
             )
             self.quit()
             return
+        except dbus.exceptions.DBusException:
+            logger.exception("Cannot register on the session bus; exiting.")
+            self.quit()
+            return
+
+        # Push the pause state now and after any extension restart.
+        shell_bridge.set_paused(self.monitor.incognito)
+        try:
+            dbus.SessionBus().watch_name_owner(
+                shell_bridge.EXT_BUS_NAME, self._on_extension_owner_changed
+            )
+        except dbus.DBusException:
+            logger.debug("cannot watch the extension name", exc_info=True)
 
         # Keep the app running even when the window is hidden — the daemon
         # owns the lifetime of the clipboard monitor + D-Bus service.
@@ -112,6 +125,10 @@ class ClipmanApp(Adw.Application):
         # Handle SIGINT/SIGTERM gracefully
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, self._shutdown)
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self._shutdown)
+
+    def _on_extension_owner_changed(self, owner):
+        if owner and self.monitor is not None:
+            shell_bridge.set_paused(self.monitor.incognito)
 
     def _on_watcher_dead(self):
         if self.window is not None:

@@ -24,6 +24,10 @@ class TestClipboardMonitor(unittest.TestCase):
 
         from clipman.clipboard_monitor import ClipboardMonitor
         self.monitor = ClipboardMonitor(self.mock_db, on_new_entry=on_new_entry)
+        # Run the image read and its store step inline instead of on a
+        # thread and the GLib loop.
+        self.monitor._run_in_background = lambda fn: fn()
+        self.monitor._run_on_main_loop = lambda fn, *args: fn(*args)
 
     def test_detects_new_text(self):
         self.monitor.handle_new_text("hello clipboard")
@@ -495,6 +499,8 @@ class TestDebounce(unittest.TestCase):
         self.mock_db = MagicMock()
         from clipman.clipboard_monitor import ClipboardMonitor
         self.monitor = ClipboardMonitor(self.mock_db)
+        self.monitor._run_in_background = lambda fn: fn()
+        self.monitor._run_on_main_loop = lambda fn, *args: fn(*args)
 
     def test_min_event_interval_value(self):
         """MIN_EVENT_INTERVAL must be at least 100ms to complement the
@@ -986,6 +992,55 @@ class TestWlPasteWatcher(unittest.TestCase):
         mock_proc.terminate.assert_called_once()
         # New process should have been started
         mock_popen.assert_called_once()
+
+
+class TestIncognitoHookAndImageThread(unittest.TestCase):
+    """Incognito is reported; the image read leaves the main loop."""
+
+    def setUp(self):
+        from clipman.clipboard_monitor import ClipboardMonitor
+        self.mock_db = MagicMock()
+        self.monitor = ClipboardMonitor(self.mock_db)
+
+    def test_incognito_hook_receives_each_change(self):
+        seen = []
+        self.monitor.on_incognito_changed = seen.append
+        self.monitor.set_incognito(True)
+        self.monitor.set_incognito(False)
+        self.assertEqual(seen, [True, False])
+        self.assertFalse(self.monitor.incognito)
+
+    def test_incognito_hook_errors_are_swallowed(self):
+        self.monitor.on_incognito_changed = MagicMock(side_effect=RuntimeError)
+        self.monitor.set_incognito(True)
+        self.assertTrue(self.monitor.incognito)
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_image_read_runs_in_background_then_stores_on_main_loop(self, mock_run):
+        mock_run.return_value = MagicMock(returncode=0, stdout=b"\x89PNG\r\n\x1a\nxx")
+        background, main_loop = [], []
+        self.monitor._run_in_background = background.append
+        self.monitor._run_on_main_loop = lambda fn, *args: main_loop.append((fn, args))
+
+        self.monitor.handle_new_image()
+        self.assertEqual(len(background), 1)
+        self.mock_db.add_entry.assert_not_called()
+
+        background[0]()
+        self.assertEqual(len(main_loop), 1)
+        fn, args = main_loop[0]
+        fn(*args)
+        self.mock_db.add_entry.assert_called_once_with(
+            "image", image_data=b"\x89PNG\r\n\x1a\nxx"
+        )
+
+    @patch("clipman.clipboard_monitor.subprocess.run")
+    def test_failed_image_read_stores_nothing(self, mock_run):
+        mock_run.side_effect = subprocess.TimeoutExpired("wl-paste", 5)
+        self.monitor._run_in_background = lambda fn: fn()
+        self.monitor._run_on_main_loop = lambda fn, *args: fn(*args)
+        self.monitor.handle_new_image()
+        self.mock_db.add_entry.assert_not_called()
 
 
 if __name__ == "__main__":

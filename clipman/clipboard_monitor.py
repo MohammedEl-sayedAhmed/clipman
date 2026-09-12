@@ -1,6 +1,7 @@
 import logging
 import os
 import subprocess
+import threading
 import time
 
 from gi.repository import GLib
@@ -167,6 +168,12 @@ class ClipboardMonitor:
         # Optional: invoked (on the GLib main loop) when the wl-paste
         # fallback watcher crashes repeatedly and stops retrying.
         self.on_watcher_dead = None
+        # Optional: invoked with the new state when incognito changes.
+        self.on_incognito_changed = None
+        # The image read blocks on wl-paste, so it leaves the main loop.
+        # Tests replace these two with direct calls.
+        self._run_in_background = _run_in_thread
+        self._run_on_main_loop = GLib.idle_add
         self._self_copy = False
         self._incognito = False
         self._last_event_time = 0.0
@@ -197,8 +204,17 @@ class ClipboardMonitor:
     def set_self_copy(self, val: bool):
         self._self_copy = val
 
+    @property
+    def incognito(self) -> bool:
+        return self._incognito
+
     def set_incognito(self, val: bool):
-        self._incognito = val
+        self._incognito = bool(val)
+        if self.on_incognito_changed is not None:
+            try:
+                self.on_incognito_changed(self._incognito)
+            except Exception:
+                logger.debug("on_incognito_changed callback failed", exc_info=True)
 
     def _rate_limited(self):
         """Return True if this event arrived too fast (debounce)."""
@@ -226,12 +242,7 @@ class ClipboardMonitor:
             self.on_new_entry()
 
     def handle_new_image(self):
-        """Called from D-Bus when the extension detects an image copy.
-
-        Uses a single wl-paste call to read the image data. This only
-        happens when an image is actually copied (not on a timer), so
-        the single subprocess call does not cause visible flicker.
-        """
+        """Called from D-Bus when an image was copied."""
         if self._self_copy:
             self._self_copy = False
             return
@@ -239,15 +250,28 @@ class ClipboardMonitor:
         if self._incognito or self._rate_limited():
             return
 
+        self._run_in_background(self._read_image)
+
+    def _read_image(self):
+        """Read the image with wl-paste, then store it."""
         try:
             result = subprocess.run(
                 ["wl-paste", "--type", "image/png"],
                 capture_output=True, timeout=5
             )
-            if result.returncode == 0 and result.stdout:
-                if len(result.stdout) <= MAX_IMAGE_SIZE:
-                    self.db.add_entry("image", image_data=result.stdout)
-                    if self.on_new_entry:
-                        self.on_new_entry()
         except (subprocess.SubprocessError, OSError):
-            pass
+            logger.debug("wl-paste image read failed", exc_info=True)
+            return
+        if result.returncode == 0 and result.stdout:
+            if len(result.stdout) <= MAX_IMAGE_SIZE:
+                self._run_on_main_loop(self._store_image, result.stdout)
+
+    def _store_image(self, data):
+        self.db.add_entry("image", image_data=data)
+        if self.on_new_entry:
+            self.on_new_entry()
+        return False
+
+
+def _run_in_thread(fn):
+    threading.Thread(target=fn, daemon=True, name="clipman-image-read").start()
