@@ -108,6 +108,31 @@ All notable changes to Clipman are documented in this file.
 - `update_entry_text` had no caller and could break the unique hash
   constraint; removed. `get_latest_text` returns the newest text clip
   regardless of pins, for the `${clipboard}` snippet token.
+
+### Fixed — popup window
+
+- The Images tab could show "no images" while its badge counted some:
+  the list loaded the 200 newest clips of any type and filtered them in
+  Python. The Text and Images tabs now ask the database for that type.
+- The `${clipboard}` snippet token expanded to the top *pinned* clip,
+  not the newest one. It now uses the newest text clip.
+- The "Snap notes" button opened a page that did not exist. It now
+  opens the install section of the README.
+- After the popup copied a clip, the monitor skipped the next clipboard
+  change with no time limit, so it could swallow a real copy made
+  later. The skip now expires after two seconds.
+- Links from the popup go through the same http(s)-only opener as the
+  Preferences window. The "Reveal folder" button uses its own helper
+  that only opens folders that exist.
+- Paste through the GNOME Shell extension: a failed focus restore no
+  longer aborts the paste; an old extension that rejects the mode
+  argument gets the no-argument call that ADR 0005 promised; and when
+  the extension refuses both calls the popup comes back with a
+  "Couldn't auto-paste" dialog instead of falling back to wtype, which
+  cannot inject keys on Mutter.
+- Masked rows say only "Sensitive" when "Auto-clear sensitive clips"
+  is off, instead of counting down to a purge that will not happen.
+
 ### Security — GNOME Shell extension (metadata version 8)
 
 - The extension's D-Bus methods (`SimulatePaste`, `MoveWindowToCursor`,

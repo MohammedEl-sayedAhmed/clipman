@@ -14,6 +14,7 @@ ARE importable, the tests assert that:
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 import unittest
@@ -74,8 +75,8 @@ class TestEdgeStates(unittest.TestCase):
         "incognito-on", "sensitive-shown", "sensitive-cleared",
         "extension-missing", "backup-failed", "restore-failed",
         "network-error", "db-locked", "paused", "paste-target-missing",
-        "history-too-large", "clipboard-blocked", "watcher-crashed",
-        "shortcut-failed",
+        "paste-failed", "history-too-large", "clipboard-blocked",
+        "watcher-crashed", "shortcut-failed",
     }
 
     def test_state_id_inventory(self):
@@ -87,7 +88,7 @@ class TestEdgeStates(unittest.TestCase):
         """
         from clipman.edge_states import STATES
         self.assertEqual(set(STATES.keys()), self.EXPECTED_IDS)
-        self.assertEqual(len(STATES), 19)
+        self.assertEqual(len(STATES), 20)
 
     def test_render_each_state_returns_widget(self):
         from clipman.edge_states import STATES, render_edge_state
@@ -454,6 +455,154 @@ class TestWindowConstruction(unittest.TestCase):
         window = ClipmanWindow(application=app, db=db, monitor=None)
         window._shell_extension_iface = lambda: None
         self.assertFalse(window._paste_via_shell("auto"))
+
+    def test_paste_via_shell_ignores_focus_restore_failure(self):
+        """A failed focus restore must not abort the paste."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestFocusFail")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        fake_iface = MagicMock()
+        fake_iface.RestorePreviousFocus.side_effect = RuntimeError("no window")
+        window._shell_extension_iface = lambda: fake_iface
+
+        with patch("clipman.window.GLib.timeout_add") as timeout_add:
+            self.assertTrue(window._paste_via_shell("auto"))
+        timeout_add.call_args[0][1]()
+        fake_iface.SimulatePaste.assert_called_once_with("auto")
+
+    def test_paste_via_shell_retries_without_mode(self):
+        """An old extension that rejects the mode gets the no-argument call."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestPasteRetry")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        calls = []
+
+        def simulate(*args):
+            calls.append(args)
+            if args:
+                raise RuntimeError("UnknownMethod")
+
+        fake_iface = MagicMock()
+        fake_iface.SimulatePaste.side_effect = simulate
+        window._shell_extension_iface = lambda: fake_iface
+        window._show_edge_state = MagicMock()
+
+        with patch("clipman.window.GLib.timeout_add") as timeout_add:
+            window._paste_via_shell("ctrl-v")
+        timeout_add.call_args[0][1]()
+        self.assertEqual(calls, [("ctrl-v",), ()])
+        window._show_edge_state.assert_not_called()
+
+    def test_paste_via_shell_shows_dialog_when_both_calls_fail(self):
+        """No wtype fallback on GNOME: the popup comes back with a dialog."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestPasteFailed")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        fake_iface = MagicMock()
+        fake_iface.SimulatePaste.side_effect = RuntimeError("refused")
+        window._shell_extension_iface = lambda: fake_iface
+        window._present_focused = MagicMock()
+        window._show_edge_state = MagicMock()
+        window._simulate_paste = MagicMock()
+
+        with patch("clipman.window.GLib.timeout_add") as timeout_add:
+            self.assertTrue(window._paste_via_shell("auto"))
+        timeout_add.call_args[0][1]()
+        window._present_focused.assert_called_once()
+        window._show_edge_state.assert_called_once_with("paste-failed")
+        window._simulate_paste.assert_not_called()
+
+    def test_type_filters_query_the_database_by_type(self):
+        """The Text and Images tabs filter in SQL, not on the newest 200 rows."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestTypeFilter")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        window.db = MagicMock(wraps=db)
+
+        window._active_filter = "images"
+        window.refresh()
+        window.db.get_entries.assert_called_with(limit=200, content_type="image")
+
+        window._active_filter = "text"
+        window.refresh()
+        window.db.get_entries.assert_called_with(limit=200, content_type="text")
+
+    def test_clipboard_token_uses_newest_text_not_pinned(self):
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        older = db.add_entry("text", content_text="older clip")
+        db.toggle_pin(older)
+        db.add_entry("text", content_text="newer clip")
+        app = Adw.Application(application_id="com.clipman.TestClipToken")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+
+        self.assertEqual(
+            window._expand_snippet_tokens("> ${clipboard}"), "> newer clip"
+        )
+
+    def test_snap_notes_url_points_at_a_readme_heading(self):
+        from clipman.window import ClipmanWindow
+
+        fragment = ClipmanWindow._SNAP_NOTES_URL.rsplit("#", 1)[1]
+        readme = Path(__file__).resolve().parents[1] / "README.md"
+        slugs = set()
+        for line in readme.read_text(encoding="utf-8").splitlines():
+            if line.startswith("#"):
+                heading = line.lstrip("#").strip().lower()
+                slugs.add(re.sub(r"[^\w\- ]", "", heading).replace(" ", "-"))
+        self.assertIn(fragment, slugs)
+
+    def test_open_url_drops_non_http_links(self):
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestOpenUrl")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+
+        with patch("clipman.preferences.subprocess.Popen") as popen:
+            window._open_url("file:///etc/passwd")
+            popen.assert_not_called()
+            window._open_url("https://example.org/")
+            popen.assert_called_once()
+
+    def test_reveal_path_opens_existing_folders_only(self):
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestReveal")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        folder = tempfile.mkdtemp(prefix="clipman-reveal-")
+        self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+
+        with patch("clipman.window.subprocess.Popen") as popen:
+            window._reveal_path(folder)
+            self.assertEqual(popen.call_args[0][0], ["xdg-open", folder])
+            popen.reset_mock()
+            window._reveal_path(os.path.join(folder, "missing"))
+            popen.assert_not_called()
+
+    def test_masked_row_has_no_countdown_when_autoclear_is_off(self):
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = Adw.Application(application_id="com.clipman.TestMaskedRow")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        entry = {"created_at": 0}
+
+        self.assertTrue(window._sensitive_autoclear)
+        self.assertIn("auto-clear in", window._sensitive_subtitle(entry))
+        window._on_setting_changed("sensitive_autoclear", "false")
+        self.assertFalse(window._sensitive_autoclear)
+        self.assertEqual(window._sensitive_subtitle(entry), "Sensitive")
 
     def test_classify_text_code_vs_prose(self):
         """The row-type classifier catches obvious code without flagging

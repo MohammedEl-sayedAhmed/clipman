@@ -44,7 +44,7 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 
 <br>
 
-<sub><i>Above: the shipped GTK 4 + libadwaita popup. The full settings surface is a sidebar <code>Adw.Dialog</code>, the snippets editor is an <code>Adw.NavigationSplitView</code> dialog, and the 19 edge states (empty, no-results, incognito, sensitive-cleared, first-run, errors…) render as Adwaita <code>StatusPage</code> / <code>Banner</code> / <code>AlertDialog</code> with a shared Catppuccin overlay. <a href="https://mohammedel-sayedahmed.github.io/clipman/#design">Browse the mockups</a> · <a href="https://mohammedel-sayedahmed.github.io/clipman/">project page</a>.</i></sub>
+<sub><i>Above: the shipped GTK 4 + libadwaita popup. The full settings surface is a sidebar <code>Adw.Dialog</code>, the snippets editor is an <code>Adw.NavigationSplitView</code> dialog, and the 20 edge states (empty, no-results, incognito, sensitive-cleared, first-run, errors…) render as Adwaita <code>StatusPage</code> / <code>Banner</code> / <code>AlertDialog</code> with a shared Catppuccin overlay. <a href="https://mohammedel-sayedahmed.github.io/clipman/#design">Browse the mockups</a> · <a href="https://mohammedel-sayedahmed.github.io/clipman/">project page</a>.</i></sub>
 
 </div>
 

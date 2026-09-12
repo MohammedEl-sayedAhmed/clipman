@@ -398,6 +398,16 @@ class TestClipboardMonitor(unittest.TestCase):
             "text", content_text="recorded", sensitive=False
         )
 
+    def test_self_copy_skip_expires(self):
+        """A stale self-copy flag must not swallow a real copy."""
+        self.monitor.set_self_copy(True)
+        later = time.monotonic() + 5
+        with patch("clipman.clipboard_monitor.time.monotonic",
+                   return_value=later):
+            self.monitor.handle_new_text("real copy")
+        self.mock_db.add_entry.assert_called_once()
+        self.assertFalse(self.monitor._self_copy)
+
     @patch("clipman.clipboard_monitor.subprocess.run")
     def test_self_copy_auto_resets_after_image(self, mock_run):
         mock_run.return_value = FakeCompletedProcess(
