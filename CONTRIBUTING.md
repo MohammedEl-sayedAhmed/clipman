@@ -60,18 +60,25 @@ clipman/
 
 ### Running Tests
 
+One-command setup, then the suite exactly as CI runs it:
+
 ```bash
-python3 -m unittest discover -s tests
+scripts/dev-setup.sh      # or: make setup
+scripts/dev.sh test       # or: make test
 ```
 
-All 330 tests should pass. GTK 4 is required at test time (CI runs the suite under `xvfb-run`); D-Bus is not. Tests cover the database layer, clipboard monitor, window/classification logic, app lifecycle, keybindings, and the update check. See [docs/development.md](docs/development.md) for the fuller dev setup.
+`dev-setup.sh` installs the system packages, creates `.venv` and installs the `dev` extras. The venv uses `--system-site-packages`, so the distro's PyGObject and dbus-python bindings are reused and never rebuilt. `dev.sh test` runs pytest under `xvfb-run` with `CLIPMAN_REQUIRE_GTK4=1` (falling back to `unittest` when pytest is not importable); pytest arguments pass through, e.g. `scripts/dev.sh test -k database`.
+
+All 331 tests should pass. GTK 4 is required at test time; a session bus is not. Tests cover the database layer, clipboard monitor, window/classification logic, app lifecycle, keybindings, and the update check. See [docs/development.md](docs/development.md) for the fuller dev setup.
 
 ### Lint
 
 ```bash
-ruff check clipman tests
-shellcheck --severity=warning install.sh uninstall.sh launcher.sh
+scripts/dev.sh lint       # or: make lint  — ruff + shellcheck
+scripts/dev.sh check      # or: make check — lint, then test
 ```
+
+`lint` runs `ruff check clipman tests` and `shellcheck --severity=warning install.sh uninstall.sh launcher.sh scripts/*.sh`, the same scopes as CI; `scripts/dev.sh ruff` and `scripts/dev.sh shellcheck` run either half alone. Ruff is pinned in the `lint` extra so the local version matches CI.
 
 - Ruff config lives in `pyproject.toml`. The per-file `E402` ignores in `clipman/app.py` and `clipman/window.py` are intentional — `gi.require_version()` legitimately must precede the `from gi.repository import ...` calls.
 - Run shellcheck whenever you touch a shell script.
@@ -110,23 +117,11 @@ Introspect or call them with `gdbus`:
 
 ### Dev system packages
 
-Ubuntu 24.04+ (and other Debian-family distros with GTK 4):
+`scripts/deps.sh` is the single manifest (apt, dnf, pacman); `scripts/dev-setup.sh` installs from it. To use it by hand:
 
 ```bash
-sudo apt-get install -y \
-    python3 python3-gi python3-dbus \
-    gir1.2-gtk-4.0 gir1.2-adw-1 libadwaita-1-0 \
-    wl-clipboard libcairo2-dev libgirepository-2.0-dev \
-    gnome-shell-extensions
-```
-
-Fedora:
-
-```bash
-sudo dnf install -y \
-    python3-gobject python3-dbus gtk4 libadwaita \
-    wl-clipboard cairo-devel gobject-introspection-devel \
-    gnome-extensions-app
+scripts/deps.sh --dev --print      # the list for this host's package manager
+scripts/deps.sh --dev --install    # install what is missing (sudo when needed)
 ```
 
 See [docs/development.md](docs/development.md) for the full setup.
@@ -181,7 +176,7 @@ GTK 4 + libadwaita, theming is layered:
 
 1. Create a feature branch: `git checkout -b feature/your-feature`
 2. Make your changes
-3. Run the test suite: `python3 -m unittest discover -s tests`
+3. Run the checks: `scripts/dev.sh check` (lint, then the test suite)
 4. Commit with a clear message describing what and why
 5. Push and open a Pull Request
 
@@ -189,24 +184,28 @@ GTK 4 + libadwaita, theming is layered:
 
 The repo ships opt-in local hooks under [`.githooks/`](.githooks/) that
 guard against AI-tool footprints and wrong-account commits. They are
-**not required** to contribute; CI does not run them. If you maintain
-multiple GitHub accounts on one machine and want belt-and-suspenders,
-run once:
+**not required** to contribute; CI does not run them.
+`scripts/dev-setup.sh` installs them when nothing else owns
+`core.hooksPath`. To install (or re-install) them by hand:
 
 ```sh
 scripts/install-hooks.sh
 ```
 
-See [docs/hooks.md](docs/hooks.md) for what each hook checks and how to
-opt out.
+If `core.hooksPath` already points elsewhere the script asks before
+replacing it; pass `--replace` to skip the prompt. Without a terminal it
+never blocks on stdin — it exits 1 with that hint instead.
+`scripts/dev.sh hooks-test` runs the hooks' own test corpus. See
+[docs/hooks.md](docs/hooks.md) for what each hook checks and how to opt
+out.
 
 ## How a PR gets reviewed
 
 - **Timeline.** A single maintainer reviews PRs (see GOVERNANCE.md). Typical first response within a week.
 - **What reviewers check.**
-  - Tests pass: `python3 -m unittest discover -s tests`.
-  - `ruff check clipman tests` clean.
-  - `shellcheck --severity=warning install.sh uninstall.sh launcher.sh` clean if any shell script was touched.
+  - Tests pass: `scripts/dev.sh test` (the same command CI runs).
+  - `scripts/dev.sh ruff` clean (`ruff check clipman tests`).
+  - `scripts/dev.sh shellcheck` clean if any shell script was touched (`--severity=warning` over `install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`).
   - User-visible change → `CHANGELOG.md` `[Unreleased]` entry.
   - Substantive architectural decision → ADR added under `docs/adr/` per ADR 0001.
   - D-Bus contract change (signature, new method, new arg) → `extension/metadata.json` `version` integer bumped per [ADR 0005](docs/adr/0005-paste-mode-as-dbus-arg.md).
@@ -233,9 +232,9 @@ When filing a bug report, please include:
 
 ## Definition of Done
 
-- [ ] `xvfb-run -a python3 -m unittest discover -s tests` passes locally (330 tests)
-- [ ] `ruff check clipman tests` is clean
-- [ ] `shellcheck --severity=warning install.sh uninstall.sh launcher.sh` is clean if any shell script was touched
+- [ ] `scripts/dev.sh test` passes locally (331 tests)
+- [ ] `scripts/dev.sh ruff` is clean
+- [ ] `scripts/dev.sh shellcheck` is clean if any shell script was touched
 - [ ] `CHANGELOG.md` `[Unreleased]` updated for user-visible changes
 - [ ] ADR added under `docs/adr/` for substantive architectural decisions
 - [ ] `extension/metadata.json` `version` integer bumped if the D-Bus contract changed (per [ADR 0005](docs/adr/0005-paste-mode-as-dbus-arg.md))

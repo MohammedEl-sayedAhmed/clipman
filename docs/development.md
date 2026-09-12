@@ -15,37 +15,36 @@ the canonical map. Two halves matter for development:
 
 ## Prerequisites
 
-System packages (Ubuntu/Debian — Ubuntu 24.04+ recommended for
-libadwaita 1.4):
+Ubuntu 24.04+ is the baseline (libadwaita 1.4); the same scripts know
+the Fedora (dnf) and Arch (pacman) package names. One command installs
+the system packages, creates `.venv`, installs the dev extras and the
+git hooks:
 
 ```bash
-sudo apt-get install -y \
-    python3 python3-gi python3-dbus \
-    gir1.2-gtk-4.0 gir1.2-adw-1 libadwaita-1-0 \
-    wl-clipboard libcairo2-dev libgirepository-2.0-dev \
-    gnome-shell-extensions
+scripts/dev-setup.sh      # or: make setup
 ```
 
-Fedora equivalents:
+The venv is created with `--system-site-packages`, so the distro's
+PyGObject and dbus-python bindings are reused and never rebuilt
+against a different GIR stack. Re-running the script is safe; it skips
+what is already in place. If it cannot `sudo` without a password it
+prints the exact package-manager command and carries on.
+
+The venv step needs PyPI; set `CLIPMAN_NO_NETWORK=1` to skip it and
+install the extras later. With a distro PyGObject older than 3.46, or
+a non-distro interpreter, pip builds PyGObject from source, which also
+needs a C compiler and GLib 2.80.
+
+
+`scripts/deps.sh` is the single source of truth for the system package
+lists (`runtime`, `test`, `lint` sets). `install.sh` and CI read it
+too, so there is no second copy to keep in sync:
 
 ```bash
-sudo dnf install -y \
-    python3-gobject python3-dbus gtk4 libadwaita \
-    wl-clipboard cairo-devel gobject-introspection-devel \
-    gnome-extensions-app
+scripts/deps.sh --runtime --print    # what install.sh installs
+scripts/deps.sh --dev --check        # what is missing for development
+scripts/deps.sh --dev --install      # install it (sudo when needed)
 ```
-
-A virtualenv is optional but recommended for lint/test tooling:
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-pip install ruff
-```
-
-PyGObject is imported through the system path — don't `pip install
-PyGObject` inside the venv, it'll diverge from the system GIR
-typelibs.
 
 ## Running from source
 
@@ -65,36 +64,50 @@ to refresh `~/.local/share/gnome-shell/extensions/clipman@clipman.com`.
 ## Running tests
 
 ```bash
-python3 -m unittest discover -s tests
+scripts/dev.sh test                  # or: make test
+scripts/dev.sh test -k database      # or: make test ARGS="-k database"
 ```
 
-The full suite (~265 tests) hits the actual SQLite layer, mocks
-clipboard subprocesses, and exercises the keybinding parser. Tests
-require the system `python3-gi` package (the project's CI matrix
-covers Python 3.10–3.12 on `ubuntu-24.04`).
+This is the exact command CI runs: pytest under `xvfb-run -a` with
+`CLIPMAN_REQUIRE_GTK4=1`, so a missing GTK 4 fails the widget tests
+instead of skipping them. When pytest is not importable it falls back
+to `unittest discover -s tests`. The interpreter is `$CLIPMAN_PYTHON`,
+else `.venv/bin/python`, else `python3`.
 
-Targeted runs:
+The full suite (331 tests) hits the actual SQLite layer, mocks
+clipboard subprocesses, and exercises the keybinding parser. The CI
+matrix covers Python 3.10–3.12 on `ubuntu-24.04`.
+
+Targeted runs (pytest syntax):
 
 ```bash
-python3 -m unittest tests.test_keybindings
-python3 -m unittest tests.test_database.TestClipboardDB.test_add_text_entry
+scripts/dev.sh test tests/test_keybindings.py
+scripts/dev.sh test tests/test_database.py::TestClipboardDB::test_add_text_entry
 ```
 
 ## Lint
 
 ```bash
-ruff check clipman tests
+scripts/dev.sh lint                  # or: make lint  — ruff + shellcheck
+scripts/dev.sh check                 # or: make check — lint, then test
 ```
+
+`lint` runs `ruff check clipman tests` and
+`shellcheck --severity=warning install.sh uninstall.sh launcher.sh scripts/*.sh`,
+the same scopes CI uses; `scripts/dev.sh ruff` and
+`scripts/dev.sh shellcheck` run either half alone. Ruff is pinned in
+the `lint` extra so the local version matches CI.
 
 Configuration lives in `pyproject.toml`. The two per-file ignores for
 `E402` in `clipman/app.py` and `clipman/window.py` are intentional —
 `gi.require_version()` legitimately must precede `from gi.repository
 import ...`.
 
-Shell scripts use `shellcheck --severity=warning`:
+Headless screenshots of the real window and preferences:
 
 ```bash
-shellcheck --severity=warning install.sh uninstall.sh launcher.sh
+scripts/dev.sh screenshot --out /tmp/clipman.png
+# or: make screenshot ARGS="--out /tmp/clipman.png"
 ```
 
 ## Debugging

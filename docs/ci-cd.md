@@ -14,12 +14,12 @@ on `main`.
 | Dependency review | `dependency-review.yml` | `pull_request` to `main` | Fails the PR on high-severity vulnerabilities or disallowed licenses introduced by dependency changes. | No (informational; no contexts on protection ruleset) |
 | Auto-label PR | `labeler.yml` | `pull_request_target` to `main` | Applies path-based labels from `.github/labeler.yml` so triage knows which area a PR touches. | No |
 | Sync labels | `labels.yml` | `push` to `main` touching `.github/labels.yml`, `workflow_dispatch` | Reconciles repository labels with the declarative `.github/labels.yml` source of truth. | No (push-only) |
-| Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `ruff check clipman tests` for Python and `shellcheck` for `install.sh` / `uninstall.sh` / `launcher.sh`. | Yes — `Python (ruff)` and `Shell (shellcheck)` |
+| Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`). | Yes — `Python (ruff)` and `Shell (shellcheck)` |
 | Release | `release.yml` | `push` of tag matching `v*.*.*`, `workflow_dispatch` | End-to-end release pipeline: pre-flight version checks, matrix tests, builds (PyPI, snap, .deb/.rpm, AppImage, extension bundle), and publishes to PyPI, Snap Store, AUR, and GitHub Releases. | No (tag-triggered only) |
 | Scorecard | `scorecard.yml` | `push` to `main`, weekly cron (`37 4 * * 1`), `branch_protection_rule` | OSSF Scorecard supply-chain analysis; uploads SARIF to the GitHub Security tab and publishes results. | No |
 | Secret scan | `secret-scan.yml` | `push` to `main`, `pull_request` to `main` | Runs `gitleaks` over full git history to catch committed credentials. | Yes — `gitleaks` |
 | Snap refresh | `snap-refresh.yml` | Weekly cron (`0 4 * * 1`), `workflow_dispatch`, `push`/`pull_request` to `main` touching snap-relevant paths | Rebuilds the snap to pick up Ubuntu archive security updates; can publish to the Snap Store on the scheduled run. See ADR 0009. | No |
-| Tests | `test.yml` | `push` to `main`, `pull_request` to `main` | `python -m unittest discover -s tests` across the Python 3.10 / 3.11 / 3.12 matrix on `ubuntu-24.04`. | Yes — `test (3.10)`, `test (3.11)`, `test (3.12)` |
+| Tests | `test.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh test` (pytest under `xvfb-run` with `CLIPMAN_REQUIRE_GTK4=1`) across the Python 3.10 / 3.11 / 3.12 matrix on `ubuntu-24.04`; system packages come from `scripts/deps.sh`. | Yes — `test (3.10)`, `test (3.11)`, `test (3.12)` |
 
 The remaining required context on `main` is `review`, which is enforced
 by the protection ruleset itself rather than by a workflow file.

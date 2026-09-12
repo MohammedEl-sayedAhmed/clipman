@@ -1,3 +1,4 @@
+import os
 import subprocess
 import sys
 import unittest
@@ -34,19 +35,20 @@ class TestDBusMainLoopInit(unittest.TestCase):
                         "D-Bus connection with the wrong mainloop")
 
     def test_toggle_without_daemon_does_not_hang(self):
-        """'clipman.py toggle' must exit promptly when no daemon runs.
-
-        Before the fix, the toggle path would create a SessionBus
-        connection without the GLib mainloop, then start the daemon
-        on a poisoned connection that never dispatched method calls.
-        """
+        """'clipman.py toggle' must exit promptly when no daemon runs."""
+        # No display and a dead bus: the toggle falls through to the daemon
+        # start, which must fail fast instead of running the main loop.
+        env = {k: v for k, v in os.environ.items()
+               if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
+        env["GDK_BACKEND"] = "x11"
+        env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/nonexistent/clipman-test"
         result = subprocess.run(
             [sys.executable, "clipman.py", "toggle"],
-            capture_output=True, timeout=10, cwd=".",
+            capture_output=True, timeout=10, cwd=".", env=env,
         )
-        # It should print "not running" and attempt to start (which will
-        # fail in the test env due to no display), but must not hang.
-        self.assertIsNotNone(result.returncode, "Process should have exited")
+        output = result.stdout + result.stderr
+        expected = (b"not running", b"missing system dependencies")
+        self.assertTrue(any(m in output for m in expected), output[-500:])
 
     def test_dbus_import_order(self):
         """dbus.mainloop.glib must be imported before dbus in clipman.py."""

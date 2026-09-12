@@ -18,12 +18,12 @@
 
 <!-- How did you verify the change? Manual steps, automated tests, etc. -->
 
-- [ ] `python -m unittest discover -s tests` passes locally
+- [ ] `scripts/dev.sh test` passes locally
 - [ ] Manually exercised the affected feature
 
 ## Checklist
 
-- [ ] Code follows the repo style (`ruff check clipman tests` clean)
-- [ ] Shell scripts pass `shellcheck`
+- [ ] Code follows the repo style (`scripts/dev.sh ruff` clean)
+- [ ] Shell scripts pass `scripts/dev.sh shellcheck`
 - [ ] Updated `CHANGELOG.md` if user-visible
 - [ ] Updated `README.md` / docs if behavior changed

@@ -11,23 +11,21 @@ EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
 
 echo "=== Installing Clipman ==="
 
-# Determine package manager
-if command -v dnf &> /dev/null; then
-    PKG_MANAGER="dnf"
-elif command -v apt &> /dev/null; then
-    PKG_MANAGER="apt"
-else
-    echo "Error: No supported package manager found (apt or dnf)"
-    exit 1
-fi
-
-# Step 1: Install system dependencies
+# Step 1: Install system dependencies (package lists live in scripts/deps.sh)
 echo "[1/6] Installing dependencies..."
-if [ "$PKG_MANAGER" = "apt" ]; then
-    sudo apt install -y wl-clipboard wtype python3-gi python3-dbus \
-        gir1.2-gtk-4.0 gir1.2-adw-1 libadwaita-1-0
-elif [ "$PKG_MANAGER" = "dnf" ]; then
-    sudo dnf install -y wl-clipboard wtype python3-gobject gtk4 libadwaita python3-dbus
+# shellcheck source=scripts/deps.sh
+source "$SCRIPT_DIR/scripts/deps.sh"
+# Assume yes as 'apt install -y' did; CLIPMAN_DEPS_YES=0 restores the prompt.
+: "${CLIPMAN_DEPS_YES:=1}"
+# Capture the status instead of letting set -e abort, so the exit-3 hint runs.
+deps_rc=0
+clipman_deps_install runtime || deps_rc=$?
+if [ "$deps_rc" -eq 3 ]; then
+    echo "Error: run the sudo command printed above, then re-run ./install.sh"
+    exit 1
+elif [ "$deps_rc" -ne 0 ]; then
+    echo "Error: dependency installation failed (exit $deps_rc)"
+    exit 1
 fi
 
 # Step 2: Create data directories

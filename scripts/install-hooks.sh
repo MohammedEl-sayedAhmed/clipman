@@ -1,14 +1,23 @@
 #!/usr/bin/env bash
-# install-hooks.sh — opt-in installer for Clipman's local git hooks.
-#
-# Run once after cloning if you want the local guardrails (identity
-# allowlist + AI-footprint scanner). External contributors do NOT need
-# to run this; the CI does not require it; nothing about your workflow
-# breaks if you skip it.
-#
-# Re-running is safe (idempotent).
+# install-hooks.sh — opt-in installer for the repo's local git hooks (identity allowlist + footprint scanner); safe to re-run.
+# CI never needs them. --replace takes over a foreign core.hooksPath without prompting.
 
 set -euo pipefail
+
+replace=0
+for arg in "$@"; do
+    case "$arg" in
+        --replace) replace=1 ;;
+        -h|--help)
+            printf 'usage: %s [--replace]\n' "$0"
+            exit 0
+            ;;
+        *)
+            printf 'error: unknown argument "%s" (usage: %s [--replace])\n' "$arg" "$0" >&2
+            exit 2
+            ;;
+    esac
+done
 
 cd "$(dirname -- "$0")/.."
 
@@ -24,8 +33,17 @@ existing=$(git config --get core.hooksPath 2>/dev/null || true)
 if [ -n "$existing" ] && [ "$existing" != ".githooks" ]; then
     printf 'warning: core.hooksPath is currently set to "%s"\n' "$existing" >&2
     printf '         Installing Clipman hooks will REPLACE that setting.\n' >&2
-    printf '         Press ENTER to continue, Ctrl-C to abort.\n' >&2
-    read -r _
+    if [ "$replace" -eq 1 ]; then
+        printf '         --replace given; proceeding.\n' >&2
+    elif [ -t 0 ]; then
+        printf '         Press ENTER to continue, Ctrl-C to abort.\n' >&2
+        read -r _
+    else
+        printf '         Not a terminal, so nothing was changed. Re-run with --replace\n' >&2
+        printf '         to take over core.hooksPath, or chain your hook manager to\n' >&2
+        printf '         "%s/.githooks" instead.\n' "$PWD" >&2
+        exit 1
+    fi
 fi
 
 # Make all hook files executable

@@ -4,27 +4,16 @@ from unittest.mock import patch
 
 from clipman import keybindings
 
-# Probe for real GTK / Gdk so the TestKeyvalToBinding class can skip
-# cleanly when running on a stock CI image without the typelibs. We do
-# NOT mutate sys.modules from these tests — previous iterations stubbed
-# ``gi`` in setUp and ``addCleanup``-restored a captured snapshot, but
-# the snapshot was taken AFTER the stubs were already installed so
-# tearDown left the stub in place and leaked it into every subsequent
-# test module (test_window.py errored with AttributeError: 'module'
-# object has no attribute 'require_version'). Skipping is simpler and
-# safer than mock-patching sys.modules.
+# Probe for the Gdk typelib so TestKeyvalToBinding skips cleanly without
+# it. Never stub sys.modules here: a leaked stub breaks later modules.
 try:
     import importlib
 
     import gi
     gi.require_version("Gdk", "4.0")
-    # Touching the attribute is the actual typelib probe: importing
-    # ``gi.repository`` succeeds even when the Gdk typelib is missing,
-    # but the attribute lookup raises in that case. Using importlib
-    # avoids binding an unused name (CodeQL py/unused-import fires on
-    # ``from gi.repository import Gdk as _RealGdk`` even with a ruff
-    # suppression comment).
-    importlib.import_module("gi.repository").Gdk
+    # Import the submodule, not an attribute of gi.repository, so the
+    # probe does not depend on test import order.
+    importlib.import_module("gi.repository.Gdk")
     _HAS_GDK = True
 except (ImportError, ValueError, AttributeError, RuntimeError):
     _HAS_GDK = False

@@ -28,6 +28,12 @@ Sponsor = "https://github.com/sponsors/MohammedEl-sayedAhmed"
 [project.scripts]
 clipman = "clipman.clipman:main"
 
+[project.optional-dependencies]
+lint = ["ruff==0.15.13"]
+# PyGObject cap: CI builds it from source against noble's GLib 2.80; bump deliberately.
+test = ["pytest==9.1.1", "PyGObject>=3.46,<3.59", "dbus-python>=1.3"]
+dev = ["clipman-clipboard[lint,test]"]
+
 [build-system]
 requires = ["setuptools>=68.0"]
 build-backend = "setuptools.build_meta"
