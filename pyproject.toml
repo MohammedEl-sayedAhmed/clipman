@@ -26,7 +26,7 @@ Issues = "https://github.com/MohammedEl-sayedAhmed/clipman/issues"
 Sponsor = "https://github.com/sponsors/MohammedEl-sayedAhmed"
 
 [project.scripts]
-clipman = "clipman.clipman:main"
+clipman = "clipman.cli:main"
 
 [project.optional-dependencies]
 lint = ["ruff==0.15.13"]
@@ -41,6 +41,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["clipman*"]
 
+[tool.setuptools.package-data]
+clipman = ["style.css"]
+
 [tool.ruff]
 target-version = "py310"
 
@@ -49,3 +52,5 @@ target-version = "py310"
 # which legitimately puts those imports below the require_version() call.
 "clipman/app.py" = ["E402"]
 "clipman/window.py" = ["E402"]
+# The checkout shim puts the project root on sys.path before importing.
+"clipman.py" = ["E402"]
