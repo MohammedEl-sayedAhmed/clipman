@@ -190,6 +190,18 @@ All notable changes to Clipman are documented in this file.
   from `ubuntu-latest` to the pinned `ubuntu-24.04`. Issue templates use
   the `type:bug` and `type:feature` labels that `labels.yml` defines.
 
+### Fixed — install and uninstall scripts
+
+- `install.sh` replaced GNOME's whole "toggle message tray" shortcut
+  list with `['<Super>m']` to free Super+V. It now removes only
+  `<Super>v` and keeps the user's other keys. The original list is saved
+  so `uninstall.sh` can put it back; before, uninstall reset the key to
+  GNOME's default.
+- `install.sh` installed the icon but no desktop entry, so the Clipman
+  window had no name or icon in the dash and in Alt+Tab. It now installs
+  `com.clipman.Clipman.desktop` (with the install path filled in) into
+  `~/.local/share/applications`; `uninstall.sh` removes it.
+
 ### Security — GNOME Shell extension (metadata version 8)
 
 - The extension's D-Bus methods (`SimulatePaste`, `MoveWindowToCursor`,

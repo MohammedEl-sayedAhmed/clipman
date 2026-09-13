@@ -7,6 +7,7 @@ EXTENSION_UUID="clipman@clipman.com"
 EXTENSION_DIR="$HOME/.local/share/gnome-shell/extensions/$EXTENSION_UUID"
 SYSTEMD_DIR="$HOME/.config/systemd/user"
 ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+APPS_DIR="$HOME/.local/share/applications"
 
 echo "=== Uninstalling Clipman ==="
 
@@ -47,16 +48,24 @@ print(keys)
     gsettings reset org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CLIPMAN_KEY_PATH name 2>/dev/null || true
     gsettings reset org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CLIPMAN_KEY_PATH command 2>/dev/null || true
     gsettings reset org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:$CLIPMAN_KEY_PATH binding 2>/dev/null || true
-    # Restore Super+V to GNOME's message tray
-    gsettings reset org.gnome.shell.keybindings toggle-message-tray 2>/dev/null || true
-    echo "  Keybinding removed. Super+V restored to GNOME message tray."
+    # Give Super+V back to GNOME's message tray: the list install.sh saved
+    # if there is one, otherwise GNOME's default.
+    if [ -f "$DATA_DIR/toggle-message-tray.orig" ]; then
+        gsettings set org.gnome.shell.keybindings toggle-message-tray \
+            "$(cat "$DATA_DIR/toggle-message-tray.orig")" 2>/dev/null || true
+        rm -f "$DATA_DIR/toggle-message-tray.orig"
+    else
+        gsettings reset org.gnome.shell.keybindings toggle-message-tray 2>/dev/null || true
+    fi
+    echo "  Keybinding removed. Super+V given back to GNOME's message tray."
 else
     echo "  No keybinding found."
 fi
 
-# Step 5: Remove app icon
-echo "[5/6] Removing application icon..."
-rm -f "$ICON_DIR/com.clipman.Clipman.svg"
+# Step 5: Remove app icon and desktop entry
+echo "[5/6] Removing application icon and desktop entry..."
+rm -f "$ICON_DIR/com.clipman.Clipman.svg" "$APPS_DIR/com.clipman.Clipman.desktop"
+update-desktop-database "$APPS_DIR" 2>/dev/null || true
 
 # Step 6: Remove data (ask first)
 echo "[6/6] Data cleanup..."
