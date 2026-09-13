@@ -91,6 +91,16 @@
         </ul>
       </description>
     </release>
+    <release version="1.0.6" date="2026-05-20">
+      <description>
+        <p>Catppuccin theme polish, snap-store auto-publish workflow, popup stability fixes.</p>
+      </description>
+    </release>
+    <release version="1.0.5" date="2026-05-20">
+      <description>
+        <p>Sensitive-data detection improvements and refreshed Catppuccin palettes.</p>
+      </description>
+    </release>
     <release version="1.0.4" date="2026-02-28">
       <description>
         <p>Fix D-Bus mainloop race that caused toggle to become unresponsive.</p>

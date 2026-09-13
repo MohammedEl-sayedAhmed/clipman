@@ -25,7 +25,7 @@ is the final decision-maker on architecture, scope, and dependencies.
   ADR in `docs/adr/` before or alongside the change that implements
   them. See `docs/adr/README.md` for the existing 10.
 - **Versioning** follows the policy recorded in
-  [ADR 0010](docs/adr/0010-versioning-policy.md): SemVer 2.0.0 with
+  [ADR 0011](docs/adr/0011-versioning-policy-refresh.md): SemVer 2.0.0 with
   clipman-specific MAJOR triggers.
 
 ## Where to raise concerns

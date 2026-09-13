@@ -5,7 +5,9 @@
  * libadwaita widget or the equivalent CSS selector under GTK4's CSS
  * engine. See docs/design/index.html for the libadwaita component map.
  *
- * Palette: Catppuccin (https://catppuccin.com) — Mocha (dark) + Latte (light).
+ * Palette: Catppuccin Mocha (dark) + warm stone (light). The light side is
+ * deliberately NOT Catppuccin Latte: its muted text fails WCAG AA on white.
+ * See body.theme-light below.
  * Default is dark. Add class="theme-light" to <body> for light theme.
  */
 

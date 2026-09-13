@@ -10,15 +10,17 @@ on `main`.
 | Workflow | File | Triggers | Purpose | Required check on `main`? |
 |----------|------|----------|---------|---------------------------|
 | Baseline guard | `baseline-guard.yml` | `push` to `security-baseline` branch | Auto-reverts unauthorized pushes to the security-baseline branch and opens a high-priority security issue; the branch is meant to be written only by the `update-baseline` job in `codeql.yml`. | No (operates on a side branch) |
+| Delete merged branch | `delete-merged-branch.yml` | `pull_request` `closed` | Deletes the head branch of a merged same-repo pull request. GitHub's repository-level auto-delete does not fire for pull requests merged by the Actions auto-merge queue, so this closes that gap. It skips forks and refuses to delete the default branch. | No |
 | CodeQL | `codeql.yml` | `push` to `main`, `pull_request` to `main`, weekly cron (`27 4 * * 1`), `workflow_dispatch` | Runs `security-and-quality` CodeQL queries for Python and JavaScript; on PRs ratchets against the `security-baseline` branch; on push to `main` rebuilds the baseline from the fresh SARIF. | Yes — `Analyze (python)` and `Analyze (javascript)` |
 | Dependency review | `dependency-review.yml` | `pull_request` to `main` | Fails the PR on high-severity vulnerabilities or disallowed licenses introduced by dependency changes. | No (informational; no contexts on protection ruleset) |
 | Auto-label PR | `labeler.yml` | `pull_request_target` to `main` | Applies path-based labels from `.github/labeler.yml` so triage knows which area a PR touches. | No |
 | Sync labels | `labels.yml` | `push` to `main` touching `.github/labels.yml`, `workflow_dispatch` | Reconciles repository labels with the declarative `.github/labels.yml` source of truth. | No (push-only) |
 | Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests scripts clipman.py`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`, `.githooks/`). | Yes — `Python (ruff)` and `Shell (shellcheck)` |
+| Refresh marketing numbers | `refresh-numbers.yml` | Daily cron (`0 6 * * *`), `workflow_dispatch`, `push` to `main` touching its own paths | Fetches PyPI and GNOME Extensions counts on the runner, writes `docs/_data/numbers.json` and the self-hosted star-history SVGs, then opens an auto-merge pull request. Authenticates with `NUMBERS_TOKEN` so that pull request gets its required checks. | No |
 | Release | `release.yml` | `push` of tag matching `v*.*.*`, `workflow_dispatch` | End-to-end release pipeline: pre-flight version checks, matrix tests, builds (PyPI, snap, .deb/.rpm, AppImage, extension bundle), and publishes to PyPI, Snap Store, AUR, and GitHub Releases. | No (tag-triggered only) |
 | Scorecard | `scorecard.yml` | `push` to `main`, weekly cron (`37 4 * * 1`), `branch_protection_rule` | OSSF Scorecard supply-chain analysis; uploads SARIF to the GitHub Security tab and publishes results. | No |
 | Secret scan | `secret-scan.yml` | `push` to `main`, `pull_request` to `main` | Runs `gitleaks` over full git history to catch committed credentials. | Yes — `gitleaks` |
-| Snap refresh | `snap-refresh.yml` | Weekly cron (`0 4 * * 1`), `workflow_dispatch`, `push`/`pull_request` to `main` touching snap-relevant paths | Rebuilds the snap to pick up Ubuntu archive security updates; can publish to the Snap Store on the scheduled run. See ADR 0009. | No |
+| Snap refresh | `snap-refresh.yml` | Weekly cron (`0 4 * * 1`), `workflow_dispatch`, `push`/`pull_request` to `main` touching snap-relevant paths | Rebuilds the snap to pick up Ubuntu archive security updates. The scheduled run publishes every channel: edge from `main`, and beta, candidate and stable from the latest release tag. See ADR 0012. | No |
 | Tests | `test.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh test` (pytest under `xvfb-run` with `CLIPMAN_REQUIRE_GTK4=1`) across the Python 3.10 / 3.11 / 3.12 matrix on `ubuntu-24.04`; system packages come from `scripts/deps.sh`. | Yes — `test (3.10)`, `test (3.11)`, `test (3.12)` |
 
 The remaining required context on `main` is `review`, which is enforced
@@ -129,6 +131,7 @@ and PKGBUILD refresh), PR #39 (AUR auto-publish wiring).
 | (none — OIDC trusted publishing) | `publish-pypi` | Configured once at <https://pypi.org/manage/account/publishing/> against project `clipman-clipboard`, repo `clipman`, workflow `release.yml`, environment `pypi`. See ADR 0004. | n/a (no long-lived secret) | `publish-pypi` fails — investigate the trusted-publisher binding. |
 | `SNAPCRAFT_STORE_CREDENTIALS` | `publish-snap` in `release.yml`, `publish` job in `snap-refresh.yml` | `snapcraft export-login --acls package_access,package_push,package_release,package_update` then paste into repo secrets. | Yearly. Snap Store emails a reminder roughly 30 days before expiry. | `publish-snap` and `snap-refresh` `publish` log `::warning::` and skip — the build artifact is still uploaded for manual review. |
 | `AUR_SSH_PRIVATE_KEY` | `publish-aur` in `release.yml` | ed25519 keypair; register the public key on the AUR maintainer account and paste the private key into repo secrets. | As needed (compromise, account change). | `publish-aur` logs a `::warning::` and skips the push; no release artifacts are affected. |
+| `NUMBERS_TOKEN` | `refresh` job in `refresh-numbers.yml` | Fine-grained PAT scoped to this repository with `contents: write` and `pull-requests: write`; paste it into the repository secrets. | On PAT expiry. The symptom is the numbers pull request stalling as `BLOCKED` with no checks reported. | Falls back to `GITHUB_TOKEN`, but GitHub never starts workflow runs for `GITHUB_TOKEN` events, so the auto-merge pull request gets zero required checks and never merges. |
 | `GITHUB_TOKEN` | Every workflow | Built-in; nothing to add. | Rotated per-job by GitHub. | n/a — token always present. Each workflow declares the minimum `permissions:` block it needs (deny-by-default at the workflow level). |
 
 To reconfirm the exact set of secret names declared in the workflows:
@@ -137,8 +140,9 @@ To reconfirm the exact set of secret names declared in the workflows:
 grep -RhoE "secrets\.[A-Z_]+" .github/workflows/ | sort -u
 ```
 
-As of v1.0.6 that returns `secrets.AUR_SSH_PRIVATE_KEY`,
-`secrets.GITHUB_TOKEN`, and `secrets.SNAPCRAFT_STORE_CREDENTIALS`.
+As of v1.2.1 that returns `secrets.AUR_SSH_PRIVATE_KEY`,
+`secrets.GITHUB_TOKEN`, `secrets.NUMBERS_TOKEN`, and
+`secrets.SNAPCRAFT_STORE_CREDENTIALS`.
 
 ## SHA-pinning policy
 
@@ -287,4 +291,5 @@ Cross-references:
 - [ADR 0004 — PyPI trusted publishing via OIDC](adr/0004-pypi-trusted-publishing-oidc.md)
 - [ADR 0006 — Solo-friendly branch protection](adr/0006-solo-friendly-branch-protection.md)
 - [ADR 0008 — Ratchet fingerprint strategy](adr/0008-ratchet-fingerprint-strategy.md)
-- [ADR 0009 — Weekly snap rebuild cadence](adr/0009-snap-rebuild-cadence.md)
+- [ADR 0012 — Snap on the GNOME extension, with an all-channel weekly refresh](adr/0012-snap-gnome-extension-and-all-channel-refresh.md)
+  (supersedes [ADR 0009](adr/0009-snap-rebuild-cadence.md))

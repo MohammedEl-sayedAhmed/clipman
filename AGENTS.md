@@ -50,7 +50,7 @@ specific assistant.
 - Full suite: `scripts/dev.sh test` — identical to CI: pytest under
   `xvfb-run -a` with `CLIPMAN_REQUIRE_GTK4=1`, falling back to
   `unittest discover -s tests` when pytest is not importable. Extra
-  arguments go to the runner (`scripts/dev.sh test -k database`). 331 tests.
+  arguments go to the runner (`scripts/dev.sh test -k database`). 375 tests.
   The `test` extra caps PyGObject below 3.59: CI builds it from source
   against noble's GLib 2.80, so bump the cap deliberately.
 - Lint: `scripts/dev.sh lint` = `ruff check clipman tests scripts clipman.py` +
@@ -160,5 +160,5 @@ specific assistant.
 
 Python 3.10–3.12 · GNOME Shell 45–50 (app baseline: Ubuntu 24.04+/GNOME 46)
 · Wayland-native. Keep README badges, `README` requirements,
-ADR-0010, `SECURITY.md`, and `extension/metadata.json` in agreement when
+ADR-0011, `SECURITY.md`, and `extension/metadata.json` in agreement when
 this changes.

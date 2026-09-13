@@ -39,7 +39,7 @@
       "description": "Clipman is an open-source, Wayland-native clipboard history manager for Ubuntu/GNOME and any compositor with wl-clipboard. Press Super+V to browse, search, pin and paste from a local SQLite-backed history. Privacy is built in: incognito mode pauses recording, sensitive data (passwords, tokens, cards) is auto-cleared after 30 seconds, and nothing leaves the machine.",
       "url": "https://mohammedel-sayedahmed.github.io/clipman/",
       "downloadUrl": "https://github.com/MohammedEl-sayedAhmed/clipman",
-      "softwareVersion": "1.2.0",
+      "softwareVersion": "1.2.1",
       "programmingLanguage": "Python",
       "license": "https://opensource.org/licenses/Apache-2.0",
       "isAccessibleForFree": true,
@@ -70,7 +70,7 @@
       "@type": "HowTo",
       "name": "Install and use Clipman",
       "step": [
-        { "@type": "HowToStep", "name": "Install", "text": "Run `sudo snap install clipman` (Ubuntu/GNOME) or `pipx install clipman-clipboard` (any distro)." },
+        { "@type": "HowToStep", "name": "Install", "text": "Run `sudo snap install clipman` (Ubuntu/GNOME) or `pipx install --system-site-packages clipman-clipboard` (any distro)." },
         { "@type": "HowToStep", "name": "Activate", "text": "Log out and back in once so the GNOME Shell extension registers, then run `./install.sh` from the source checkout if you're not on snap." },
         { "@type": "HowToStep", "name": "Summon", "text": "Press Super+V from anywhere to open the popup." },
         { "@type": "HowToStep", "name": "Use", "text": "Click a row to paste it into the focused window. Pin items you want to keep. Save snippets with Ctrl+N. Toggle incognito with the eye icon." }
@@ -1389,7 +1389,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
       </div>
     </div>
     <div class="legal">
-      <span>© 2026 Mohammed El-sayed Ahmed · <span class="mono">v1.2.0</span></span>
+      <span>© 2026 Mohammed El-sayed Ahmed · <span class="mono">v1.2.1</span></span>
       <span class="mono">cmd-K • super+V • <a href="https://github.com/MohammedEl-sayedAhmed/clipman">github</a></span>
     </div>
   </div>
@@ -1449,8 +1449,8 @@ footer.site .legal .mono { font-size: 0.78rem; }
     const TABS = {
         snap:   { cmd: 'sudo snap install clipman',
                   hint: '<a href="https://snapcraft.io/clipman" style="display:inline-block;vertical-align:middle;margin-right:14px;"><img src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" alt="Get it from the Snap Store" height="40"></a>Log out and back in once to activate the GNOME Shell extension, then press <span class="mono">Super+V</span>.' },
-        pypi:   { cmd: 'pipx install clipman-clipboard',
-                  hint: 'After install, run <span class="mono">./install.sh</span> from a source checkout to register the GNOME Shell extension and the keybinding. · <a href="https://pypi.org/project/clipman-clipboard/">pypi.org/project/clipman-clipboard</a>' },
+        pypi:   { cmd: 'pipx install --system-site-packages clipman-clipboard',
+                  hint: 'The <span class="mono">--system-site-packages</span> flag is required so the venv can see the distro <span class="mono">python3-gi</span> and GTK4 bindings. After install, run <span class="mono">./install.sh</span> from a source checkout to register the GNOME Shell extension and the keybinding. · <a href="https://pypi.org/project/clipman-clipboard/">pypi.org/project/clipman-clipboard</a>' },
         aur:    { cmd: 'yay -S clipman-clipboard   # or: paru -S clipman-clipboard',
                   hint: 'AUR package builds and registers everything for you. · <a href="https://aur.archlinux.org/packages/clipman-clipboard">aur.archlinux.org/packages/clipman-clipboard</a>' },
         deb:    { cmd: 'sudo apt install ./clipman_*_all.deb',

@@ -15,13 +15,18 @@ new maintainer knows what they are about to invoke.
 
 - Bump every version-bearing file in lockstep with
   `scripts/bump-version.sh X.Y.Z`. The script rewrites `pyproject.toml`,
-  `snap/snapcraft.yaml`, `aur/PKGBUILD`, and `clipman/__init__.py` in a
-  single pass so no channel drifts.
+  `clipman/_version.py`, `snap/snapcraft.yaml`, `flathub/*.json`,
+  `aur/PKGBUILD`, `CITATION.cff`, and `data/*.metainfo.xml` in a single
+  pass so no channel drifts. The extension's `metadata.json` integer is
+  left alone on purpose — it counts the D-Bus contract, not the
+  product version.
 - Promote the `[Unreleased]` block in `CHANGELOG.md` to
   `[X.Y.Z] - YYYY-MM-DD` and add a fresh empty `[Unreleased]` block on
   top.
-- Commit the bump, push `main`, then create and push the `vX.Y.Z` tag.
-  The tag push is the trigger.
+- Land the bump as a squash-merged release PR, then create the `vX.Y.Z`
+  tag through the GitHub API (`gh api .../git/refs`) on the merged
+  commit. The identity pre-push hook rejects a locally pushed tag that
+  points at a squash commit. Creating the tag is the trigger.
 - `.github/workflows/release.yml` fires on the tag and, as of v1.0.6+,
   publishes to PyPI, the Snap Store `stable` channel, AUR, and the
   GitHub Release end-to-end. The full job DAG, secrets matrix, and
@@ -38,12 +43,12 @@ Per-channel auth, so you know what to rotate when something expires:
 - **PyPI** — OIDC trusted publishing, no token stored. The trusted
   publisher binding (project `clipman-clipboard`, workflow
   `release.yml`, environment `pypi`) is configured once per ADR 0004
-  (`docs/adr/0004-pypi-trusted-publishing.md`).
+  (`docs/adr/0004-pypi-trusted-publishing-oidc.md`).
 - **Snap Store** — `SNAPCRAFT_STORE_CREDENTIALS` repository secret.
   Token expires yearly; the Snap Store emails a reminder roughly 30
   days out.
 - **AUR** — an SSH-key secret added with PR #39 lets the workflow
-  push to `ssh://aur@aur.archlinux.org/clipman.git`. Rotate by
+  push to `ssh://aur@aur.archlinux.org/clipman-clipboard.git`. Rotate by
   regenerating the keypair, registering the new public key on the AUR
   account, and updating the repository secret.
 - **GitHub Release** — the workflow's default `GITHUB_TOKEN` (no
@@ -59,9 +64,11 @@ Per-channel auth, so you know what to rotate when something expires:
   regardless of the support window above — a critical fix lands on
   every still-supported MINOR, and a sufficiently severe issue may
   trigger an out-of-band patch on an otherwise-EOL line.
-- Currently supported lines (as of v1.0.6):
-  - **1.0.x** — full support (latest MINOR; there is no previous
-    MINOR yet because 1.0 is the only released MINOR line).
+- Currently supported lines (as of v1.2.1), matching the table in
+  `SECURITY.md`:
+  - **1.2.x** — full support (latest MINOR).
+  - **1.1.x** — security backports only, within the window above.
+  - **1.0.x** and older — unsupported.
 
 ## Deprecation policy
 
@@ -77,7 +84,7 @@ Per-channel auth, so you know what to rotate when something expires:
 - D-Bus surface deprecations follow the same one-MINOR-warning rule,
   with a try/except fallback for the older signature held for one
   MINOR series. ADR 0005
-  (`docs/adr/0005-dbus-simulate-paste-mode-arg.md`) set the precedent:
+  (`docs/adr/0005-paste-mode-as-dbus-arg.md`) set the precedent:
   the daemon retries the no-arg `SimulatePaste()` call when the v5
   `SimulatePaste(s mode)` call raises against a v4 extension still
   loaded in Shell.
@@ -104,9 +111,9 @@ users will skip MINOR releases, so:
 
 - Release runbook (literal commands): `docs/release-checklist.md`
 - Release pipeline reference (job DAG, secrets, SHA-pin policy): `docs/ci-cd.md`
-- Versioning policy: `docs/adr/0010-versioning-policy.md` (added in
-  the parallel docs overhaul)
-- D-Bus deprecation precedent: `docs/adr/0005-dbus-simulate-paste-mode-arg.md`
-- PyPI publishing model: `docs/adr/0004-pypi-trusted-publishing.md`
+- Versioning policy: `docs/adr/0011-versioning-policy-refresh.md`
+  (supersedes `0010-versioning-policy.md`)
+- D-Bus deprecation precedent: `docs/adr/0005-paste-mode-as-dbus-arg.md`
+- PyPI publishing model: `docs/adr/0004-pypi-trusted-publishing-oidc.md`
 - Contributor-side workflow: `CONTRIBUTING.md`
 - Security disclosure window: `SECURITY.md`

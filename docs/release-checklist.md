@@ -29,8 +29,8 @@ git reset --hard origin/main
 
 # 2. Bump versions in lockstep.
 ./scripts/bump-version.sh 1.0.5
-# This touches pyproject.toml, snap/snapcraft.yaml, aur/PKGBUILD,
-# and clipman/__init__.py.
+# This touches pyproject.toml, clipman/_version.py, snap/snapcraft.yaml,
+# flathub/*.json, aur/PKGBUILD, CITATION.cff, and data/*.metainfo.xml.
 
 # 3. Promote the Unreleased section in CHANGELOG.md.
 #    Open CHANGELOG.md and rename `## [Unreleased]` to
@@ -41,18 +41,24 @@ $EDITOR CHANGELOG.md
 # 4. Verify locally (lint, then the suite).
 scripts/dev.sh check
 
-# 5. Commit the bump.
-git add pyproject.toml snap/snapcraft.yaml aur/PKGBUILD \
-        clipman/__init__.py CHANGELOG.md
+# 5. Commit the bump on a branch and open a release PR.
+git checkout -b release/1.0.5
+git add pyproject.toml clipman/_version.py snap/snapcraft.yaml \
+        flathub aur/PKGBUILD CITATION.cff data CHANGELOG.md
 git commit -m "chore: bump to 1.0.5"
-git push origin main
+git push -u origin release/1.0.5
+gh pr create --fill
+# Squash-merge it once the checks pass, then update main.
+git checkout main && git pull --ff-only
 
-# 6. Tag and push. This is the trigger.
-git tag -s v1.0.5 -m "v1.0.5"   # or unsigned: git tag v1.0.5
-git push origin v1.0.5
+# 6. Create the tag through the GitHub API. This is the trigger.
+#    Never `git push --tags`: the identity pre-push hook rejects a tag
+#    that points at one of GitHub's squash commits.
+gh api repos/MohammedEl-sayedAhmed/clipman/git/refs \
+    -f ref=refs/tags/v1.0.5 -f sha="$(git rev-parse origin/main)"
 ```
 
-The tag push fires `release.yml`. Watch the run in the Actions tab —
+Creating the tag fires `release.yml`. Watch the run in the Actions tab —
 each stage either annotates the failure or moves on:
 
 1. **pre-flight** — confirms `pyproject.toml` and `snap/snapcraft.yaml`
@@ -64,13 +70,19 @@ each stage either annotates the failure or moves on:
 6. **publish-snap** — releases to the `stable` channel.
 7. **bundle-extension** — `gnome-extensions pack` → versioned zip.
 8. **github-release** — creates the GH Release with all artifacts and
-   the auto-extracted CHANGELOG section as the body.
+   the auto-extracted CHANGELOG section as the body. It runs only when
+   every publish job before it succeeded.
+9. **publish-aur** — refreshes `aur/PKGBUILD` and `aur/.SRCINFO` with
+   `scripts/update-aur.sh` and pushes to
+   `ssh://aur@aur.archlinux.org/clipman-clipboard.git`. Skipped with a
+   warning when `AUR_SSH_PRIVATE_KEY` is unset.
 
 If a stage fails before publish, the tag is already on `origin` — you
 can:
 
-- Push a fix commit to `main`, delete the tag (`git push --delete
-  origin v1.0.5 && git tag -d v1.0.5`), retag.
+- Push a fix commit to `main`, delete the tag
+  (`gh api -X DELETE repos/MohammedEl-sayedAhmed/clipman/git/refs/tags/v1.0.5`),
+  then create it again through the API.
 - Or workflow-dispatch the release with the existing tag once main is
   green.
 
@@ -82,8 +94,6 @@ These steps aren't automatable today:
   `clipman-extension-v1.0.5.zip` from the new GH Release and upload it
   at https://extensions.gnome.org/upload/. EGO has no programmatic
   upload API.
-- **AUR** — bump `aur/PKGBUILD` (the bump script already did this) and
-  push to the AUR remote if you maintain a separate AUR repo.
 
 ## Verify the release publicly
 

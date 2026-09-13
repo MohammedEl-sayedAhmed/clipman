@@ -58,7 +58,7 @@ DEFAULT_SENSITIVE_TIMEOUT = 30
 # Catppuccin palette overrides for libadwaita @-tokens. Mirrors
 # docs/design/tokens.css so the live app matches the marketing mockup
 # regardless of the user's system Adwaita accent. Values are the
-# canonical Catppuccin Mocha (dark) and Latte (light) palettes.
+# canonical Catppuccin Mocha (dark) and the warm-stone light palette.
 _CATPPUCCIN_MOCHA = {
     "window_bg_color":     "#1e1e2e",
     "view_bg_color":       "#1e1e2e",
