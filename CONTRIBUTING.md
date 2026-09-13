@@ -78,7 +78,7 @@ scripts/dev.sh lint       # or: make lint  — ruff + shellcheck
 scripts/dev.sh check      # or: make check — lint, then test
 ```
 
-`lint` runs `ruff check clipman tests scripts clipman.py` and `shellcheck --severity=warning install.sh uninstall.sh launcher.sh scripts/*.sh`, the same scopes as CI; `scripts/dev.sh ruff` and `scripts/dev.sh shellcheck` run either half alone. Ruff is pinned in the `lint` extra so the local version matches CI.
+`lint` runs `ruff check clipman tests scripts clipman.py` and `shellcheck --severity=warning` over `install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh` and the `.githooks/` scripts, the same scopes as CI; `scripts/dev.sh ruff` and `scripts/dev.sh shellcheck` run either half alone. Ruff is pinned in the `lint` extra so the local version matches CI.
 
 - Ruff config lives in `pyproject.toml`. The per-file `E402` ignores in `clipman/app.py` and `clipman/window.py` are intentional — `gi.require_version()` legitimately must precede the `from gi.repository import ...` calls.
 - Run shellcheck whenever you touch a shell script.
@@ -205,7 +205,7 @@ out.
 - **What reviewers check.**
   - Tests pass: `scripts/dev.sh test` (the same command CI runs).
   - `scripts/dev.sh ruff` clean (`ruff check clipman tests scripts clipman.py`).
-  - `scripts/dev.sh shellcheck` clean if any shell script was touched (`--severity=warning` over `install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`).
+  - `scripts/dev.sh shellcheck` clean if any shell script was touched (`--severity=warning` over `install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh` and the `.githooks/` scripts).
   - User-visible change → `CHANGELOG.md` `[Unreleased]` entry.
   - Substantive architectural decision → ADR added under `docs/adr/` per ADR 0001.
   - D-Bus contract change (signature, new method, new arg) → `extension/metadata.json` `version` integer bumped per [ADR 0005](docs/adr/0005-paste-mode-as-dbus-arg.md).

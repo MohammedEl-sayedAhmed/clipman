@@ -116,6 +116,46 @@ contains_allowed_identity() {
     return 1
 }
 
+# Owner segment of a git remote URL: the path component right after the
+# host. Returns 1 for anything without a recognisable host (a local path,
+# say), so callers can fall back to the looser identity match.
+push_url_owner() {
+    local url="$1" rest
+    case "$url" in
+        *://*)
+            rest="${url#*://}"
+            rest="${rest#*@}"
+            ;;
+        *@*:*)
+            rest="${url#*@}"
+            rest="${rest/:/\/}"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+    case "$rest" in
+        */*) ;;
+        *) return 1 ;;
+    esac
+    rest="${rest#*/}"
+    [ -z "$rest" ] && return 1
+    printf '%s' "${rest%%/*}"
+}
+
+# Exact (case-insensitive) match of a repo owner against the allowlist.
+# Deliberately not a substring match: a repo named "<owner>-mirror" under
+# somebody else's account must not pass.
+is_allowed_owner() {
+    local owner="${1,,}" allow
+    [ -z "$owner" ] && return 1
+    for allow in "${HOOKS_ALLOW[@]}"; do
+        [ -z "$allow" ] && continue
+        [ "$owner" = "${allow,,}" ] && return 0
+    done
+    return 1
+}
+
 allowed_list_for_message() {
     local IFS=", "
     printf '%s' "${HOOKS_ALLOW[*]}"
@@ -132,24 +172,39 @@ allowed_list_for_message() {
 # repo accepts patches from the wider world. Plain-allowlist would reject
 # legitimate external co-authors.
 #
-# This function takes a more nuanced position: it returns 0 if the trailer
-# email is from a class of identities we KNOW are safe to surface — the
-# repo owner's allowlisted handles, GitHub's privacy-alias noreplies
-# (which are bound to a real GitHub account, so any leak there is
-# already that account's choice to expose), and the canonical bot
-# noreplies (dependabot, github-actions, etc).
+# This function therefore rejects only two classes, and lets every other
+# human through:
 #
-# Anything else — including human emails on personal/work domains — is
-# rejected. This forces commit messages to use the privacy-alias form
-# of an email rather than the raw domain, which is what GitHub itself
-# recommends in its "Setting your commit email address" docs.
+#   1. AI-assistant vendor domains. The footprint scanner already catches
+#      the common trailers by name; this covers the rest.
+#   2. Addresses that borrow an allowlisted handle without being the
+#      owner's GitHub privacy alias — someone else claiming to be the
+#      maintainer.
 #
-# Designed as a positive policy: there are no per-domain deny patterns
-# baked into this file, so the source doesn't track any specific
-# identity that we'd rather not appear in the repo.
+# An earlier version rejected every raw personal or work domain, to push
+# contributors towards the GitHub privacy-alias form. That contradicted
+# this repo's own test corpus, which requires outside contributors'
+# ``Signed-off-by`` and ``Reviewed-by`` trailers to pass, so the rule was
+# narrowed to the two cases above.
+
+# Vendor domains for AI assistants. Trailers from these never belong in
+# this repo's history.
+HOOKS_AI_DOMAINS=("anthropic.com" "openai.com" "deepmind.com")
+
 is_safe_trailer_email() {
     local email="${1,,}"
     [ -z "$email" ] && return 1
+
+    local domain="${email##*@}"
+    local local_part="${email%@*}"
+
+    # 1. AI-assistant vendor domains, including subdomains.
+    local ai
+    for ai in "${HOOKS_AI_DOMAINS[@]}"; do
+        if [ "$domain" = "$ai" ] || [[ "$domain" == *".$ai" ]]; then
+            return 1
+        fi
+    done
 
     # GitHub privacy-alias noreply addresses (any user, any bot).
     # Pattern: <numericid>+<login>@users.noreply.github.com  OR  <login>@users.noreply.github.com
@@ -162,19 +217,33 @@ is_safe_trailer_email() {
         return 0
     fi
 
-    # Allowlisted handles, matched against the local-part of the address
-    # (the bit before '@'). Same case-insensitive substring rule as
-    # contains_allowed_identity.
-    local local_part="${email%@*}"
+    # 2. An allowlisted handle outside the owner's privacy alias means
+    # someone is claiming the maintainer's identity on another domain.
     local allow
     for allow in "${HOOKS_ALLOW[@]}"; do
         [ -z "$allow" ] && continue
         [ "${#allow}" -lt 4 ] && continue
         if [[ "$local_part" == *"${allow,,}"* ]]; then
-            return 0
+            return 1
         fi
     done
 
+    return 0
+}
+
+# True when a trailer's display name claims an allowlisted handle that the
+# address does not back up — "Owner <someone-else@example.com>". The real
+# owner's trailers carry the handle in the address too, so they pass.
+borrows_allowed_handle() {
+    local name="${1,,}" local_part="${2,,}" allow
+    local_part="${local_part%@*}"
+    for allow in "${HOOKS_ALLOW[@]}"; do
+        [ -z "$allow" ] && continue
+        [ "${#allow}" -lt 4 ] && continue
+        if [[ "$name" == *"${allow,,}"* ]] && [[ "$local_part" != *"${allow,,}"* ]]; then
+            return 0
+        fi
+    done
     return 1
 }
 
@@ -187,7 +256,13 @@ scan_trailer_identities() {
     [ -f "$msg_path" ] || return 0
 
     local bad=0
-    while IFS=$'\t' read -r key value; do
+    # git interpret-trailers --parse prints "Key: value", not a tab-separated
+    # pair, so split on the first colon. Trailer keys never contain one.
+    local line key value
+    while IFS= read -r line; do
+        key="${line%%:*}"
+        value="${line#*:}"
+        value="${value#"${value%%[![:space:]]*}"}"
         # Only key types that may carry person identity. Skip purely
         # informational ones like "Closes:", "Refs:", "Fixes:".
         case "${key,,}" in
@@ -197,20 +272,21 @@ scan_trailer_identities() {
                 continue
                 ;;
         esac
-        # Extract <email> from "Name <email>" trailer values.
-        local email=""
+        # Split "Name <email>" into its two halves.
+        local email="" name=""
         if [[ "$value" =~ \<([^>]+)\> ]]; then
             email="${BASH_REMATCH[1]}"
+            name="${value%%<*}"
+            name="${name%"${name##*[![:space:]]}"}"
         else
             email="$value"
         fi
-        if ! is_safe_trailer_email "$email"; then
+        if ! is_safe_trailer_email "$email" || borrows_allowed_handle "$name" "$email"; then
             hook_error "trailer identity not allowed: ${key}: ${value}"
-            hook_detail "  This repo only allows trailers carrying:"
-            hook_detail "    - owner allowlist ($(allowed_list_for_message))"
-            hook_detail "    - GitHub privacy-alias noreplies (id+login@users.noreply.github.com)"
-            hook_detail "    - GitHub's web-flow merge identity (noreply@github.com)"
-            hook_detail "  Use the GitHub privacy-alias form of the email instead."
+            hook_detail "  Rejected because the address is either an AI-assistant"
+            hook_detail "  vendor domain, or borrows an allowlisted handle"
+            hook_detail "  ($(allowed_list_for_message)) without being that account's"
+            hook_detail "  GitHub privacy-alias address."
             bad=1
         fi
     done < <(parse_message_trailers "$msg_path")

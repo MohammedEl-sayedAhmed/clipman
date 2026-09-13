@@ -6,7 +6,7 @@
 #   scripts/dev.sh test [args]          the suite, exactly as CI runs it
 #   scripts/dev.sh lint                 ruff + shellcheck
 #   scripts/dev.sh ruff                 ruff check clipman tests scripts clipman.py
-#   scripts/dev.sh shellcheck           shellcheck on the repo's shell scripts
+#   scripts/dev.sh shellcheck           shellcheck on the shell scripts and git hooks
 #   scripts/dev.sh screenshot [args]    headless render (scripts/screenshot.py)
 #   scripts/dev.sh hooks-test           the git-hook footprint-scanner corpus
 #   scripts/dev.sh check                lint, then test
@@ -95,7 +95,9 @@ cmd_shellcheck() {
     if ! command -v shellcheck >/dev/null 2>&1; then
         die "shellcheck not found; run: scripts/deps.sh --lint --install (or scripts/dev.sh setup)"
     fi
-    shellcheck --severity=warning install.sh uninstall.sh launcher.sh scripts/*.sh
+    shellcheck --severity=warning install.sh uninstall.sh launcher.sh scripts/*.sh \
+        .githooks/commit-msg .githooks/pre-commit .githooks/pre-push \
+        .githooks/_lib.sh .githooks/_test.sh
 }
 
 cmd_lint() {
