@@ -1,9 +1,10 @@
 # Translating clipman
 
-clipman uses GNU gettext for translations. All user-visible strings
-in the UI (`clipman/window.py`) are wrapped with `_()` and collected
-into a single translation template at `po/clipman.pot` (currently 70
-translatable strings).
+clipman uses GNU gettext for translations. User-visible strings are
+wrapped with `_()` and collected into a single template at
+`po/clipman.pot`. The files scanned are listed in `po/POTFILES.in`:
+`edge_states.py`, `preferences.py`, `snippets_dialog.py` and
+`window.py`. The template currently holds 226 strings.
 
 This guide covers two audiences: translators adding a new language,
 and contributors who added new translatable strings in code. The
@@ -41,31 +42,35 @@ source-side conventions are summarised in `CONTRIBUTING.md` under
 
 ## Regenerating the translation template
 
-When you add a new `_("...")` call in code, regenerate the POT so
+When you add a new `_("...")` call in code, regenerate the template so
 translators see the new string:
 
 ```bash
-xgettext \
-    --from-code=UTF-8 \
-    --language=Python \
-    --keyword=_ \
-    --output=po/clipman.pot \
-    --files-from=po/POTFILES.in
+scripts/dev.sh i18n
 ```
 
-`po/POTFILES.in` currently lists `clipman/window.py` — the only file
-holding translatable strings today. Confirm the keyword (`_`) and the
-files-from list match what `po/POTFILES.in` expects before running.
-Commit the regenerated `clipman.pot` together with the code change
-that introduced the new strings — the POT diff is the translator's
-signal that work is needed.
+That runs `scripts/gen-pot.py`, which reads `po/POTFILES.in` and
+extracts with `pygettext`. `pygettext` ships with CPython, so no extra
+system package is needed. The header is rewritten afterwards, so the
+template is byte-identical between runs when the sources have not
+changed, and the diff shows only real string changes. The same command
+then compiles any `po/*.po` into `locale/`, which needs `msgfmt` from
+the `gettext` package (`scripts/deps.sh --i18n --install`).
+
+Add the file to `po/POTFILES.in` when a module grows its first `_()`
+call, and commit the regenerated `clipman.pot` together with the code
+change — the template diff is the translator's signal that work is
+needed.
 
 ## Source-side conventions
 
-- Import `_` from the `clipman` package: `from clipman import _`.
-  The gettext bootstrap lives in `clipman/__init__.py`, which binds
-  the `clipman` text domain to a `locale/` directory next to the
-  package root.
+- Import the translation function straight from the standard library:
+  `from gettext import gettext as _`. Do **not** write
+  `from clipman import _`: that points a submodule back at the package
+  root, which CodeQL reports as `py/cyclic-import` and the security
+  gate fails the pull request. `clipman/__init__.py` has already bound
+  the text domain by the time any submodule loads, so the plain import
+  picks up the right catalogue.
 - Wrap every user-visible string: `label.set_text(_("Search..."))`.
 - Use `.format(...)` for strings with variables — keep the
   placeholders inside the translatable string:
@@ -88,30 +93,22 @@ gettext.bindtextdomain("clipman", LOCALE_DIR)
 gettext.textdomain("clipman")
 ```
 
-At the moment **no part of the build actually compiles `.po` files
-into `.mo` files or installs them into that `locale/` directory**.
-`install.sh` does not run `msgfmt`; `snap/snapcraft.yaml`,
-`aur/PKGBUILD`, and `pyproject.toml` likewise have no locale install
-step. Until that
-gap is closed, `_()` is effectively a passthrough at runtime — the
-strings are wrapped and the POT is maintained, but end users will see
-English regardless of `LANG`.
+`install.sh` and `scripts/dev.sh i18n` both compile every
+`po/<lang>.po` into `locale/<lang>/LC_MESSAGES/clipman.mo`, so a source
+checkout picks up translations. Both steps are best effort: with no
+`.po` files, or without `msgfmt` installed, they print a line and carry
+on, and the app stays in English.
 
-Closing the gap will require, at minimum:
-
-- A `msgfmt` step that compiles each `po/<lang>.po` into
-  `locale/<lang>/LC_MESSAGES/clipman.mo` during install.
-- Mirroring that step in `install.sh` and in each packaging manifest
-  (snap, flatpak, AUR) so distributed builds carry the compiled
-  catalogues.
-
-Contributions that wire this up are welcome — once it lands, this
-section will be updated with the concrete commands.
+Still open: the packaged builds. `snap/snapcraft.yaml`, `aur/PKGBUILD`
+and `pyproject.toml` have no locale install step, so snap, AUR and pip
+users would see English even once a language is contributed. That is
+worth wiring up with the first `.po` file, not before — there is
+nothing to ship yet.
 
 ## Where to ask
 
 - Specific phrasing question on a string: open a GitHub Discussion in
   the [project's Discussions](https://github.com/MohammedEl-sayedAhmed/clipman/discussions).
-- Tooling problem with `xgettext`/`msginit`/`msgfmt`: open an issue
-  with the `kind:bug` template; include your gettext version
-  (`xgettext --version | head -1`).
+- Tooling problem with `msginit`/`msgfmt`: open an issue with the
+  bug template; include your gettext version
+  (`msgfmt --version | head -1`).

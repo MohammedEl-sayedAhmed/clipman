@@ -8,6 +8,7 @@
 #   scripts/dev.sh ruff                 ruff check clipman tests scripts clipman.py
 #   scripts/dev.sh shellcheck           shellcheck on the shell scripts and git hooks
 #   scripts/dev.sh screenshot [args]    headless render (scripts/screenshot.py)
+#   scripts/dev.sh i18n                 regenerate po/clipman.pot, compile po/*.po
 #   scripts/dev.sh hooks-test           the git-hook footprint-scanner corpus
 #   scripts/dev.sh check                lint, then test
 #   scripts/dev.sh help
@@ -110,6 +111,15 @@ cmd_lint() {
     log "lint ok"
 }
 
+cmd_i18n() {
+    local python
+    python=$(resolve_python)
+    "$python" "$ROOT/scripts/gen-pot.py"
+    # shellcheck source=scripts/deps.sh
+    . "$ROOT/scripts/deps.sh"
+    clipman_build_catalogues "$ROOT"
+}
+
 cmd_screenshot() {
     local py
     py=$(resolve_python)
@@ -139,6 +149,7 @@ main() {
         lint)       cmd_lint ;;
         ruff)       cmd_ruff ;;
         shellcheck) cmd_shellcheck ;;
+        i18n)       cmd_i18n ;;
         screenshot) cmd_screenshot "$@" ;;
         hooks-test) cmd_hooks_test ;;
         check)      cmd_check "$@" ;;

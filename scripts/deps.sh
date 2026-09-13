@@ -4,7 +4,8 @@
 # functions, or run it as a CLI (see --help).
 # shellcheck disable=SC2034  # arrays are read through a nameref
 
-# Package lists: runtime (app), test (Xvfb + build headers), lint (shellcheck)
+# Package lists: runtime (app), test (Xvfb + build headers), lint (shellcheck),
+# i18n (gettext, for compiling translation catalogues)
 
 CLIPMAN_DEPS_RUNTIME_APT=(
     wl-clipboard wtype python3-gi python3-dbus
@@ -33,6 +34,10 @@ CLIPMAN_DEPS_TEST_PACMAN=(
 CLIPMAN_DEPS_LINT_APT=(shellcheck)
 CLIPMAN_DEPS_LINT_DNF=(ShellCheck)
 CLIPMAN_DEPS_LINT_PACMAN=(shellcheck)
+
+CLIPMAN_DEPS_I18N_APT=(gettext)
+CLIPMAN_DEPS_I18N_DNF=(gettext)
+CLIPMAN_DEPS_I18N_PACMAN=(gettext)
 
 # primary=fallback, consulted with `apt-cache policy` for the apt backend.
 declare -A CLIPMAN_DEPS_ALTERNATIVES_APT=(
@@ -105,15 +110,15 @@ _clipman_deps_raw_list() {
     printf '%s\n' "${_ref[@]}"
 }
 
-# Expand set aliases (dev -> runtime test lint); one set name per line.
+# Expand set aliases (dev -> runtime test lint i18n); one set name per line.
 _clipman_deps_expand_sets() {
     local set
     for set in "$@"; do
         case "$set" in
-            runtime|test|lint) echo "$set" ;;
-            dev) printf '%s\n' runtime test lint ;;
+            runtime|test|lint|i18n) echo "$set" ;;
+            dev) printf '%s\n' runtime test lint i18n ;;
             *)
-                _clipman_deps_log "unknown set '$set' (expected runtime, test, lint or dev)"
+                _clipman_deps_log "unknown set '$set' (expected runtime, test, lint, i18n or dev)"
                 return 1
                 ;;
         esac
@@ -210,7 +215,7 @@ _clipman_deps_run_privileged() {
 #######################################
 # Resolve one set's package list for a package manager.
 # Arguments:
-#   set  runtime, test, lint or dev
+#   set  runtime, test, lint, i18n or dev
 #   pm   apt, dnf or pacman (default: detected)
 # Outputs:
 #   Writes the space-separated list to stdout.
@@ -233,7 +238,7 @@ clipman_deps_list() {
 #######################################
 # List the packages of one set that are not installed.
 # Arguments:
-#   set  runtime, test, lint or dev
+#   set  runtime, test, lint, i18n or dev
 #   pm   apt, dnf or pacman (default: detected)
 # Outputs:
 #   Writes the missing packages, space-separated, to stdout.
@@ -356,13 +361,14 @@ clipman_deps_install() {
 
 _clipman_deps_usage() {
     cat <<'EOF'
-usage: scripts/deps.sh [--runtime|--test|--lint|--dev]... [--pm apt|dnf|pacman]
+usage: scripts/deps.sh [--runtime|--test|--lint|--i18n|--dev]... [--pm apt|dnf|pacman]
                        [--print|--check|--install] [--yes] [--no-update]
 
-Sets (repeatable; default --dev = runtime + test + lint):
+Sets (repeatable; default --dev = runtime + test + lint + i18n):
   --runtime   packages the app needs to run
   --test      Xvfb plus the headers needed to build PyGObject / dbus-python
   --lint      shellcheck
+  --i18n      gettext (msgfmt, for translation catalogues)
   --dev       all of the above
 
 Actions (default --print):
@@ -385,7 +391,7 @@ _clipman_deps_main() {
     local action="" pm=""
     while [ "$#" -gt 0 ]; do
         case "$1" in
-            --runtime|--test|--lint|--dev) sets+=("${1#--}") ;;
+            --runtime|--test|--lint|--i18n|--dev) sets+=("${1#--}") ;;
             --print|--check|--install)
                 if [ -n "$action" ] && [ "$action" != "${1#--}" ]; then
                     _clipman_deps_log "conflicting actions --$action and $1"
@@ -466,3 +472,34 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     set -euo pipefail
     _clipman_deps_main "$@"
 fi
+
+#######################################
+# Compile po/*.po into locale/<lang>/LC_MESSAGES/clipman.mo.
+# Needs msgfmt (the gettext package). Without it, or with no .po files,
+# this is a no-op and the app stays in English.
+# Globals:
+#   None
+# Arguments:
+#   Repository root.
+# Outputs:
+#   One line per compiled catalogue.
+#######################################
+clipman_build_catalogues() {
+    local root="${1:-.}"
+    local po lang target
+    if ! compgen -G "$root/po/*.po" >/dev/null; then
+        return 0
+    fi
+    if ! command -v msgfmt >/dev/null 2>&1; then
+        echo "  Skipping translations: msgfmt not found (install gettext)."
+        return 0
+    fi
+    for po in "$root"/po/*.po; do
+        lang=$(basename "$po" .po)
+        target="$root/locale/$lang/LC_MESSAGES"
+        mkdir -p "$target"
+        if msgfmt "$po" -o "$target/clipman.mo"; then
+            echo "  Translations: $lang"
+        fi
+    done
+}

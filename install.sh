@@ -59,6 +59,10 @@ sed -e "s|CLIPMAN_PATH_PLACEHOLDER|$SCRIPT_DIR|g" -e '/^X-GNOME-Autostart-enable
     "$SCRIPT_DIR/data/com.clipman.Clipman.desktop" > "$APPS_DIR/com.clipman.Clipman.desktop"
 update-desktop-database "$APPS_DIR" 2>/dev/null || true
 
+# Translations, when a language has been contributed. Needs msgfmt from
+# the gettext package; without it the app stays in English.
+clipman_build_catalogues "$SCRIPT_DIR"
+
 # Step 5: Register Super+V keybinding
 echo "[5/6] Registering Super+V keyboard shortcut..."
 

@@ -225,6 +225,42 @@ All notable changes to Clipman are documented in this file.
   failing case out of 43 to 51 of 51, with new cases for impersonation,
   an AI vendor domain and the push-URL owner match.
 
+### Fixed — translations and the snippets editor
+
+- Translation extraction covered one file. `po/POTFILES.in` listed only
+  `window.py`, so 155 of the 226 translatable strings never reached the
+  template: the whole Preferences pane, every edge state and the
+  snippets editor. All four modules are listed now and the template
+  holds every string.
+- New `scripts/dev.sh i18n` rebuilds the template through
+  `scripts/gen-pot.py` and compiles any `po/*.po` into `locale/`. It
+  extracts with `pygettext`, which ships with CPython, so regenerating
+  needs no extra package; compiling needs `msgfmt`, which is now part
+  of the `dev` dependency set. `install.sh` compiles catalogues too, so
+  a source install picks up a language once one is contributed.
+- `CONTRIBUTING.md` and `docs/translating.md` told contributors to
+  write `from clipman import _`, which is the cyclic import the CodeQL
+  gate rejects. Both now say `from gettext import gettext as _`, and
+  the string counts and the `.mo` status they quoted are current.
+- The snippets editor wrote an empty "New snippet" row as soon as
+  "New" was pressed, so cancelling left it behind. "New" now opens an
+  unsaved draft and nothing is written until Save, which stays
+  insensitive until the name is filled in.
+- Deleting a snippet asked nothing. It now confirms first, like
+  clearing the history does.
+
+### Fixed — test suite side effects
+
+- Running the tests opened a file manager on the developer's desktop.
+  An edge-state action reached the real `xdg-open` with a temp
+  directory the test had already deleted, and another asked systemd to
+  restart the real daemon. The widget tests now share a fixture that
+  stubs the functions reaching outside the process, and two leaked
+  child processes are gone with it.
+- Every widget test built its window on an application that had not
+  emitted `startup`, so each one logged a `Gtk-CRITICAL`. The shared
+  fixture registers the application first. The suite is silent now.
+
 ### Security — GNOME Shell extension (metadata version 8)
 
 - The extension's D-Bus methods (`SimulatePaste`, `MoveWindowToCursor`,

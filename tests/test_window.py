@@ -13,6 +13,7 @@ ARE importable, the tests assert that:
 
 from __future__ import annotations
 
+import itertools
 import os
 import re
 import shutil
@@ -31,7 +32,7 @@ try:
     import gi
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw  # noqa: F401
+    from gi.repository import Adw, Gio  # noqa: F401
     _HAS_GTK = True
 except (ImportError, ValueError, AttributeError, RuntimeError):
     # ImportError: pygobject / gi missing on the runner.
@@ -42,6 +43,7 @@ except (ImportError, ValueError, AttributeError, RuntimeError):
     # so the import chain raises a single, predictable class).
     _HAS_GTK = False
     Adw = None  # type: ignore[assignment]
+    Gio = None  # type: ignore[assignment]
 
 _ADW_INIT_OK = False
 if _HAS_GTK:
@@ -65,9 +67,86 @@ if os.environ.get("CLIPMAN_REQUIRE_GTK4") == "1" and not (_HAS_GTK and _ADW_INIT
     )
 
 
+class _WidgetTestCase(unittest.TestCase):
+    """Shared fixtures for the tests that build real widgets.
+
+    Provides a temp-directory database, an application that has already
+    emitted ``startup``, and a guard that stops any test starting a real
+    process.
+    """
+
+    def setUp(self):
+        # Nothing here may touch the developer's desktop. An unstubbed
+        # edge-state action used to run xdg-open and open a file manager
+        # on a temp directory the test had already deleted, and another
+        # asked systemd to restart the real daemon. Patch the clipman
+        # functions that reach outside the process, not subprocess
+        # itself: every module shares one subprocess module object, so
+        # patching Popen there also breaks check_output in keybindings.
+        self._shell_guards = []
+        for target in ("clipman.preferences.open_url",
+                       "clipman.window.ClipmanWindow._reveal_path",
+                       "clipman.window.ClipmanWindow._action_restart_daemon",
+                       "clipman.window.ClipmanWindow._wl_copy"):
+            patcher = patch(target)
+            patcher.start()
+            self._shell_guards.append(patcher)
+            self.addCleanup(patcher.stop)
+
+    def _allow_shell_out(self):
+        """Drop the guard for the tests that check these two functions."""
+        while self._shell_guards:
+            self._shell_guards.pop().stop()
+
+    # Registering exports the application on the session bus, and the
+    # same object path cannot be exported twice in one process, so every
+    # app gets its own suffix.
+    _app_serial = itertools.count()
+
+    def _make_app(self, name):
+        """An Adw.Application that has emitted startup.
+
+        Adding a window to an unregistered GApplication logs "New
+        application windows must be added after the
+        GApplication::startup signal has been emitted" on every
+        construction.
+        """
+        app = Adw.Application(
+            application_id=f"{name}{next(self._app_serial)}",
+            flags=Gio.ApplicationFlags.NON_UNIQUE,
+        )
+        app.register(None)
+        self.addCleanup(app.quit)
+        return app
+
+    def _make_db(self):
+        # Use a temp dir so the test never touches the real DB.
+        # Mirrors the pattern in test_database.py: patch the module-level
+        # paths (do NOT mutate them — that leaks across tests) and register
+        # an addCleanup for each patch + the tmpdir.
+        from clipman import database
+
+        tmp = tempfile.mkdtemp(prefix="clipman-test-")
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        data_dir = Path(tmp) / "clipman"
+        images_dir = data_dir / "images"
+        db_path = data_dir / "clipman.db"
+        for target, value in (
+            ("clipman.database.DATA_DIR", data_dir),
+            ("clipman.database.IMAGES_DIR", images_dir),
+            ("clipman.database.DB_PATH", db_path),
+        ):
+            patcher = patch(target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        db = database.ClipboardDB()
+        self.addCleanup(db.close)
+        return db
+
+
 @unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
                      "GTK 4 + libadwaita not available")
-class TestEdgeStates(unittest.TestCase):
+class TestEdgeStates(_WidgetTestCase):
     """Every declared state must map to a renderable widget."""
 
     EXPECTED_IDS = {
@@ -177,7 +256,7 @@ class TestEdgeStates(unittest.TestCase):
 
         db = database.ClipboardDB()
         self.addCleanup(db.close)
-        app = Adw.Application(application_id="com.clipman.TestDispatch")
+        app = self._make_app("com.clipman.TestDispatch")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         self.assertEqual(
             set(window._edge_action_dispatch.keys()),
@@ -187,38 +266,14 @@ class TestEdgeStates(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
                      "GTK 4 + libadwaita not available")
-class TestWindowConstruction(unittest.TestCase):
+class TestWindowConstruction(_WidgetTestCase):
     """ClipmanWindow + ClipmanPreferences + SnippetsDialog all build."""
-
-    def _make_db(self):
-        # Use a temp dir so the test never touches the real DB.
-        # Mirrors the pattern in test_database.py: patch the module-level
-        # paths (do NOT mutate them — that leaks across tests) and register
-        # an addCleanup for each patch + the tmpdir.
-        from clipman import database
-
-        tmp = tempfile.mkdtemp(prefix="clipman-test-")
-        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
-        data_dir = Path(tmp) / "clipman"
-        images_dir = data_dir / "images"
-        db_path = data_dir / "clipman.db"
-        for target, value in (
-            ("clipman.database.DATA_DIR", data_dir),
-            ("clipman.database.IMAGES_DIR", images_dir),
-            ("clipman.database.DB_PATH", db_path),
-        ):
-            p = patch(target, value)
-            p.start()
-            self.addCleanup(p.stop)
-        db = database.ClipboardDB()
-        self.addCleanup(db.close)
-        return db
 
     def test_window_boots(self):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.Test")
+        app = self._make_app("com.clipman.Test")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         self.assertIsNotNone(window)
         # Public interface required by dbus_service stays intact.
@@ -238,7 +293,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestIncognito")
+        app = self._make_app("com.clipman.TestIncognito")
         monitor = MagicMock()
         window = ClipmanWindow(application=app, db=db, monitor=monitor)
 
@@ -266,7 +321,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestIncogPersist")
+        app = self._make_app("com.clipman.TestIncogPersist")
         window = ClipmanWindow(application=app, db=db, monitor=MagicMock())
 
         window._incognito_btn.set_active(True)
@@ -279,7 +334,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.Test")
+        app = self._make_app("com.clipman.Test")
         parent = ClipmanWindow(application=app, db=db, monitor=None)
         prefs = ClipmanPreferences(db, parent, on_setting_changed=None)
         self.assertIsNotNone(prefs)
@@ -290,7 +345,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestCatppuccin")
+        app = self._make_app("com.clipman.TestCatppuccin")
 
         w_on = ClipmanWindow(application=app, db=db, monitor=None)
         self.assertTrue(w_on._use_catppuccin)  # default on
@@ -333,7 +388,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestDismiss")
+        app = self._make_app("com.clipman.TestDismiss")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         # Headless: the window is never compositor-active, so is-active is
         # False — exactly the "lost focus" condition.
@@ -358,7 +413,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestHide")
+        app = self._make_app("com.clipman.TestHide")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         window.set_visible(True)
         window._cursor_move_id = 0
@@ -376,7 +431,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestCursor")
+        app = self._make_app("com.clipman.TestCursor")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         window.set_visible(False)
         # Returns False (removes source) and no-ops because it's hidden.
@@ -390,7 +445,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestPasteShell")
+        app = self._make_app("com.clipman.TestPasteShell")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         window._paste_via_shell = lambda mode: True  # extension present
 
@@ -405,7 +460,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestPasteWtype")
+        app = self._make_app("com.clipman.TestPasteWtype")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         window._paste_via_shell = lambda mode: False  # no extension
 
@@ -422,7 +477,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestPasteOrder")
+        app = self._make_app("com.clipman.TestPasteOrder")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         calls = []
         fake_iface = MagicMock()
@@ -451,7 +506,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestNoExt")
+        app = self._make_app("com.clipman.TestNoExt")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         window._shell_extension_iface = lambda: None
         self.assertFalse(window._paste_via_shell("auto"))
@@ -461,7 +516,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestFocusFail")
+        app = self._make_app("com.clipman.TestFocusFail")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         fake_iface = MagicMock()
         fake_iface.RestorePreviousFocus.side_effect = RuntimeError("no window")
@@ -477,7 +532,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestPasteRetry")
+        app = self._make_app("com.clipman.TestPasteRetry")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         calls = []
 
@@ -502,7 +557,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestPasteFailed")
+        app = self._make_app("com.clipman.TestPasteFailed")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         fake_iface = MagicMock()
         fake_iface.SimulatePaste.side_effect = RuntimeError("refused")
@@ -523,7 +578,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestTypeFilter")
+        app = self._make_app("com.clipman.TestTypeFilter")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         window.db = MagicMock(wraps=db)
 
@@ -542,7 +597,7 @@ class TestWindowConstruction(unittest.TestCase):
         older = db.add_entry("text", content_text="older clip")
         db.toggle_pin(older)
         db.add_entry("text", content_text="newer clip")
-        app = Adw.Application(application_id="com.clipman.TestClipToken")
+        app = self._make_app("com.clipman.TestClipToken")
         window = ClipmanWindow(application=app, db=db, monitor=None)
 
         self.assertEqual(
@@ -562,10 +617,11 @@ class TestWindowConstruction(unittest.TestCase):
         self.assertIn(fragment, slugs)
 
     def test_open_url_drops_non_http_links(self):
+        self._allow_shell_out()
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestOpenUrl")
+        app = self._make_app("com.clipman.TestOpenUrl")
         window = ClipmanWindow(application=app, db=db, monitor=None)
 
         with patch("clipman.preferences.subprocess.Popen") as popen:
@@ -575,10 +631,11 @@ class TestWindowConstruction(unittest.TestCase):
             popen.assert_called_once()
 
     def test_reveal_path_opens_existing_folders_only(self):
+        self._allow_shell_out()
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestReveal")
+        app = self._make_app("com.clipman.TestReveal")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         folder = tempfile.mkdtemp(prefix="clipman-reveal-")
         self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
@@ -594,7 +651,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestMaskedRow")
+        app = self._make_app("com.clipman.TestMaskedRow")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         entry = {"created_at": 0}
 
@@ -638,7 +695,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestCopyWayland")
+        app = self._make_app("com.clipman.TestCopyWayland")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         calls = []
         window._is_wayland = lambda: True
@@ -656,7 +713,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestCopyX11")
+        app = self._make_app("com.clipman.TestCopyX11")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         wl_called = []
         window._is_wayland = lambda: False
@@ -679,7 +736,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestBackup")
+        app = self._make_app("com.clipman.TestBackup")
         parent = ClipmanWindow(application=app, db=db, monitor=None)
         prefs = ClipmanPreferences(db, parent, on_setting_changed=None)
         self.assertIsInstance(prefs._parent_window, Gtk.Window)
@@ -690,7 +747,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestResize")
+        app = self._make_app("com.clipman.TestResize")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         self.assertFalse(window.get_resizable())
 
@@ -701,51 +758,84 @@ class TestWindowConstruction(unittest.TestCase):
         dialog = SnippetsDialog(db)
         self.assertIsNotNone(dialog)
 
-    def test_new_snippet_loads_into_editor_form(self):
-        """Creating a new snippet must populate the editor, not blank it.
+    def test_new_snippet_starts_an_unsaved_draft(self):
+        """"New" must not write a row until the user saves.
 
-        Regression: _on_new_clicked used to set self._selected_id
-        BEFORE _reload_list(), so when the reload re-selected the row,
-        _on_row_selected early-returned (snippet_id == _selected_id) and
-        _load_into_form never ran — the form stayed blank. Assert the
-        selection AND the observable form state (name entry + content
-        buffer + title) reflect the freshly created snippet.
+        It used to call add_snippet straight away, so cancelling left an
+        empty "New snippet" behind. The editor now opens a blank draft and
+        Save stays insensitive until the name is filled in.
         """
         from clipman.snippets_dialog import SnippetsDialog
 
         db = self._make_db()
         dialog = SnippetsDialog(db)
-
-        # Sanity: nothing selected, form blank before the new action.
         self.assertIsNone(dialog._selected_id)
-        self.assertEqual(dialog._name_row.get_text(), "")
 
         dialog._on_new_clicked(None)
 
-        # The new row's id is now the selection target.
-        self.assertIsNotNone(dialog._selected_id)
-        new_id = dialog._selected_id
+        self.assertEqual(db.get_snippets(), [])
+        self.assertIsNone(dialog._selected_id)
+        self.assertTrue(dialog._draft)
+        self.assertEqual(dialog._name_row.get_text(), "")
+        self.assertFalse(dialog._save_btn.get_sensitive())
+        self.assertFalse(dialog._delete_btn.get_sensitive())
 
-        # The DB persisted exactly the snippet we expect.
-        snippet = next(
-            (s for s in db.get_snippets() if s["id"] == new_id), None
-        )
-        self.assertIsNotNone(snippet)
+    def test_new_snippet_is_saved_once_it_has_a_name(self):
+        from clipman.snippets_dialog import SnippetsDialog
 
-        # Observable editor state must mirror the new snippet, not be blank.
-        self.assertEqual(dialog._name_row.get_text(), snippet["name"])
-        buf = dialog._textview.get_buffer()
-        buffer_text = buf.get_text(
-            buf.get_start_iter(), buf.get_end_iter(), True
-        )
-        self.assertEqual(buffer_text, snippet.get("content_text") or "")
-        self.assertEqual(dialog._title_label.get_text(), snippet["name"])
+        db = self._make_db()
+        dialog = SnippetsDialog(db)
+        dialog._on_new_clicked(None)
+
+        dialog._name_row.set_text("Greeting")
+        dialog._textview.get_buffer().set_text("hello")
+        self.assertTrue(dialog._save_btn.get_sensitive())
+
+        dialog._on_save_clicked(None)
+
+        snippets = db.get_snippets()
+        self.assertEqual(len(snippets), 1)
+        self.assertEqual(snippets[0]["name"], "Greeting")
+        self.assertEqual(snippets[0]["content_text"], "hello")
+        self.assertFalse(dialog._draft)
+        self.assertEqual(dialog._selected_id, snippets[0]["id"])
         self.assertTrue(dialog._delete_btn.get_sensitive())
 
-        # And the sidebar row for the new snippet is the selected one.
-        selected = dialog._listbox.get_selected_row()
-        self.assertIsNotNone(selected)
-        self.assertEqual(getattr(selected, "snippet_id", None), new_id)
+    def test_cancelling_a_new_snippet_leaves_nothing_behind(self):
+        from clipman.snippets_dialog import SnippetsDialog
+
+        db = self._make_db()
+        dialog = SnippetsDialog(db)
+        dialog._on_new_clicked(None)
+        dialog._name_row.set_text("Abandoned")
+
+        dialog._on_cancel_clicked(None)
+
+        self.assertEqual(db.get_snippets(), [])
+        self.assertEqual(dialog._name_row.get_text(), "")
+
+    def test_delete_asks_before_removing_a_snippet(self):
+        """Delete is destructive, so it goes through a confirmation."""
+        from clipman.snippets_dialog import SnippetsDialog
+
+        db = self._make_db()
+        sid = db.add_snippet("Keep me", "body")
+        dialog = SnippetsDialog(db)
+        dialog._load_into_form(
+            next(s for s in db.get_snippets() if s["id"] == sid)
+        )
+
+        with patch("clipman.snippets_dialog.Adw.AlertDialog") as alert:
+            dialog._on_delete_clicked(None)
+        self.assertTrue(alert.called)
+        self.assertEqual(len(db.get_snippets()), 1)
+
+        dialog._on_delete_response(None, "cancel")
+        self.assertEqual(len(db.get_snippets()), 1)
+
+        dialog._on_delete_response(None, "delete")
+        self.assertEqual(db.get_snippets(), [])
+        self.assertIsNone(dialog._selected_id)
 
     def test_refresh_with_seeded_entries(self):
         """Three seeded entries -> three model items, newest first."""
@@ -758,7 +848,7 @@ class TestWindowConstruction(unittest.TestCase):
         for text in ("old entry", "mid entry", "new entry"):
             db.add_entry("text", content_text=text)
 
-        app = Adw.Application(application_id="com.clipman.Test")
+        app = self._make_app("com.clipman.Test")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         window.refresh()
 
@@ -775,7 +865,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.Test")
+        app = self._make_app("com.clipman.Test")
         parent = ClipmanWindow(application=app, db=db, monitor=None)
 
         received: list[tuple[str, object]] = []
@@ -815,7 +905,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.Test")
+        app = self._make_app("com.clipman.Test")
         window = ClipmanWindow(application=app, db=db, monitor=None)
 
         # No banner row at construction time. Patch should_show_banner so
@@ -840,7 +930,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestDismiss")
+        app = self._make_app("com.clipman.TestDismiss")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         updates.set_enabled(db, True)  # independent of install-kind default
 
@@ -878,11 +968,11 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestDispatch")
+        app = self._make_app("com.clipman.TestDispatch")
         window = ClipmanWindow(application=app, db=db, monitor=None)
 
         # Side-effect callees we never want to fire during the test:
-        #   - _open_url shells out to xdg-open
+        #   - _open_url and _reveal_path shell out to xdg-open
         #   - _on_prefs_clicked spawns Adw.PreferencesWindow
         #   - _on_snippets_clicked spawns Adw.Dialog
         #   - refresh_update_banner pokes the updates module
@@ -890,6 +980,7 @@ class TestWindowConstruction(unittest.TestCase):
         # actually called something rather than the warning fallback.
         called: list[str] = []
         window._open_url = lambda url: called.append(("url", url))
+        window._reveal_path = lambda path: called.append(("folder", path))
         window._on_prefs_clicked = (
             lambda _b, page=None: called.append(("prefs", page))
         )
@@ -952,7 +1043,7 @@ class TestWindowConstruction(unittest.TestCase):
         entry_id = db.add_entry("image", image_data=bytes(png_bytes))
         self.assertIsNotNone(entry_id)
 
-        app = Adw.Application(application_id="com.clipman.TestThumb")
+        app = self._make_app("com.clipman.TestThumb")
         window = ClipmanWindow(application=app, db=db, monitor=None)
 
         # Grab the stored path the same way _bind_entry_row does.
@@ -990,7 +1081,7 @@ class TestWindowConstruction(unittest.TestCase):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
-        app = Adw.Application(application_id="com.clipman.TestDebounce")
+        app = self._make_app("com.clipman.TestDebounce")
         window = ClipmanWindow(application=app, db=db, monitor=None)
 
         # Count refresh() calls without actually rebuilding the list.
@@ -1028,7 +1119,7 @@ class TestWindowConstruction(unittest.TestCase):
 
 @unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
                      "GTK 4 + libadwaita not available")
-class TestKeyboardShortcuts(unittest.TestCase):
+class TestKeyboardShortcuts(_WidgetTestCase):
     """The footer advertises ↵ Paste · ⌫ Delete · P Pin · Esc Close.
 
     Exercises the action helpers directly (far more robust headless than
@@ -1036,33 +1127,13 @@ class TestKeyboardShortcuts(unittest.TestCase):
     the DB / selection state changed.
     """
 
-    def _make_db(self):
-        from clipman import database
-
-        tmp = tempfile.mkdtemp(prefix="clipman-test-")
-        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
-        data_dir = Path(tmp) / "clipman"
-        images_dir = data_dir / "images"
-        db_path = data_dir / "clipman.db"
-        for target, value in (
-            ("clipman.database.DATA_DIR", data_dir),
-            ("clipman.database.IMAGES_DIR", images_dir),
-            ("clipman.database.DB_PATH", db_path),
-        ):
-            p = patch(target, value)
-            p.start()
-            self.addCleanup(p.stop)
-        db = database.ClipboardDB()
-        self.addCleanup(db.close)
-        return db
-
     def _seeded_window(self, texts=("old", "mid", "new")):
         from clipman.window import ClipmanWindow
 
         db = self._make_db()
         for text in texts:
             db.add_entry("text", content_text=text)
-        app = Adw.Application(application_id="com.clipman.TestKeys")
+        app = self._make_app("com.clipman.TestKeys")
         window = ClipmanWindow(application=app, db=db, monitor=None)
         window.refresh()
         return db, window
