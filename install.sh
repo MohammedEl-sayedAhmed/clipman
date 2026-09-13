@@ -40,16 +40,24 @@ cp "$SCRIPT_DIR/extension/extension.js" "$EXTENSION_DIR/"
 gnome-extensions enable "$EXTENSION_UUID" 2>/dev/null || true
 echo "  Extension installed. You may need to log out and back in to activate it."
 
-# Step 4: Install application icon
+# Step 4: Install application icon and desktop entry
 # Clipman autostarts via the systemd user service (Step 6) ONLY. We do not
 # also drop an XDG autostart .desktop: running both starts the daemon twice,
 # and the two instances race for the com.clipman.Daemon bus name, leaving an
 # orphaned process. Remove any autostart file left by an older installer.
-echo "[4/6] Installing application icon..."
+echo "[4/6] Installing application icon and desktop entry..."
 rm -f "$LEGACY_AUTOSTART"
 ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
 mkdir -p "$ICON_DIR"
 cp "$SCRIPT_DIR/data/com.clipman.Clipman.svg" "$ICON_DIR/"
+# The desktop entry gives the Clipman window its name and icon in the
+# dash and in Alt+Tab. NoDisplay keeps it out of the app grid; the
+# autostart key only means something in the autostart folder.
+APPS_DIR="$HOME/.local/share/applications"
+mkdir -p "$APPS_DIR"
+sed -e "s|CLIPMAN_PATH_PLACEHOLDER|$SCRIPT_DIR|g" -e '/^X-GNOME-Autostart-enabled=/d' \
+    "$SCRIPT_DIR/data/com.clipman.Clipman.desktop" > "$APPS_DIR/com.clipman.Clipman.desktop"
+update-desktop-database "$APPS_DIR" 2>/dev/null || true
 
 # Step 5: Register Super+V keybinding
 echo "[5/6] Registering Super+V keyboard shortcut..."
@@ -74,11 +82,19 @@ else
     gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$NEW_LIST"
 fi
 
-# Remove Super+V from GNOME's built-in message tray toggle (conflicts with our binding)
+# Free Super+V from GNOME's message tray shortcut. Keep the user's other
+# keys, and save the original list so uninstall.sh can put it back.
 CURRENT_MSG_TRAY=$(gsettings get org.gnome.shell.keybindings toggle-message-tray 2>/dev/null || echo "[]")
-if echo "$CURRENT_MSG_TRAY" | grep -q "'<Super>v'"; then
-    gsettings set org.gnome.shell.keybindings toggle-message-tray "['<Super>m']"
-    echo "  Removed Super+V from GNOME message tray (Super+M still works)."
+if echo "$CURRENT_MSG_TRAY" | grep -qi "'<Super>v'"; then
+    [ -f "$DATA_DIR/toggle-message-tray.orig" ] || echo "$CURRENT_MSG_TRAY" > "$DATA_DIR/toggle-message-tray.orig"
+    NEW_MSG_TRAY=$(echo "$CURRENT_MSG_TRAY" | python3 -c "
+import ast, sys
+text = sys.stdin.read().strip()
+keys = ast.literal_eval(text[4:] if text.startswith('@as ') else text)
+print([k for k in keys if k.lower() != '<super>v'])
+")
+    gsettings set org.gnome.shell.keybindings toggle-message-tray "$NEW_MSG_TRAY"
+    echo "  Removed Super+V from GNOME's message tray shortcut (other keys kept)."
 fi
 
 # Set the keybinding properties
