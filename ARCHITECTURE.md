@@ -26,15 +26,17 @@ thread; SQLite access is intentionally serialized through the loop
 The UI tree is libadwaita-first: `clipman/window.py` builds an
 `Adw.ApplicationWindow` with an `Adw.HeaderBar` and an
 `Adw.ActionRow`-driven history list; `clipman/preferences.py` ships
-the settings surface as an `Adw.PreferencesWindow` with six panes
+the settings surface as an `Adw.Dialog` with a navigation sidebar and
+six panes
 (Appearance, Privacy, Shortcuts, Storage, Updates, About);
 `clipman/snippets_dialog.py` is an `Adw.NavigationSplitView`
-master-detail editor. The 16 declarative edge states from the
+master-detail editor. The 20 declarative edge states from the
 mockups live as `StateSpec` entries in `clipman/edge_states.py` and
 are dispatched at render time by `render_edge_state` into one of
 `Adw.StatusPage`, `Adw.Banner`, or `Adw.AlertDialog`. The
 `clipman/style.css` stylesheet overrides libadwaita's
-`@named-color` tokens with the Catppuccin Mocha and Latte palettes
+`@named-color` tokens with the Catppuccin Mocha (dark) and warm-stone
+(light) palettes
 so the entire surface picks up the theme without per-widget CSS.
 The package's runtime version literal lives in the leaf module
 `clipman/_version.py` and is re-exported from `clipman/__init__.py`,
@@ -51,7 +53,7 @@ state is touched off-thread.
 
 The GNOME Shell extension under `extension/` is an ES module that
 loads inside the Shell's gjs process. It is compatible with GNOME
-Shell 45 through 48. On clipboard `owner-changed` events the
+Shell 45 through 50. On clipboard `owner-changed` events the
 extension reads the new content via a MIME-type fallback chain
 (`text/plain;charset=utf-8` -> `UTF8_STRING` -> `text/plain` ->
 `STRING`) and forwards it to the daemon over D-Bus. It also exposes

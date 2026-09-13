@@ -24,10 +24,10 @@ clipman/
 │   ├── clipboard_monitor.py    # Event-driven clipboard change handling
 │   ├── database.py             # SQLite storage layer
 │   ├── dbus_service.py         # D-Bus IPC (toggle, clipboard events)
-│   ├── edge_states.py          # 16 declarative StateSpec entries dispatched
+│   ├── edge_states.py          # 20 declarative StateSpec entries dispatched
 │   │                           #   into Adw.StatusPage / Adw.Banner / Adw.AlertDialog
 │   ├── keybindings.py          # gsettings helpers for Super+V customization
-│   ├── preferences.py          # Adw.PreferencesWindow (6 panes)
+│   ├── preferences.py          # Adw.Dialog + sidebar (6 panes)
 │   ├── snippets_dialog.py      # Adw.NavigationSplitView master-detail snippet editor
 │   ├── updates.py              # Anonymous update-check against GitHub Releases
 │   ├── window.py               # Adw.ApplicationWindow + Adw.HeaderBar history popup
@@ -42,12 +42,19 @@ clipman/
 │   └── clipman.service         # Systemd user service
 ├── po/
 │   ├── POTFILES.in             # Files with translatable strings
-│   └── clipman.pot             # Translation template (70 strings)
+│   └── clipman.pot             # Translation template (226 strings)
 ├── tests/
-│   ├── test_database.py        # Database tests (90 tests)
-│   ├── test_clipboard_monitor.py  # Monitor tests (105 tests)
-│   ├── test_entry_point.py     # D-Bus mainloop init tests (3 tests)
-│   └── test_window_utils.py    # URL detection & time formatting (28 tests)
+│   ├── test_clipboard_monitor.py  # Monitor tests (110 tests)
+│   ├── test_database.py        # Database tests (96 tests)
+│   ├── test_window.py          # Window, classify & render tests (60 tests)
+│   ├── test_updates.py         # Update-check tests (40 tests)
+│   ├── test_keybindings.py     # Keybinding-customization tests (32 tests)
+│   ├── test_app.py             # Application lifecycle tests (10 tests)
+│   ├── test_sensitive.py       # Sensitive-data heuristics (10 tests)
+│   ├── test_entry_point.py     # D-Bus mainloop init tests (9 tests)
+│   ├── test_shell_bridge.py    # Shell-extension bridge tests (4 tests)
+│   ├── test_release_metadata.py  # Packaging-metadata tests (3 tests)
+│   └── test_dbus_service.py    # D-Bus service tests (1 test)
 ├── docs/
 │   ├── dark-theme.png          # Screenshot (dark theme)
 │   └── light-theme.png         # Screenshot (light theme)
@@ -69,7 +76,7 @@ scripts/dev.sh test       # or: make test
 
 `dev-setup.sh` installs the system packages, creates `.venv` and installs the `dev` extras. The venv uses `--system-site-packages`, so the distro's PyGObject and dbus-python bindings are reused and never rebuilt. `dev.sh test` runs pytest under `xvfb-run` with `CLIPMAN_REQUIRE_GTK4=1` (falling back to `unittest` when pytest is not importable); pytest arguments pass through, e.g. `scripts/dev.sh test -k database`.
 
-All 331 tests should pass. GTK 4 is required at test time; a session bus is not. Tests cover the database layer, clipboard monitor, window/classification logic, app lifecycle, keybindings, and the update check. See [docs/development.md](docs/development.md) for the fuller dev setup.
+All 375 tests should pass. GTK 4 is required at test time; a session bus is not. Tests cover the database layer, clipboard monitor, window/classification logic, app lifecycle, keybindings, and the update check. See [docs/development.md](docs/development.md) for the fuller dev setup.
 
 ### Lint
 
@@ -108,7 +115,7 @@ Introspect or call them with `gdbus`:
 
 - **Wayland only** — no X11-specific APIs in the daemon
 - **GTK 4 + libadwaita 1.4+** — the UI is built on `Adw.ApplicationWindow`,
-  `Adw.PreferencesWindow`, `Adw.NavigationSplitView`, `Adw.ActionRow`,
+  `Adw.Dialog`, `Adw.NavigationSplitView`, `Adw.ActionRow`,
   `Adw.StatusPage`, `Adw.Banner`, and `Adw.AlertDialog`. Ubuntu 22.04 is no
   longer the floor; 24.04+ is the supported baseline.
 - **GNOME Shell extension** — runs inside the compositor; changes require logout/login to take effect
@@ -154,9 +161,10 @@ GTK 4 + libadwaita, theming is layered:
 1. **libadwaita `@named-color` tokens** (e.g. `@accent_color`,
    `@window_bg_color`, `@card_bg_color`) carry the bulk of the
    palette. The stylesheet redefines these tokens so every Adw
-   widget — `Adw.ActionRow`, `Adw.PreferencesWindow`,
+   widget — `Adw.ActionRow`, `Adw.Dialog`,
    `Adw.HeaderBar`, `Adw.Banner`, etc. — picks up the Catppuccin
-   Mocha or Latte palette automatically without per-widget rules.
+   Mocha (dark) or warm-stone (light) palette automatically without
+   per-widget rules.
 2. **Catppuccin palette overlay**: light- and dark-variant
    selectors (`window.dark @define-color …` / `window.light …`)
    write the chosen palette into the `@named-color` slots at theme
@@ -234,7 +242,7 @@ When filing a bug report, please include:
 
 ## Definition of Done
 
-- [ ] `scripts/dev.sh test` passes locally (331 tests)
+- [ ] `scripts/dev.sh test` passes locally (375 tests)
 - [ ] `scripts/dev.sh ruff` is clean
 - [ ] `scripts/dev.sh shellcheck` is clean if any shell script was touched
 - [ ] `CHANGELOG.md` `[Unreleased]` updated for user-visible changes

@@ -18,7 +18,7 @@ Like Windows `Win+V` — but for Linux.
 [![GNOME](https://img.shields.io/badge/GNOME-46--50-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MohammedEl-sayedAhmed/clipman/badge)](https://scorecard.dev/viewer/?uri=github.com/MohammedEl-sayedAhmed/clipman)
 [![Wayland](https://img.shields.io/badge/Wayland-native-yellow)](https://wayland.freedesktop.org)
-[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.10--3.12-3776AB?logo=python&logoColor=white)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/clipman-clipboard?label=PyPI&logo=pypi&logoColor=white)](https://pypi.org/project/clipman-clipboard/)
 [![PyPI Downloads](https://img.shields.io/pepy/dt/clipman-clipboard?label=PyPI%20Downloads&logo=pypi&logoColor=white)](https://pepy.tech/project/clipman-clipboard)
 [![GNOME Extensions](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fextensions.gnome.org%2Fextension-info%2F%3Fpk%3D9407&query=%24.downloads&label=EGO%20Downloads&logo=gnome&logoColor=white&color=4A86CF)](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/)
@@ -63,7 +63,7 @@ Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extensi
 - **Pin favorites** — keep important entries permanently, exempt from pruning
 - **Filter tabs** — switch between All, Text, Images, and Snippets views
 - **Snippet templates** — save reusable text blocks for quick pasting
-- **Date grouping** — entries organized into Today, Yesterday, and Older sections
+- **Date grouping** — entries organized into ★ Pinned, Today, Yesterday, Earlier this week, and Older sections
 - **Inline editing** — edit any text entry directly from the history
 - **Preview expansion** — expand long entries inline to see full content
 - **URL detection** — auto-detected with a one-click open button
@@ -78,7 +78,6 @@ Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extensi
 | <kbd>Super</kbd> + <kbd>V</kbd> | Toggle the popup |
 | <kbd>Arrow</kbd> keys | Navigate entries |
 | <kbd>Enter</kbd> | Paste selected entry |
-| <kbd>Shift</kbd> + <kbd>Enter</kbd> | Copy without pasting |
 | <kbd>P</kbd> | Pin / unpin selected entry |
 | <kbd>Delete</kbd> | Delete selected entry |
 | <kbd>Escape</kbd> | Close popup |
@@ -118,7 +117,7 @@ Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extensi
 ## Requirements
 
 - Ubuntu 24.04+ with GNOME 46–50 and Wayland
-- Python 3.10+
+- Python 3.10–3.12 (newer versions are not blocked, but CI does not test them)
 - GTK 4 + libadwaita 1.4+
 
 > Dependencies are installed automatically by the install script.
@@ -240,17 +239,18 @@ Or with paru: `paru -S clipman-clipboard`
 |--------|-----|
 | Open clipboard history | <kbd>Super</kbd> + <kbd>V</kbd> |
 | Paste an entry | Click on it or press <kbd>Enter</kbd> |
-| Copy without pasting | <kbd>Shift</kbd> + <kbd>Enter</kbd> |
 | Pin / unpin an entry | Click the star icon or press <kbd>P</kbd> |
 | Delete an entry | Click the X icon or press <kbd>Delete</kbd> |
+| Jump to search | <kbd>/</kbd> or <kbd>Ctrl</kbd> + <kbd>F</kbd> |
+| Navigate entries | <kbd>↑</kbd> / <kbd>↓</kbd> |
 | Filter by type | Click **All**, **Text**, **Images**, or **Snippets** tabs |
-| Create a snippet | Switch to **Snippets** tab and click **+ Add** |
+| Create a snippet | Switch to the **Snippets** tab, then click the **+** button in the header bar or press <kbd>Ctrl</kbd> + <kbd>N</kbd> |
 | Search history | Type in the search bar |
 | Edit a text entry | Click the edit icon on any text entry |
 | Expand long text | Click the expand icon to see full content |
 | Open a URL | Click the arrow icon on URL entries |
 | Toggle incognito | Click the eye icon in the status bar |
-| Clear all unpinned | Click **Clear All** |
+| Clear all unpinned | Click **Clear all** |
 | Close popup | <kbd>Escape</kbd> or click outside |
 
 ### Settings
@@ -261,9 +261,11 @@ left sidebar). It carries six panes:
 | Pane | Setting | Description |
 |------|---------|-------------|
 | **Appearance** | Theme | Follow system / Dark (Catppuccin Mocha) / Light (warm stone) |
+| | Catppuccin theme | On: the Catppuccin Mocha and warm-stone palettes. Off: follow your system GNOME theme and accent color |
 | | Font size | Text size for entries (8–20px) |
 | | Font & accent colors | Free-form color pickers with one-tap reset to theme defaults |
 | | Opacity | Window transparency (30%–100%) |
+| | Show count badges on filter tabs | Show the per-filter item count on the All / Text / Images / Snippets tabs |
 | **Privacy** | Start in incognito mode | Launch with clipboard recording paused |
 | | Auto-clear sensitive clips | Delete detected secrets after the delay below; when off they stay masked (on by default) |
 | | Auto-clear delay | Seconds before detected sensitive entries are purged (default 30) |
@@ -274,12 +276,13 @@ left sidebar). It carries six panes:
 | | Database location | Path to the SQLite database |
 | | Backup / Restore | Export and import your clipboard database |
 | **Updates** | Check for updates | Toggle the daily anonymous check against GitHub Releases. Default: ON for source / PyPI / AUR, OFF for Snap and Flatpak (they auto-refresh). See [ADR 0007](docs/adr/0007-in-app-update-notifications.md) |
-| | Check now | Manual check button — bypasses the 24h cooldown |
+| | Last checked / Latest known version | When the last check ran and the newest version seen, with a link to its release notes |
 | **About** | Version + links | Version string (sourced from `clipman/_version.py`), license, homepage, and acknowledgements |
 
 Settings are saved automatically and persist across sessions.
 
-Snippets get their own surface: clicking **Edit snippets** opens an
+Snippets get their own surface: the **+** button in the header bar,
+shown only on the Snippets tab, opens an
 `Adw.NavigationSplitView` master-detail dialog (`clipman/snippets_dialog.py`)
 with a searchable list on the left and an editor form on the right —
 template variables (`${date}`, `${time}`, `${clipboard}`) included.
@@ -345,15 +348,19 @@ clipman/
 │   └── clipman.service            # Systemd user service
 ├── po/
 │   ├── POTFILES.in                # Files with translatable strings
-│   └── clipman.pot                # Translation template (70 strings)
+│   └── clipman.pot                # Translation template (226 strings)
 ├── tests/
-│   ├── test_database.py           # Database unit tests (93 tests)
-│   ├── test_clipboard_monitor.py  # Monitor unit tests (105 tests)
+│   ├── test_clipboard_monitor.py  # Monitor unit tests (110 tests)
+│   ├── test_database.py           # Database unit tests (96 tests)
+│   ├── test_window.py             # Window, classify & render tests (60 tests)
+│   ├── test_updates.py            # Update-check tests (40 tests)
 │   ├── test_keybindings.py        # Keybinding-customization tests (32 tests)
-│   ├── test_updates.py            # Update-check tests (38 tests)
-│   ├── test_entry_point.py        # D-Bus mainloop init tests (7 tests)
-│   ├── test_app.py                # Application lifecycle tests (8 tests)
-│   └── test_window.py             # Window, classify & render tests (47 tests)
+│   ├── test_app.py                # Application lifecycle tests (10 tests)
+│   ├── test_sensitive.py          # Sensitive-data heuristics (10 tests)
+│   ├── test_entry_point.py        # D-Bus mainloop init tests (9 tests)
+│   ├── test_shell_bridge.py       # Shell-extension bridge tests (4 tests)
+│   ├── test_release_metadata.py   # Packaging-metadata tests (3 tests)
+│   └── test_dbus_service.py       # D-Bus service tests (1 test)
 ├── docs/
 │   ├── adr/                       # Architecture Decision Records
 │   ├── releases/                  # Release process docs (GH Releases are authoritative)
@@ -401,7 +408,7 @@ gnome-extensions list --enabled | grep clipman
 If missing, enable it with `gnome-extensions enable clipman@clipman.com` and log out/in.
 
 **Pasting shows `^V` in VSCode/Electron integrated terminals**
-Clipman auto-pastes with Ctrl+V, which standalone terminals interpret correctly. However, integrated terminals inside editors (VSCode, Cursor) expect Ctrl+Shift+V. Use **Shift+Enter** in Clipman to copy without auto-pasting, then manually Ctrl+Shift+V in the terminal.
+Clipman auto-pastes with Ctrl+V, which standalone terminals interpret correctly. Integrated terminals inside editors (VSCode, Cursor) expect Ctrl+Shift+V. Open Preferences, then Paste behaviour, and set "When I select a clip" to **Simulate Ctrl+Shift+V**.
 
 **Daemon not starting**
 Check the service status:
@@ -412,7 +419,7 @@ journalctl --user -u clipman.service -n 20
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite (330 tests).
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite (375 tests).
 
 ## Uninstall
 

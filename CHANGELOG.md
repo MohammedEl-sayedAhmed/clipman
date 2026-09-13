@@ -261,6 +261,75 @@ All notable changes to Clipman are documented in this file.
   emitted `startup`, so each one logged a `Gtk-CRITICAL`. The shared
   fixture registers the application first. The suite is silent now.
 
+### Fixed — documentation that did not match the code
+
+A sweep of every claim in the docs against the code. The corrections that
+change what a reader would do:
+
+- README documented a "Shift+Enter — copy without pasting" shortcut in
+  two tables and sent people to it from the troubleshooting section. No
+  such shortcut exists: Enter is handled with no modifier check.
+  Troubleshooting now points at the Paste behaviour setting, which is
+  the real answer for editor terminals.
+- README told people to click a "+ Add" button to create a snippet and
+  an "Edit snippets" button to open the editor. Neither label exists;
+  the control is the "+" button in the header bar, shown only on the
+  Snippets tab. README also listed a "Check now" button in the Updates
+  pane that is not there.
+- `docs/development.md` documented a `CLIPMAN_DATA_DIR` environment
+  variable. Nothing reads it; the data directory is fixed.
+- The site and the two LLM summaries told people to run
+  `pipx install clipman-clipboard`. That produces a launcher which
+  cannot start, because the GTK4 bindings are distro packages a plain
+  virtualenv cannot see. They now use `--system-site-packages` and say
+  why.
+- Three release documents said to publish with `git push --tags`. The
+  identity pre-push hook rejects a tag that points at one of GitHub's
+  squash commits, so the tag has to be created through the GitHub API.
+  The release checklist now walks through the release PR and the API
+  call, and its rollback advice does the same.
+- The release documents also listed the wrong files for
+  `scripts/bump-version.sh` (naming `clipman/__init__.py`, which it has
+  never touched, and omitting four it does), described the AUR push as
+  a manual step that the pipeline has automated, pointed at two ADR
+  filenames that do not exist, and named the wrong AUR remote.
+- `docs/llms-full.txt` claimed FTS5 search, image storage under
+  `blobs/`, and a daemon that refuses to start on loose permissions.
+  Search is SQL `LIKE`, images live under `images/`, and the daemon
+  repairs permissions rather than refusing.
+- The AppImage instructions asked for `gir1.2-gtk-3.0` for a GTK 4 app.
+- `CODE_OF_CONDUCT.md` opened with raw TOML that rendered as body text,
+  and its reporting address was still the template's
+  `[INSERT CONTACT METHOD]`, while `GOVERNANCE.md` said a channel
+  existed. It now names the private advisory channel that
+  `SECURITY.md` uses.
+- The two AppStream metainfo files had drifted: one was missing the
+  1.0.5 and 1.0.6 releases, and they disagreed on the date and summary
+  of 1.0.4. Both now match the CHANGELOG.
+- Counts and names that had gone stale: the test total and per-file
+  breakdown, the edge-state count, the translation-template size, the
+  light palette (warm stone, not Catppuccin Latte), the preferences
+  widget (`Adw.Dialog`, not `Adw.PreferencesWindow`), the GNOME Shell
+  range, the site's version strings, the sitemap dates, and the
+  versions shown in the design mockups.
+- `SECURITY.md` now states the support window, which the contributor
+  guide requires it to carry. `docs/ci-cd.md` claimed a complete
+  workflow inventory while missing two workflows and one secret.
+- `pyproject.toml` gained per-version classifiers so the tested range
+  is visible on PyPI. `requires-python` stays open at the top end, so a
+  newer interpreter is still allowed to install.
+
+### Added — two superseding ADRs
+
+- **ADR 0011** supersedes ADR 0010. The versioning policy is unchanged,
+  but four of its premises were stale: the Ubuntu baseline, the toolkit
+  (GTK 4 shipped in 1.1.0), the file the bump script patches, and a
+  D-Bus contract list missing two of the extension's four methods.
+- **ADR 0012** supersedes ADR 0009. The snap moved to `core24` with the
+  GNOME extension, so the GTK stack comes from Canonical's content snap
+  instead of being restaged from the archive, and the weekly job now
+  refreshes every channel rather than only edge.
+
 ### Security — GNOME Shell extension (metadata version 8)
 
 - The extension's D-Bus methods (`SimulatePaste`, `MoveWindowToCursor`,

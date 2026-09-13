@@ -7,6 +7,18 @@
 | 1.2.x   | :white_check_mark: |
 | < 1.2   | :x:                |
 
+## Supported Platforms
+
+Security fixes target the documented support window:
+
+- Python 3.10–3.12
+- GNOME Shell 45–50 through the bundled extension; the app baseline is
+  Ubuntu 24.04+ with GNOME 46
+- Wayland sessions. Clipman is Wayland-native and X11 is not supported
+
+Reports about platforms outside this window are still read, but a fix
+may wait for the release that widens the window.
+
 ## Reporting a Vulnerability
 
 If you discover a security vulnerability in Clipman, please report it

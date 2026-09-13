@@ -8,11 +8,16 @@ is pushed.
 ## How a release happens
 
 1. Bump versions with `./scripts/bump-version.sh <new-version>` —
-   updates `pyproject.toml`, `snap/snapcraft.yaml`, and `aur/PKGBUILD`
-   in one shot.
+   updates `pyproject.toml`, `clipman/_version.py`,
+   `snap/snapcraft.yaml`, `flathub/*.json`, `aur/PKGBUILD`,
+   `CITATION.cff`, and `data/*.metainfo.xml` in one shot.
 2. Rename the `## [Unreleased]` section in `CHANGELOG.md` to
    `## [<new-version>] - YYYY-MM-DD`.
-3. Commit, tag (`git tag v<new-version>`), and push (`git push --tags`).
+3. Land the bump as a squash-merged pull request, then create the tag
+   through the GitHub API on the merged commit:
+   `gh api repos/MohammedEl-sayedAhmed/clipman/git/refs -f ref=refs/tags/v<new-version> -f sha=$(git rev-parse origin/main)`.
+   Do not `git push --tags`: the identity pre-push hook rejects a tag
+   that points at one of GitHub's squash commits.
 4. The `release.yml` workflow takes over — see the diagram below.
 
 ## Pipeline shape
@@ -78,7 +83,8 @@ flowchart TD
   manually — to enable the extension + keybinding.
 - **AppImage** bundles a Python 3.12 runtime and the clipman wheel.
   It does **not** bundle GTK or PyGObject. The user still needs
-  `python3-gi` and `gir1.2-gtk-3.0` (or distro equivalents) installed
+  `python3-gi`, `gir1.2-gtk-4.0` and `gir1.2-adw-1` (or distro
+  equivalents) installed
   system-wide. Bundling GTK fully in an AppImage is technically
   possible but historically fragile; for a self-contained install the
   Snap and Flatpak builds are better choices.

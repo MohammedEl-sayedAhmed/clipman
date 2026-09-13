@@ -18,7 +18,7 @@ surface is intentionally small.
 
 - **stable** — signature is part of the project's public contract;
   removal or rename triggers a MAJOR version bump (see
-  [ADR 0010](adr/0010-versioning-policy.md)). Adding an argument or
+  [ADR 0011](adr/0011-versioning-policy-refresh.md)). Adding an argument or
   a method is a MINOR bump, and the extension's `metadata.json`
   version goes up with it (precedent:
   [ADR 0005](adr/0005-paste-mode-as-dbus-arg.md)).
@@ -249,4 +249,4 @@ out / back in (Wayland requires a Shell restart to load extensions).
 
 - [ARCHITECTURE.md](../ARCHITECTURE.md) — full process model
 - [ADR 0005](adr/0005-paste-mode-as-dbus-arg.md) — D-Bus arg vs method choice
-- [ADR 0010](adr/0010-versioning-policy.md) — when D-Bus changes trigger which SemVer bump
+- [ADR 0011](adr/0011-versioning-policy-refresh.md) — when D-Bus changes trigger which SemVer bump

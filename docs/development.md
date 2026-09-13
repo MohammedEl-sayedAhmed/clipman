@@ -74,7 +74,7 @@ instead of skipping them. When pytest is not importable it falls back
 to `unittest discover -s tests`. The interpreter is `$CLIPMAN_PYTHON`,
 else `.venv/bin/python`, else `python3`.
 
-The full suite (331 tests) hits the actual SQLite layer, mocks
+The full suite (375 tests) hits the actual SQLite layer, mocks
 clipboard subprocesses, and exercises the keybinding parser. The CI
 matrix covers Python 3.10–3.12 on `ubuntu-24.04`.
 
@@ -175,7 +175,9 @@ gdbus call --session --dest com.clipman.Daemon \
 
 ## Useful environment variables
 
-- `CLIPMAN_DATA_DIR` — override the default `~/.local/share/clipman/`.
+- `WAYLAND_DISPLAY` — its presence selects the Wayland paste path in
+  `clipman/window.py`. The data directory is not configurable; it is
+  fixed at `~/.local/share/clipman/` in `clipman/database.py`.
 - `SNAP` (set by the snap runtime) — turns on the snap-aware code
   paths in `clipman/app.py` and skips `wl-paste --watch` (it can't
   see the host clipboard under strict confinement).

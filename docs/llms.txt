@@ -17,5 +17,5 @@
 ## Distribution
 
 - Snap: `sudo snap install clipman`
-- PyPI: `pipx install clipman-clipboard`
+- PyPI: `pipx install --system-site-packages clipman-clipboard` (the flag is required — the GTK4/libadwaita `gi` bindings are distro packages and cannot be pip-installed)
 - AUR: `yay -S clipman-clipboard`
