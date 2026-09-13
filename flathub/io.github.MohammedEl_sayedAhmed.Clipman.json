@@ -8,6 +8,8 @@
         "--share=ipc",
         "--socket=wayland",
         "--socket=fallback-x11",
+        "--own-name=com.clipman.Daemon",
+        "--own-name=com.clipman.Clipman",
         "--talk-name=org.gnome.Shell",
         "--talk-name=org.gnome.Shell.Extensions.clipman"
     ],

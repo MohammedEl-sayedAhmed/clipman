@@ -48,6 +48,9 @@ jobs:
       - name: Open alert issue
         env:
           GH_TOKEN: ${{ github.token }}
+          # Read event data through env; never expand it inside the heredoc.
+          ACTOR: ${{ github.actor }}
+          HEAD_TS: ${{ github.event.head_commit.timestamp }}
         run: |
           gh issue create \
             --title "[security] Unauthorized push to security-baseline reverted" \
@@ -57,9 +60,9 @@ jobs:
 
           | Field | Value |
           |-------|-------|
-          | Actor | \`${{ github.actor }}\` |
-          | Commit | [\`${{ github.sha }}\`](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}) |
-          | Timestamp | \`${{ github.event.head_commit.timestamp }}\` |
+          | Actor | \`${ACTOR}\` |
+          | Commit | [\`${GITHUB_SHA}\`](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}) |
+          | Timestamp | \`${HEAD_TS}\` |
 
           The push was **automatically reverted**.
 

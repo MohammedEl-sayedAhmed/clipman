@@ -92,7 +92,7 @@ scripts/dev.sh lint                  # or: make lint  — ruff + shellcheck
 scripts/dev.sh check                 # or: make check — lint, then test
 ```
 
-`lint` runs `ruff check clipman tests` and
+`lint` runs `ruff check clipman tests scripts clipman.py` and
 `shellcheck --severity=warning install.sh uninstall.sh launcher.sh scripts/*.sh`,
 the same scopes CI uses; `scripts/dev.sh ruff` and
 `scripts/dev.sh shellcheck` run either half alone. Ruff is pinned in

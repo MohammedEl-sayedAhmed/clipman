@@ -74,7 +74,9 @@ parts:
     stage-packages:
       - wtype
     override-build: |
-      craftctl default
+      # No `craftctl default`: the dump plugin would copy the whole
+      # checkout (docs, tests, CI files) into the snap. Only the files
+      # below ship. Stage packages are unpacked before this runs.
       install -d $CRAFT_PART_INSTALL/share/clipman
       cp -r clipman/ $CRAFT_PART_INSTALL/share/clipman/clipman/
       cp clipman.py $CRAFT_PART_INSTALL/share/clipman/
@@ -82,6 +84,8 @@ parts:
       chmod +x $CRAFT_PART_INSTALL/share/clipman/launcher.sh
       install -Dm644 data/com.clipman.Clipman.desktop $CRAFT_PART_INSTALL/share/applications/com.clipman.Clipman.desktop
       install -Dm644 data/com.clipman.Clipman.svg $CRAFT_PART_INSTALL/share/icons/hicolor/scalable/apps/com.clipman.Clipman.svg
+      install -Dm644 LICENSE $CRAFT_PART_INSTALL/share/doc/clipman/LICENSE
+      install -Dm644 NOTICE $CRAFT_PART_INSTALL/share/doc/clipman/NOTICE
 
       install -d $CRAFT_PART_INSTALL/bin
       cat > $CRAFT_PART_INSTALL/bin/clipman-wrapper << 'EOF'
