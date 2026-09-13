@@ -52,6 +52,7 @@ class SnippetsDialog(Adw.Dialog):
         self._snippets = []
         self._selected_id = None
         self._dirty = False
+        self._draft = False  # "New" was pressed and nothing is saved yet
         self._suppress_dirty = False  # set while we programmatically reload
 
         self.set_title(_("Snippets"))
@@ -286,6 +287,7 @@ class SnippetsDialog(Adw.Dialog):
             self._load_into_form(snippet)
 
     def _load_into_form(self, snippet):
+        self._draft = False
         self._suppress_dirty = True
         try:
             if snippet is None:
@@ -336,27 +338,20 @@ class SnippetsDialog(Adw.Dialog):
     # ------------------------------------------------------------------
 
     def _on_new_clicked(self, _btn):
-        sid = self.db.add_snippet(_("New snippet"), "")
-        # Do NOT pre-set self._selected_id here: _reload_list() would
-        # select the matching row, but _on_row_selected early-returns
-        # when snippet_id == self._selected_id, so _load_into_form would
-        # never run and the editor form would stay blank. Reload first
-        # (with _selected_id still pointing at the previous snippet, or
-        # None) so selecting the new row is a genuine change, then load
-        # the new snippet into the form explicitly.
-        self._reload_list()
-        snippet = next(
-            (s for s in self._snippets if s["id"] == sid), None
-        )
-        if snippet is not None:
-            row = self._find_row_by_id(sid)
-            if row is not None:
-                self._listbox.select_row(row)
-            self._load_into_form(snippet)
+        # Nothing is written until the user saves, so cancelling leaves no
+        # empty row behind. Save stays insensitive until the name is filled.
+        self._listbox.select_row(None)
+        self._load_into_form(None)
+        self._draft = True
+        self._title_label.set_text(_("New snippet"))
+        self._meta_label.set_text(_("Not saved yet"))
+        self._name_row.grab_focus()
 
     def _on_save_clicked(self, _btn):
         name = self._name_row.get_text().strip()
         if not name:
+            # The button is insensitive without a name; this only guards
+            # against a programmatic click.
             return
         buf = self._textview.get_buffer()
         text = buf.get_text(buf.get_start_iter(), buf.get_end_iter(), True)
@@ -364,12 +359,24 @@ class SnippetsDialog(Adw.Dialog):
             self._selected_id = self.db.add_snippet(name, text)
         else:
             self.db.update_snippet(self._selected_id, name, text)
+        self._draft = False
         self._set_dirty(False)
         self._reload_list()
+        # Selecting the row is not enough: _on_row_selected early-returns
+        # when the id already matches, so load the saved snippet by hand.
+        row = self._find_row_by_id(self._selected_id)
+        if row is not None:
+            self._listbox.select_row(row)
+        fresh = next(
+            (s for s in self._snippets if s["id"] == self._selected_id), None
+        )
+        if fresh is not None:
+            self._load_into_form(fresh)
 
     def _on_cancel_clicked(self, _btn):
         # Reload the persisted version of the current snippet, discarding
-        # whatever the user typed since the last save.
+        # whatever the user typed since the last save. An unsaved draft
+        # just disappears.
         if self._selected_id is None:
             self._load_into_form(None)
             return
@@ -381,6 +388,25 @@ class SnippetsDialog(Adw.Dialog):
 
     def _on_delete_clicked(self, _btn):
         if self._selected_id is None:
+            return
+        name = self._name_row.get_text().strip() or _("this snippet")
+        dialog = Adw.AlertDialog(
+            heading=_("Delete snippet?"),
+            body=_("\u201c{name}\u201d will be removed. This can't be "
+                   "undone.").format(name=name),
+        )
+        dialog.add_response("cancel", _("Cancel"))
+        dialog.add_response("delete", _("Delete"))
+        dialog.set_response_appearance(
+            "delete", Adw.ResponseAppearance.DESTRUCTIVE
+        )
+        dialog.set_default_response("cancel")
+        dialog.set_close_response("cancel")
+        dialog.connect("response", self._on_delete_response)
+        dialog.present(self)
+
+    def _on_delete_response(self, _dialog, response):
+        if response != "delete" or self._selected_id is None:
             return
         self.db.delete_snippet(self._selected_id)
         self._selected_id = None

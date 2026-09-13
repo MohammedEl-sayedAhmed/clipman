@@ -364,7 +364,8 @@ clipman/
 ├── aur/
 │   └── PKGBUILD                   # AUR packaging
 ├── scripts/
-│   └── bump-version.sh            # Single command to bump version everywhere
+│   ├── bump-version.sh            # Single command to bump version everywhere
+│   └── gen-pot.py                 # Rebuilds po/clipman.pot from POTFILES.in
 ├── .github/
 │   └── workflows/                 # CI: tests, lint, CodeQL, Scorecard, secret-scan,
 │                                  #     release, snap-refresh, dependency-review, …

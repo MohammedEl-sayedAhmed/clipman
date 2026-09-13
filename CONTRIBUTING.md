@@ -128,20 +128,22 @@ See [docs/development.md](docs/development.md) for the full setup.
 
 ### i18n (Translations)
 
-All user-visible strings in `window.py` are wrapped with `_()` for translation support:
+User-visible strings are wrapped with `_()` for translation support:
 
 ```python
-from clipman import _
+from gettext import gettext as _
 
 label.set_text(_("Search..."))
 status.set_text(_("{count} items").format(count=total))
 ```
 
-- Import `_` from `clipman` (set up in `__init__.py`)
+- Import `_` from the standard library, not from `clipman`. The package
+  root already binds the text domain, and `from clipman import _` inside
+  a submodule is a cycle that CodeQL reports as `py/cyclic-import`.
 - Wrap every user-visible string with `_()`
 - Use `.format()` for strings with variables — keep placeholders inside the translatable string
-- Translation template: `po/clipman.pot`
-- Source file list: `po/POTFILES.in`
+- Translation template: `po/clipman.pot`; regenerate it with `scripts/dev.sh i18n`
+- Source file list: `po/POTFILES.in` — add a file when it grows its first `_()`
 - Adding a new translation: see [docs/translating.md](docs/translating.md).
 
 ### CSS Theming
