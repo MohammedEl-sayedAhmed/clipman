@@ -202,6 +202,29 @@ All notable changes to Clipman are documented in this file.
   `com.clipman.Clipman.desktop` (with the install path filled in) into
   `~/.local/share/applications`; `uninstall.sh` removes it.
 
+### Fixed — git hooks
+
+- The trailer-identity check never ran. It read the output of
+  `git interpret-trailers --parse` as a tab-separated pair, but that
+  command prints `Key: value`, so every trailer was skipped and the
+  function always reported success. AI co-author trailers were still
+  blocked, by the footprint scanner. The parser now splits on the first
+  colon.
+- With the check live, its old policy rejected every raw personal or
+  work domain, which would have blocked outside contributors'
+  `Signed-off-by` and `Reviewed-by` trailers. The repo's own test corpus
+  requires those to pass. The policy now rejects only two things: an
+  AI-assistant vendor domain, and a trailer whose display name borrows
+  the maintainer's handle on an address that does not back it up.
+- The push-URL check matched the allowlist as a substring of the whole
+  URL, so a repo such as `attacker/<owner>-mirror.git` passed. It now
+  compares the owner segment of the URL exactly, and falls back to the
+  old check for remotes with no host, such as local paths.
+- `.githooks/_test.sh` is clean under shellcheck, and `scripts/dev.sh
+  shellcheck` now covers the hooks as well. The suite went from one
+  failing case out of 43 to 51 of 51, with new cases for impersonation,
+  an AI vendor domain and the push-URL owner match.
+
 ### Security — GNOME Shell extension (metadata version 8)
 
 - The extension's D-Bus methods (`SimulatePaste`, `MoveWindowToCursor`,

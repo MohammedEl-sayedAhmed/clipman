@@ -10,13 +10,14 @@
 #   -  5 contributor_safe: commits from other open-source contributors
 #     (their own emails, normal Signed-off-by, Reviewed-by trailers, etc.)
 #
-# This script only exercises the FOOTPRINT scanner via scan_footprints.
-# Identity allowlist checks are deterministic substring matches and are
-# unit-tested separately at the bottom of this script.
+# Each message case runs through the real commit-msg hook, so both the
+# footprint scanner and the trailer-identity check are exercised. The
+# identity allowlist and the push-URL owner match are unit-tested at the
+# bottom of this script.
 
 set -uo pipefail
 
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 2
 
 # shellcheck source=.githooks/_lib.sh
 . ./_lib.sh
@@ -107,6 +108,35 @@ for entry in "${ident_tests[@]}"; do
     else
         fail=$((fail+1))
         fail_lines+=("identity [$input] expected=$expect got=$actual")
+    fi
+done
+
+# ----- Push-URL owner tests -----------------------------------------------
+
+# The owner segment must match the allowlist exactly. A repo named after the
+# owner under somebody else's account must not pass on a substring.
+url_tests=(
+    "git@github.com:MohammedEl-sayedAhmed/clipman.git|1"
+    "https://github.com/MohammedEl-sayedAhmed/clipman.git|1"
+    "ssh://git@github.com/MohammedEl-sayedAhmed/clipman.git|1"
+    "git@github.com:attacker/MohammedEl-sayedAhmed-mirror.git|0"
+    "https://github.com/attacker/MohammedEl-sayedAhmed.git|0"
+    "https://user@github.com/OtherOrg/clipman.git|0"
+)
+
+for entry in "${url_tests[@]}"; do
+    input="${entry%|*}"
+    expect="${entry##*|}"
+    if owner=$(push_url_owner "$input") && is_allowed_owner "$owner"; then
+        actual=1
+    else
+        actual=0
+    fi
+    if [ "$actual" = "$expect" ]; then
+        pass=$((pass+1))
+    else
+        fail=$((fail+1))
+        fail_lines+=("push url [$input] expected=$expect got=$actual")
     fi
 done
 

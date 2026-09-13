@@ -16,9 +16,15 @@ failed=0
 # ----- Push URL check ------------------------------------------------------
 
 bad_urls=()
+owner=""
 while IFS= read -r url; do
     [ -z "$url" ] && continue
-    if ! contains_allowed_identity "$url"; then
+    # Match the URL's owner segment exactly where we can parse one, so a
+    # repo like "<owner>-mirror" under another account cannot pass on a
+    # substring. URLs with no host (local paths) keep the looser check.
+    if owner=$(push_url_owner "$url"); then
+        is_allowed_owner "$owner" || bad_urls+=("$url")
+    elif ! contains_allowed_identity "$url"; then
         bad_urls+=("$url")
     fi
 done < <(printf '%s\n' "$remote_url"; collect_push_urls)
@@ -125,6 +131,9 @@ scan_commit() {
     return "$local_failed"
 }
 
+# git feeds four fields per ref; only the local sha and the remote sha
+# are used, but all four must be read to consume the line.
+# shellcheck disable=SC2034
 while read -r local_ref local_sha remote_ref remote_sha; do
     [ -z "$local_sha" ] && continue
     [ "$local_sha" = "$zero" ] && continue  # branch deletion
