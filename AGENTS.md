@@ -158,7 +158,7 @@ specific assistant.
 
 ## Support window
 
-Python 3.10–3.12 · GNOME Shell 45–50 (app baseline: Ubuntu 24.04+/GNOME 46)
+Python 3.10–3.12 · GNOME Shell 45–51 (app baseline: Ubuntu 24.04+/GNOME 46)
 · Wayland-native. Keep README badges, `README` requirements,
 ADR-0011, `SECURITY.md`, and `extension/metadata.json` in agreement when
 this changes.

@@ -53,7 +53,7 @@ state is touched off-thread.
 
 The GNOME Shell extension under `extension/` is an ES module that
 loads inside the Shell's gjs process. It is compatible with GNOME
-Shell 45 through 50. On clipboard `owner-changed` events the
+Shell 45 through 51. On clipboard `owner-changed` events the
 extension reads the new content via a MIME-type fallback chain
 (`text/plain;charset=utf-8` -> `UTF8_STRING` -> `text/plain` ->
 `STRING`) and forwards it to the daemon over D-Bus. It also exposes

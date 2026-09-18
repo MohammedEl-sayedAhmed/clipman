@@ -15,7 +15,7 @@ Like Windows `Win+V` — but for Linux.
 [![GitHub Stars](https://img.shields.io/github/stars/MohammedEl-sayedAhmed/clipman?style=flat&logo=github&label=Stars)](https://github.com/MohammedEl-sayedAhmed/clipman/stargazers)
 [![GitHub Downloads](https://img.shields.io/github/downloads/MohammedEl-sayedAhmed/clipman/total?logo=github&label=Downloads)](https://github.com/MohammedEl-sayedAhmed/clipman/releases)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04+-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com)
-[![GNOME](https://img.shields.io/badge/GNOME-46--50-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
+[![GNOME](https://img.shields.io/badge/GNOME-46--51-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MohammedEl-sayedAhmed/clipman/badge)](https://scorecard.dev/viewer/?uri=github.com/MohammedEl-sayedAhmed/clipman)
 [![Wayland](https://img.shields.io/badge/Wayland-native-yellow)](https://wayland.freedesktop.org)
 [![Python](https://img.shields.io/badge/Python-3.10--3.12-3776AB?logo=python&logoColor=white)](https://python.org)
@@ -116,7 +116,7 @@ Clipman is a **Wayland-native** clipboard manager built on a GNOME Shell extensi
 
 ## Requirements
 
-- Ubuntu 24.04+ with GNOME 46–50 and Wayland
+- Ubuntu 24.04+ with GNOME 46–51 and Wayland
 - Python 3.10–3.12 (newer versions are not blocked, but CI does not test them)
 - GTK 4 + libadwaita 1.4+
 
