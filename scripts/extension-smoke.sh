@@ -34,7 +34,7 @@ if gdbus introspect --session --dest "$EXT_NAME" --object-path "$EXT_PATH" 2>/de
         | grep -q "SetPaused"; then
     ok "interface exports SetPaused (contract version 8)"
 else
-    ko "SetPaused missing: is extension v8 installed and enabled?"
+    ko "SetPaused missing: is extension v9 installed and enabled?"
 fi
 
 echo "== Foreign callers are refused (direct name)"

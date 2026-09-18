@@ -313,7 +313,12 @@ export default class ClipmanExtension extends Extension {
 
     _getVirtualKeyboard() {
         if (!this._virtualKeyboard) {
-            const seat = Clutter.get_default_backend().get_default_seat();
+            // Clutter.get_default_backend() was removed in GNOME Shell 51;
+            // global.stage.context.get_backend() is its replacement.
+            const backend = Clutter.get_default_backend
+                ? Clutter.get_default_backend()
+                : global.stage.context.get_backend();
+            const seat = backend.get_default_seat();
             this._virtualKeyboard = seat.create_virtual_device(
                 Clutter.InputDeviceType.KEYBOARD_DEVICE);
         }

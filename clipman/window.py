@@ -141,7 +141,7 @@ ROW_TYPE_ICONS = {
     "link": "insert-link-symbolic",
     "code": "utilities-terminal-symbolic",
     "image": "image-x-generic-symbolic",
-    "snip": "emblem-documents-symbolic",
+    "snip": "x-office-document-symbolic",
 }
 _TILE_TYPE_CLASSES = ("type-text", "type-link", "type-code",
                       "type-image", "type-snip")

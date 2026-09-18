@@ -28,7 +28,7 @@ The daemon exposes a session-bus D-Bus interface at `com.clipman.Daemon` (`/com/
 
 ## Supported compositors
 
-- GNOME Shell 45–50 (Mutter / Wayland) through the bundled Shell extension; the app baseline is Ubuntu 24.04+ with GNOME 46
+- GNOME Shell 45–51 (Mutter / Wayland) through the bundled Shell extension; the app baseline is Ubuntu 24.04+ with GNOME 46
 - KDE Plasma 6 (KWin / Wayland) via `wl-clipboard`
 - Sway, Hyprland, river, Niri and other wlroots compositors via `wl-clipboard`
 - X11 sessions are intentionally unsupported; legacy tools cover that case
