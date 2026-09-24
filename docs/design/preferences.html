@@ -551,7 +551,7 @@
     </style>
 <script src="theme.js" defer></script>
 </head>
-<body class="theme-light">
+<body class="theme-dark">
 
 <div class="theme-toggle">
     <span>theme</span>
@@ -631,7 +631,8 @@
                         <div class="label">Color scheme</div>
                         <div class="desc">Dark uses Catppuccin Mocha; Light uses warm stone with brand accents.</div>
                     </div>
-                    <div class="segmented">
+                    <!-- Shows the theme the page is in (theme.js). -->
+                    <div class="segmented" data-mirrors-theme>
                         <button class="active">Dark</button>
                         <button>Light</button>
                         <button>Follow system</button>

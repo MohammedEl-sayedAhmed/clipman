@@ -419,6 +419,19 @@ All notable changes to Clipman are documented in this file.
   now, and so does the database path in Preferences → Storage (a home
   folder can have those characters too).
 
+### Fixed — the theme toggle on the design pages
+
+- On a first visit, the design pages on the website (the mockups of the
+  popup, Preferences, the snippets editor and the states) showed the
+  light theme with "Dark" marked in their theme toggle. The page had
+  its own light default, and the shared `docs/design/theme.js` set the
+  theme and the buttons only when a theme was saved. It now always
+  applies the theme and marks its button: `?theme=` when the URL has
+  it, else the saved choice, else dark, the default of the marketing
+  page too. Every page also follows the theme of the page that embeds
+  it, not just the states page. The "Color scheme" row inside the
+  Preferences mockup shows the page's theme as well.
+
 ### Fixed — git hooks
 
 - The trailer-identity check never ran. It read the output of

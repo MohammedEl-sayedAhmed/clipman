@@ -580,7 +580,7 @@
     </style>
 <script src="theme.js" defer></script>
 </head>
-<body class="theme-light">
+<body class="theme-dark">
 
 <div class="theme-toggle">
     <span>theme</span>
@@ -999,28 +999,8 @@ document.querySelectorAll('.picker-item').forEach(item => {
 const params = new URLSearchParams(location.search);
 if (params.get('embed') === '1') document.body.classList.add('embed');
 
-// Initial theme from ?theme= URL or default to dark.
-const themeParam = params.get('theme');
-function applyTheme(t) {
-    const cls = (t === 'light') ? 'theme-light' : 'theme-dark';
-    // Preserve the .embed class while swapping the theme class.
-    const embed = document.body.classList.contains('embed') ? ' embed' : '';
-    document.body.className = cls + embed;
-}
-applyTheme(themeParam);
-
-// Listen for live theme changes from the parent window when embedded.
-// Restrict to messages from the SAME origin (and the file:// case used
-// during local preview) to satisfy the js/missing-origin-check rule.
-window.addEventListener('message', (e) => {
-    if (!e || !e.data) return;
-    const sameOrigin = (e.origin === window.location.origin) || (e.origin === 'null');
-    if (!sameOrigin) return;
-    if (e.data.type !== 'clipman-theme') return;
-    const v = e.data.value;
-    if (v !== 'light' && v !== 'dark') return;
-    applyTheme(v);
-});
+// The theme (?theme=, the saved choice, the embedding page's messages)
+// is handled by theme.js, like on every design page.
 
 // Initial state from ?state= URL or first item
 const initial = params.get('state');
