@@ -15,7 +15,8 @@ on `main`.
 | Dependency review | `dependency-review.yml` | `pull_request` to `main` | Fails the PR on high-severity vulnerabilities or disallowed licenses introduced by dependency changes. | No (informational; no contexts on protection ruleset) |
 | Auto-label PR | `labeler.yml` | `pull_request_target` to `main` | Applies path-based labels from `.github/labeler.yml` so triage knows which area a PR touches. | No |
 | Sync labels | `labels.yml` | `push` to `main` touching `.github/labels.yml`, `workflow_dispatch` | Reconciles repository labels with the declarative `.github/labels.yml` source of truth. | No (push-only) |
-| Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests scripts clipman.py`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`, `.githooks/`). | Yes — `Python (ruff)` and `Shell (shellcheck)` |
+| Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests scripts clipman.py`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`, `.githooks/`), plus `scripts/dev.sh hooks-test`, the local git hooks' own test suite. | Yes — `Python (ruff)`, `Shell (shellcheck)` and `Hooks (self-test)` |
+| Footprints | `footprints.yml` | `pull_request` to `main` (opened, synchronize, reopened, edited) | `scripts/check-footprints.sh`: blocks AI-tool attribution in the pull request's commits (trailers, messages, added lines), title and description, with the same checks as the local git hooks. A bot's description is skipped. | Yes — `Footprints` |
 | Refresh marketing numbers | `refresh-numbers.yml` | Daily cron (`0 6 * * *`), `workflow_dispatch`, `push` to `main` touching its own paths | Fetches PyPI and GNOME Extensions counts on the runner, writes `docs/_data/numbers.json` and the self-hosted star-history SVGs, then opens an auto-merge pull request. Authenticates with `NUMBERS_TOKEN` so that pull request gets its required checks. | No |
 | Release | `release.yml` | `push` of tag matching `v*.*.*`, `workflow_dispatch` | End-to-end release pipeline: pre-flight version checks, matrix tests, builds (PyPI, snap, .deb/.rpm, AppImage, extension bundle), and publishes to PyPI, Snap Store, AUR, and GitHub Releases. | No (tag-triggered only) |
 | Scorecard | `scorecard.yml` | `push` to `main`, weekly cron (`37 4 * * 1`), `branch_protection_rule` | OSSF Scorecard supply-chain analysis; uploads SARIF to the GitHub Security tab and publishes results. | No |
@@ -192,6 +193,8 @@ Required status checks on `main` (from
 - `Analyze (python)` — from `codeql.yml`
 - `Python (ruff)` — from `lint.yml`
 - `Shell (shellcheck)` — from `lint.yml`
+- `Hooks (self-test)` — from `lint.yml`
+- `Footprints` — from `footprints.yml`
 - `gitleaks` — from `secret-scan.yml`
 - `review` — auto-label / review-gating context
 - `test (3.10)` — from `test.yml`

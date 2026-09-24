@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 # Shared helpers for Clipman's local git hooks.
 #
-# These hooks are LOCAL ONLY. They are not part of CI and do not block other
-# contributors' pull requests. They exist so the repo owner can catch two
-# specific classes of mistake before they leave the machine:
+# These hooks are LOCAL ONLY. They are not part of CI and never gate anyone
+# else's pull request. They exist so the repo owner can catch two specific
+# classes of mistake before they leave the machine:
 #
 #   1. Wrong GitHub account active when committing/pushing.
 #   2. AI-tool footprints (Claude / Anthropic / generic LLM attributions)
 #      ending up in commit messages or staged content.
 #
-# Hooks are opt-in: run scripts/install-hooks.sh to enable. External
-# contributors are unaffected (denylist is two specific usernames; pattern
-# scanner is universal but tuned to avoid common false positives like
-# "Claude Monet" or anthropic.com appearing as a URL in citations).
+# Hooks are opt-in: scripts/install-hooks.sh enables them, and
+# scripts/dev-setup.sh does so only in the maintainer's own clone. The
+# account checks (1) run only in maintainer mode (see is_maintainer_clone),
+# so a contributor who installs the hooks keeps just the footprint checks
+# (2), which are tuned to avoid false positives like "Claude Monet" or
+# anthropic.com appearing as a URL in citations.
 #
 # Known limitations (see docs/hooks.md):
 #   - Unicode-obfuscated footprints (ZWSP, homoglyphs, NBSP) are NOT caught
@@ -67,22 +69,23 @@ is_path_allowlisted() {
 }
 
 # ---------------------------------------------------------------------------
-# Identity allowlist: the only account(s) allowed to commit/push from this
-# clone after the local hooks are installed.
+# Identity allowlist: the only account(s) allowed to commit/push from the
+# maintainer's clone (see is_maintainer_clone).
 # ---------------------------------------------------------------------------
 #
 # Default whitelist holds only the repo owner's personal account. Override
 # via env: CLIPMAN_HOOKS_ALLOW="login1 login2"  (space-separated usernames).
 # Empty/whitespace values restore the safe default rather than turning the
-# check off — there is no "off" without setting CLIPMAN_HOOKS_BYPASS=1 (one
-# of the matched patterns must be present).
+# check off. There is no switch that turns it off in the maintainer's
+# clone; `--no-verify` skips the hooks once.
 #
 # Match is case-insensitive substring against:
 #   - git user.name / user.email
 #   - GIT_AUTHOR_NAME/_EMAIL, GIT_COMMITTER_NAME/_EMAIL env vars
 #   - GIT_AUTHOR_IDENT, GIT_COMMITTER_IDENT (the post-override truth)
-#   - the gh-CLI active login (best-effort, not blocking when gh missing)
-#   - commit-trailer values on per-commit scans
+#   - the gh-CLI active login (skipped when gh is missing or logged out)
+#   - the author and committer of each pushed commit
+# Trailers use their own, looser policy: is_safe_trailer_email below.
 
 HOOKS_ALLOW_DEFAULT=("MohammedEl-sayedAhmed")
 
@@ -159,6 +162,34 @@ is_allowed_owner() {
 allowed_list_for_message() {
     local IFS=", "
     printf '%s' "${HOOKS_ALLOW[*]}"
+}
+
+# Maintainer mode: the account checks only make sense in the maintainer's
+# own clone. An explicit `git config clipman.hooks.maintainer true|false`
+# wins; install-hooks.sh sets it. When it is unset, a clone whose origin
+# URL, as configured, belongs to an allowlisted owner counts as the
+# maintainer's. So an existing clone keeps its protection with no action,
+# while a contributor's clone of their own fork does not. The configured
+# URL is used, not the rewritten one, so a rewrite rule that sends pushes
+# elsewhere cannot also switch the checks off.
+is_maintainer_clone() {
+    local flag url owner
+    flag=$(git config --type=bool --get clipman.hooks.maintainer 2>/dev/null || true)
+    case "$flag" in
+        true) return 0 ;;
+        false) return 1 ;;
+    esac
+    url=$(git config --get remote.origin.url 2>/dev/null) || return 1
+    owner=$(push_url_owner "$url") || return 1
+    is_allowed_owner "$owner"
+}
+
+# Printed under every account-check failure: the way out for a contributor
+# whose clone was taken for the maintainer's.
+hint_not_maintainer() {
+    hook_detail "Not the maintainer? The account checks are for the maintainer's"
+    hook_detail "clone only. Turn them off in this clone with:"
+    hook_detail "  git config clipman.hooks.maintainer false"
 }
 
 # ---------------------------------------------------------------------------
@@ -358,6 +389,7 @@ _strip_invisibles() {
 
 # Scan stdin (or a file given as $1) for footprint patterns.
 # Returns 0 if clean, 1 if any pattern matched.
+# shellcheck disable=SC2120  # commit-msg passes a file; callers here use stdin
 scan_footprints() {
     local input
     if [ "$#" -ge 1 ] && [ -n "${1:-}" ]; then
@@ -405,6 +437,80 @@ parse_message_trailers() {
 }
 
 # ---------------------------------------------------------------------------
+# Per-commit content checks
+# ---------------------------------------------------------------------------
+#
+# Everything about a commit except who made it: trailer identities, the
+# message, and the lines it adds outside HOOKS_PATH_ALLOWLIST. Shared by
+# pre-push and scripts/check-footprints.sh (CI), so the local hooks and the
+# pull-request check block exactly the same things. Returns 0 when clean.
+scan_commit_content() {
+    local sha="$1"
+    local failed=0
+
+    # Trailer identities. Co-Authored-By / Signed-off-by / Reviewed-by /
+    # Tested-by trailers may not use an AI-assistant vendor domain or
+    # borrow an allowlisted handle; everyone else, outside contributors
+    # included, passes. See is_safe_trailer_email above.
+    local tmp_msg
+    tmp_msg=$(mktemp)
+    git log -1 --format='%B' "$sha" > "$tmp_msg"
+    if ! scan_trailer_identities "$tmp_msg"; then
+        hook_error "commit $sha has a trailer that is not allowed"
+        hook_detail "  $(git log -1 --format='%h %s' "$sha")"
+        failed=1
+    fi
+    rm -f "$tmp_msg"
+
+    # Footprint scan: message
+    local message
+    message=$(git log -1 --format='%B' "$sha")
+    if ! printf '%s' "$message" | scan_footprints; then
+        hook_error "commit $sha message contains a footprint"
+        hook_detail "  $(git log -1 --format='%h %s' "$sha")"
+        failed=1
+    fi
+
+    # Footprint scan: added content in non-allowlisted files (BYPASS-12)
+    # We compare each commit against its parent; for root commits, against
+    # an empty tree.
+    local parents parent diffrange added_files
+    parents=$(git log -1 --format='%P' "$sha")
+    if [ -z "$parents" ]; then
+        # Root commit
+        diffrange="4b825dc642cb6eb9a060e54bf8d69288fbee4904..$sha"
+    else
+        parent=${parents%% *}  # first parent only (merge commits)
+        diffrange="${parent}..${sha}"
+    fi
+
+    added_files=$(git diff --name-only --diff-filter=AM "$diffrange" 2>/dev/null || true)
+    if [ -n "$added_files" ]; then
+        local aggregated=""
+        while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            if is_path_allowlisted "$path"; then continue; fi
+            local file_add
+            file_add=$(git diff --no-color --diff-filter=AM "$diffrange" -- "$path" 2>/dev/null \
+                       | awk '/^\+\+\+ /{next} /^\+/{print}')
+            if [ -n "$file_add" ]; then
+                aggregated="${aggregated}${file_add}"$'\n'
+            fi
+        done <<<"$added_files"
+
+        if [ -n "$aggregated" ]; then
+            if ! printf '%s' "$aggregated" | scan_footprints; then
+                hook_error "commit $sha diff contains a footprint"
+                hook_detail "  $(git log -1 --format='%h %s' "$sha")"
+                failed=1
+            fi
+        fi
+    fi
+
+    return "$failed"
+}
+
+# ---------------------------------------------------------------------------
 # Identity sources
 # ---------------------------------------------------------------------------
 
@@ -422,14 +528,12 @@ collect_local_identities() {
     } | sed '/^$/d'
 }
 
+# Every URL a push to remote $1 can reach. `git remote get-url --push`
+# already applies insteadOf and pushInsteadOf rewrites, so these are the
+# real destinations. Rewrite rules for other hosts (a work GitLab, say)
+# never touch this push and must not fail it.
 collect_push_urls() {
-    {
-        git remote get-url --push origin 2>/dev/null
-        git config --get remote.origin.url 2>/dev/null
-        git config --get remote.origin.pushurl 2>/dev/null
-        git config --get-regexp '^url\..*\.(insteadof|pushinsteadof)$' 2>/dev/null \
-            | awk '{print $2}'
-    } | sed '/^$/d'
+    git remote get-url --push --all "${1:-origin}" 2>/dev/null | sed '/^$/d'
 }
 
 gh_active_login() {

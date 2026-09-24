@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
-# _test.sh — run the corpus against the footprint scanner.
+# _test.sh — run the hooks corpus and unit tests against the real hooks.
 #
-# The corpus (.githooks/_test_corpus.json) was produced by the research
-# workflow and covers:
-#   - 15 should_block: real footprints (canonical trailer, variants, emoji,
-#     HTML entity escapes, etc.)
-#   - 10 should_pass : borderline content that LOOKS like a footprint but
-#     is legitimate (Claude Monet, anthropic.com URL in docs, etc.)
-#   -  5 contributor_safe: commits from other open-source contributors
-#     (their own emails, normal Signed-off-by, Reviewed-by trailers, etc.)
+# The corpus (.githooks/_test_corpus.json) has three categories:
+#   - should_block    : real footprints (canonical trailer, variants, emoji,
+#                       HTML entity escapes, ...) and wrong-account states
+#   - should_pass     : borderline content that LOOKS like a footprint but
+#                       is legitimate (Claude Monet, anthropic.com URL in
+#                       docs, ...)
+#   - contributor_safe: commits and clones of outside contributors (their
+#                       own identities, normal Signed-off-by trailers, ...)
 #
-# Each message case runs through the real commit-msg hook, so both the
-# footprint scanner and the trailer-identity check are exercised. The
-# identity allowlist and the push-URL owner match are unit-tested at the
-# bottom of this script.
+# A case whose input is a commit message runs through the real commit-msg
+# hook. A case whose input is a JSON object describes a clone instead; it
+# runs through the real pre-commit and pre-push hooks in a throwaway repo
+# (see _test_scenario.py). The identity allowlist and the push-URL owner
+# match are unit-tested at the bottom of this script.
 
 set -uo pipefail
 
@@ -36,7 +37,7 @@ fail_lines=()
 # to python3 (always present alongside our app), so the harness works on a
 # bare clone without root.
 if command -v jq >/dev/null 2>&1; then
-    parser=(jq -r 'to_entries[] | [(.key|tostring), .value.category, .value.expected_outcome, .value.reason, .value.input] | @tsv' "$CORPUS")
+    parser=(jq -r 'to_entries[] | [(.key|tostring), .value.category, .value.expected_outcome, (.value.expected_check // ""), .value.reason, .value.input] | @tsv' "$CORPUS")
 elif command -v python3 >/dev/null 2>&1; then
     parser=(python3 ./_test_parse.py "$CORPUS")
 else
@@ -50,27 +51,32 @@ decode_input() {
     printf '%b' "$1"
 }
 
-while IFS=$'\t' read -r idx category outcome reason input; do
+while IFS=$'\t' read -r idx category outcome check reason input; do
     input=$(decode_input "$input")
-    # JSON-shaped inputs represent git-state, not commit messages — they
-    # exercise identity logic, which is covered by the contains_allowed_identity
-    # unit tests below. Skip from the message scanner.
     if [[ "$input" =~ ^[[:space:]]*\{.*\}[[:space:]]*$ ]]; then
-        continue
-    fi
-
-    # Invoke the ACTUAL commit-msg hook so this harness validates real
-    # behaviour, not a reimplementation. (DESIGN-01 fix.)
-    tmpfile=$(mktemp)
-    # Real git commit messages end with a trailing newline — mirror that
-    # so hooks reading the message line-by-line don't miss the final line.
-    printf '%s\n' "$input" > "$tmpfile"
-    if ./commit-msg "$tmpfile" >/dev/null 2>&1; then
-        actual=PASS
+        # A JSON object describes a clone, not a message: run the real
+        # pre-commit and pre-push hooks against it in a throwaway repo.
+        # BLOCK(<hook>) means the other hook refused it than the one the
+        # case expects.
+        if ! command -v python3 >/dev/null 2>&1; then
+            actual="SKIPPED (python3 missing)"
+        elif ! actual=$(python3 ./_test_scenario.py "$PWD" "$input" "$check" 2>&1); then
+            actual="ERROR: ${actual//$'\n'/ }"
+        fi
     else
-        actual=BLOCK
+        # Invoke the ACTUAL commit-msg hook so this harness validates real
+        # behaviour, not a reimplementation. (DESIGN-01 fix.)
+        tmpfile=$(mktemp)
+        # Real git commit messages end with a trailing newline — mirror that
+        # so hooks reading the message line-by-line don't miss the final line.
+        printf '%s\n' "$input" > "$tmpfile"
+        if ./commit-msg "$tmpfile" >/dev/null 2>&1; then
+            actual=PASS
+        else
+            actual=BLOCK
+        fi
+        rm -f "$tmpfile"
     fi
-    rm -f "$tmpfile"
 
     if [ "$actual" = "$outcome" ]; then
         pass=$((pass+1))
@@ -81,6 +87,30 @@ while IFS=$'\t' read -r idx category outcome reason input; do
         fail_lines+=("    reason: $reason")
     fi
 done < <("${parser[@]}")
+
+# ----- Pull-request check (scripts/check-footprints.sh) --------------------
+#
+# The CI side of the footprint rule must block exactly what commit-msg
+# blocks, plus footprints in added lines, the title and the description.
+# _test_ci_scan.py prints mismatches, then "ci-scan <passed> <failed>".
+
+if command -v python3 >/dev/null 2>&1; then
+    ci_out=$(python3 ./_test_ci_scan.py "$PWD/.." 2>&1)
+    ci_summary=$(printf '%s\n' "$ci_out" | tail -n 1)
+    if [[ "$ci_summary" =~ ^ci-scan\ ([0-9]+)\ ([0-9]+)$ ]]; then
+        pass=$((pass + BASH_REMATCH[1]))
+        fail=$((fail + BASH_REMATCH[2]))
+        while IFS= read -r line; do
+            [ -n "$line" ] && fail_lines+=("$line")
+        done < <(printf '%s\n' "$ci_out" | sed '$d')
+    else
+        fail=$((fail + 1))
+        fail_lines+=("ci-scan did not run: ${ci_out//$'\n'/ }")
+    fi
+else
+    fail=$((fail + 1))
+    fail_lines+=("ci-scan skipped: python3 missing")
+fi
 
 # ----- Identity allowlist unit tests --------------------------------------
 
@@ -122,6 +152,7 @@ url_tests=(
     "git@github.com:attacker/MohammedEl-sayedAhmed-mirror.git|0"
     "https://github.com/attacker/MohammedEl-sayedAhmed.git|0"
     "https://user@github.com/OtherOrg/clipman.git|0"
+    "https://github.com/MohammedEl-sayedAhmed-mirror/clipman.git|0"
 )
 
 for entry in "${url_tests[@]}"; do

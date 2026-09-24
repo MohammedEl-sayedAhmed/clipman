@@ -1,32 +1,36 @@
 #!/usr/bin/env bash
-# pre-commit hook: identity allowlist + staged-diff footprint scan.
+# pre-commit hook: identity allowlist (maintainer's clone only) +
+# staged-diff footprint scan.
 
 # shellcheck source=.githooks/_lib.sh
 . "$(dirname -- "$(readlink -f -- "$0" 2>/dev/null || printf '%s' "$0")")/_lib.sh"
 
 failed=0
 
-# ----- Identity allowlist check --------------------------------------------
+# ----- Identity allowlist check (maintainer's clone only) -------------------
 
-bad_ident_lines=()
-while IFS= read -r ident; do
-    [ -z "$ident" ] && continue
-    if ! contains_allowed_identity "$ident"; then
-        bad_ident_lines+=("$ident")
+if is_maintainer_clone; then
+    bad_ident_lines=()
+    while IFS= read -r ident; do
+        [ -z "$ident" ] && continue
+        if ! contains_allowed_identity "$ident"; then
+            bad_ident_lines+=("$ident")
+        fi
+    done < <(collect_local_identities)
+
+    if [ "${#bad_ident_lines[@]}" -gt 0 ]; then
+        hook_error "git identity is not in the personal allowlist ($(allowed_list_for_message))"
+        for line in "${bad_ident_lines[@]}"; do
+            hook_detail "$line"
+        done
+        hook_detail "Fix one of:"
+        hook_detail "  git config user.email <id>+${HOOKS_ALLOW[0]}@users.noreply.github.com  (your GitHub noreply address)"
+        hook_detail "  git config user.name  ${HOOKS_ALLOW[0]}"
+        hook_detail "  unset GIT_AUTHOR_EMAIL GIT_COMMITTER_EMAIL  (if env shadowed config)"
+        hook_detail "  git config --show-origin --get user.email   (to see which file set it)"
+        hint_not_maintainer
+        failed=1
     fi
-done < <(collect_local_identities)
-
-if [ "${#bad_ident_lines[@]}" -gt 0 ]; then
-    hook_error "git identity is not in the personal allowlist ($(allowed_list_for_message))"
-    for line in "${bad_ident_lines[@]}"; do
-        hook_detail "$line"
-    done
-    hook_detail "Fix one of:"
-    hook_detail "  git config user.email mohammedelsayed4648@gmail.com"
-    hook_detail "  git config user.name  MohammedEl-sayedAhmed"
-    hook_detail "  unset GIT_AUTHOR_EMAIL GIT_COMMITTER_EMAIL  (if env shadowed config)"
-    hook_detail "  git config --show-origin --get user.email   (to see which file set it)"
-    failed=1
 fi
 
 # ----- Staged-diff footprint scan ------------------------------------------

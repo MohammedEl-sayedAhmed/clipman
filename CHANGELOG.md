@@ -244,6 +244,32 @@ All notable changes to Clipman are documented in this file.
   shellcheck` now covers the hooks as well. The suite went from one
   failing case out of 43 to 51 of 51, with new cases for impersonation,
   an AI vendor domain and the push-URL owner match.
+- The hooks blocked every outside contributor. `scripts/dev-setup.sh`
+  installs them in every clone, and they allowed only the maintainer's
+  identity. The account checks now run only in maintainer mode
+  (`git config clipman.hooks.maintainer`, which `install-hooks.sh` sets
+  from the clone's identity). A contributor's clone keeps just the
+  AI-footprint checks.
+- A new `Footprints` check runs on every pull request. It blocks AI-tool
+  attribution in the commits (trailers, messages, added lines), the
+  title and the description, with the same checks as the hooks, so the
+  rule holds for contributors who never installed them.
+- The pre-commit error told people to set their email to the
+  maintainer's personal address, which the check then rejected as well.
+  It now suggests the GitHub noreply form, and tells a contributor how to
+  turn the account checks off.
+- The push-URL check failed every push when the global git config had a
+  URL rewrite rule for any other host, such as a work GitLab. It now
+  checks only where the push really goes, after rewrites.
+- In maintainer mode, a `gh` CLI logged in to an account outside the
+  allowlist is now an error, not a warning, because gh may be the one
+  doing the push.
+- The test suite skipped the six corpus cases that describe a clone, and
+  four of them disagreed with the hooks. Those cases now run through the
+  real pre-commit and pre-push hooks in throwaway repos, next to twelve
+  new cases: URL rewrites, the mode setting, trailer checks, and a commit
+  made outside the hooks. CI runs the suite in the Lint workflow; 70 of
+  70 pass.
 
 ### Fixed — translations and the snippets editor
 
