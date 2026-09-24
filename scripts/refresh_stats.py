@@ -1,25 +1,28 @@
 #!/usr/bin/env python3
 """Refresh self-hosted GitHub stats: star-history SVGs + downloads history.
 
-Run daily by .github/workflows/refresh-numbers.yml (and locally for
-seeding). Produces:
+Run daily by .github/workflows/refresh-numbers.yml, which passes a
+checkout of the ``numbers`` branch as ``--out``. Writes into that
+directory:
 
-- ``docs/assets/star-history-dark.svg`` / ``star-history-light.svg`` —
-  a cumulative star chart generated from the stargazer timestamps.
-  Self-hosted because the star-history.com SVG endpoint rate-limits
-  behind GitHub's image proxy and then the README shows "no data".
-- ``docs/_data/stats_history.json`` — append-only daily series of
+- ``star-history-dark.svg`` / ``star-history-light.svg`` — a cumulative
+  star chart generated from the stargazer timestamps. Self-hosted
+  because the star-history.com SVG endpoint rate-limits behind GitHub's
+  image proxy and then the README shows "no data".
+- ``stats_history.json`` — append-only daily series of
   ``{date, stars, gh_downloads}`` so release-download growth (which
   GitHub only exposes as a live total) accrues a history we own.
 
 Deterministic on unchanged inputs: same stars + same downloads produce
-byte-identical files, so the bot's "no diff → no PR" invariant holds.
+byte-identical files, so the branch only gets a commit when a number
+moves.
 
 Auth: uses ``GH_TOKEN`` / ``GITHUB_TOKEN`` when set (the runner's token);
 anonymous works locally within rate limits.
 """
 from __future__ import annotations
 
+import argparse
 import datetime
 import json
 import os
@@ -28,9 +31,9 @@ import urllib.error
 import urllib.request
 
 REPO = "MohammedEl-sayedAhmed/clipman"
-HISTORY_PATH = "docs/_data/stats_history.json"
-SVG_DARK = "docs/assets/star-history-dark.svg"
-SVG_LIGHT = "docs/assets/star-history-light.svg"
+HISTORY_FILE = "stats_history.json"
+SVG_DARK = "star-history-dark.svg"
+SVG_LIGHT = "star-history-light.svg"
 UA = f"clipman-stats/1.0 (+https://github.com/{REPO})"
 
 THEMES = {
@@ -231,10 +234,10 @@ def build_star_svg(dates, theme):
     )
 
 
-def update_history(stars, downloads_total, per_tag):
+def update_history(path, stars, downloads_total, per_tag):
     """Append today's point only when a value moved (no-churn invariant)."""
     try:
-        with open(HISTORY_PATH) as f:
+        with open(path) as f:
             data = json.load(f)
     except (OSError, ValueError):
         data = {
@@ -253,21 +256,24 @@ def update_history(stars, downloads_total, per_tag):
             "gh_downloads": downloads_total,
             "per_tag": per_tag,
         })
-        with open(HISTORY_PATH, "w") as f:
+        with open(path, "w") as f:
             json.dump(data, f, indent=2)
             f.write("\n")
         return True
     return False
 
 
-def main():
-    os.makedirs(os.path.dirname(SVG_DARK), exist_ok=True)
-    os.makedirs(os.path.dirname(HISTORY_PATH), exist_ok=True)
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--out", default=".",
+                        help="directory to write into (default: current)")
+    out = parser.parse_args(argv).out
+    os.makedirs(out, exist_ok=True)
 
     dates = fetch_star_dates()
     if dates is not None:
-        for path, theme in THEMES.items():
-            with open(path, "w") as f:
+        for name, theme in THEMES.items():
+            with open(os.path.join(out, name), "w") as f:
                 f.write(build_star_svg(dates, theme))
         print(f"star SVGs written ({len(dates)} stars)")
     else:
@@ -277,7 +283,8 @@ def main():
     rel = fetch_release_downloads()
     if rel is not None and dates is not None:
         total, per_tag = rel
-        changed = update_history(len(dates), total, per_tag)
+        changed = update_history(os.path.join(out, HISTORY_FILE),
+                                 len(dates), total, per_tag)
         print(f"downloads total={total} history_changed={changed}")
     else:
         print("WARN: releases fetch failed; history left as-is",

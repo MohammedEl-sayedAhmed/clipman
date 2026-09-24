@@ -17,7 +17,7 @@ on `main`.
 | Sync labels | `labels.yml` | `push` to `main` touching `.github/labels.yml`, `workflow_dispatch` | Reconciles repository labels with the declarative `.github/labels.yml` source of truth. | No (push-only) |
 | Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests scripts clipman.py`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`, `.githooks/`), plus `scripts/dev.sh hooks-test`, the local git hooks' own test suite. | Yes — `Python (ruff)`, `Shell (shellcheck)` and `Hooks (self-test)` |
 | Footprints | `footprints.yml` | `pull_request` to `main` (opened, synchronize, reopened, edited) | `scripts/check-footprints.sh`: blocks AI-tool attribution in the pull request's commits (trailers, messages, added lines), title and description, with the same checks as the local git hooks. A bot's description is skipped. | Yes — `Footprints` |
-| Refresh marketing numbers | `refresh-numbers.yml` | Daily cron (`0 6 * * *`), `workflow_dispatch`, `push` to `main` touching its own paths | Fetches PyPI and GNOME Extensions counts on the runner, writes `docs/_data/numbers.json` and the self-hosted star-history SVGs, then opens an auto-merge pull request. Authenticates with `NUMBERS_TOKEN` so that pull request gets its required checks. | No |
+| Refresh marketing numbers | `refresh-numbers.yml` | Daily cron (`0 6 * * *`), `workflow_dispatch`, `push` to `main` touching its own paths | Fetches PyPI and GNOME Extensions counts on the runner, rebuilds the self-hosted star-history SVGs and the downloads history, and commits them to the `numbers` branch with the built-in `GITHUB_TOKEN`. No pull request, no personal token; `main` is never touched. | No |
 | Release | `release.yml` | `push` of tag matching `v*.*.*`, `workflow_dispatch` | End-to-end release pipeline: pre-flight version checks, matrix tests, builds (PyPI, snap, .deb/.rpm, AppImage, extension bundle), and publishes to PyPI, Snap Store, AUR, and GitHub Releases. | No (tag-triggered only) |
 | Scorecard | `scorecard.yml` | `push` to `main`, weekly cron (`37 4 * * 1`), `branch_protection_rule` | OSSF Scorecard supply-chain analysis; uploads SARIF to the GitHub Security tab and publishes results. | No |
 | Secret scan | `secret-scan.yml` | `push` to `main`, `pull_request` to `main` | Runs `gitleaks` over full git history to catch committed credentials. | Yes — `gitleaks` |
@@ -132,7 +132,6 @@ and PKGBUILD refresh), PR #39 (AUR auto-publish wiring).
 | (none — OIDC trusted publishing) | `publish-pypi` | Configured once at <https://pypi.org/manage/account/publishing/> against project `clipman-clipboard`, repo `clipman`, workflow `release.yml`, environment `pypi`. See ADR 0004. | n/a (no long-lived secret) | `publish-pypi` fails — investigate the trusted-publisher binding. |
 | `SNAPCRAFT_STORE_CREDENTIALS` | `publish-snap` in `release.yml`, `publish` job in `snap-refresh.yml` | `snapcraft export-login --acls package_access,package_push,package_release,package_update` then paste into repo secrets. | Yearly. Snap Store emails a reminder roughly 30 days before expiry. | `publish-snap` and `snap-refresh` `publish` log `::warning::` and skip — the build artifact is still uploaded for manual review. |
 | `AUR_SSH_PRIVATE_KEY` | `publish-aur` in `release.yml` | ed25519 keypair; register the public key on the AUR maintainer account and paste the private key into repo secrets. | As needed (compromise, account change). | `publish-aur` logs a `::warning::` and skips the push; no release artifacts are affected. |
-| `NUMBERS_TOKEN` | `refresh` job in `refresh-numbers.yml` | Fine-grained PAT scoped to this repository with `contents: write` and `pull-requests: write`; paste it into the repository secrets. | On PAT expiry. The symptom is the numbers pull request stalling as `BLOCKED` with no checks reported. | Falls back to `GITHUB_TOKEN`, but GitHub never starts workflow runs for `GITHUB_TOKEN` events, so the auto-merge pull request gets zero required checks and never merges. |
 | `GITHUB_TOKEN` | Every workflow | Built-in; nothing to add. | Rotated per-job by GitHub. | n/a — token always present. Each workflow declares the minimum `permissions:` block it needs (deny-by-default at the workflow level). |
 
 To reconfirm the exact set of secret names declared in the workflows:
@@ -141,9 +140,8 @@ To reconfirm the exact set of secret names declared in the workflows:
 grep -RhoE "secrets\.[A-Z_]+" .github/workflows/ | sort -u
 ```
 
-As of v1.2.1 that returns `secrets.AUR_SSH_PRIVATE_KEY`,
-`secrets.GITHUB_TOKEN`, `secrets.NUMBERS_TOKEN`, and
-`secrets.SNAPCRAFT_STORE_CREDENTIALS`.
+That returns `secrets.AUR_SSH_PRIVATE_KEY`, `secrets.GITHUB_TOKEN`,
+and `secrets.SNAPCRAFT_STORE_CREDENTIALS`.
 
 ## SHA-pinning policy
 

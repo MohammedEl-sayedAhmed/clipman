@@ -1,7 +1,8 @@
 name: Refresh marketing numbers
 
 # Fetches PyPI (via pypistats) and GNOME Extensions counts server-side
-# once a day and commits docs/_data/numbers.json if anything changed.
+# once a day, rebuilds the self-hosted star chart and downloads history,
+# and commits the results to the `numbers` branch.
 #
 # Why this exists: the marketing page (docs/index.html) renders live
 # counts under "By the numbers". The GitHub-derived ones (stars, forks,
@@ -10,8 +11,23 @@ name: Refresh marketing numbers
 # API key (pepy.tech v2) or rate-limit, and extensions.gnome.org sends
 # no CORS header at all — so client-side fetches silently fail and
 # leave the tile showing "—". This workflow does the same fetches from
-# a runner (no CORS), writes the result to a same-origin JSON file,
-# and the page reads it on load.
+# a runner (no CORS) and writes numbers.json, which the page reads from
+# raw.githubusercontent.com (that host sends
+# Access-Control-Allow-Origin: *).
+#
+# Why a branch of its own: the data used to reach main through a daily
+# auto-merge PR opened with the maintainer's personal token. That put a
+# bot PR under the maintainer's name every day, moved main daily (so
+# every open PR fell behind under strict branch protection), and would
+# stall whenever the token expired. The `numbers` branch has no
+# protection and no required checks, so the built-in token commits to
+# it directly: no PR, no personal token, and main only changes when
+# people change it. Pushes made with the built-in token start no
+# workflows, so this cannot loop.
+#
+# Readers: docs/index.html (numbers.json) and README.md (the star-history
+# SVGs and the downloads history), all through
+# raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/numbers/.
 
 on:
   schedule:
@@ -19,14 +35,13 @@ on:
     # ~daily cadence so anything more frequent buys nothing.
     - cron: '0 6 * * *'
   workflow_dispatch:
-  # On push to main of either the workflow itself or the seed JSON, run
+  # On push to main of the workflow itself or the stats script, run
   # immediately so changes to this job's plumbing are visible quickly.
   push:
     branches: [main]
     paths:
       - '.github/workflows/refresh-numbers.yml'
       - 'scripts/refresh_stats.py'
-      - 'docs/_data/numbers.json'
 
 # Default-deny at the workflow level; the single job below is granted
 # exactly what it needs (Scorecard Token-Permissions).
@@ -38,11 +53,14 @@ concurrency:
 
 jobs:
   refresh:
+    # A fork has no use for a numbers branch of its own.
+    if: github.repository == 'MohammedEl-sayedAhmed/clipman'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      contents: write       # push a refresh branch
-      pull-requests: write  # open the auto-merge PR
+      contents: write       # commit to the numbers branch
+    env:
+      DATA_DIR: numbers-data
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
@@ -51,32 +69,72 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-          # Use the fine-grained PAT (NUMBERS_TOKEN) so the branch push and
-          # the PR below are attributed to a real account rather than
-          # GITHUB_TOKEN. GitHub deliberately does NOT start workflow runs
-          # for events made with GITHUB_TOKEN (loop prevention), so a
-          # bot-opened PR gets zero required checks and its ``--auto`` merge
-          # blocks forever — which is why the daily star/number bump used to
-          # stall until manually nudged, then get superseded and lost.
-          # A PAT-opened PR runs its checks and self-merges unattended.
-          # Falls back to GITHUB_TOKEN until the secret exists (checks then
-          # stall as before — harmless, just not hands-off).
-          token: ${{ secrets.NUMBERS_TOKEN || secrets.GITHUB_TOKEN }}
+          # Full history, so a first run can seed the numbers branch from
+          # the last copies main carried. The persisted credentials are
+          # the built-in token, which pushes the numbers branch below.
+          fetch-depth: 0
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
+      - name: Check out the numbers branch
+        run: |
+          # ls-remote exits 2 only when the branch is missing, so a
+          # network failure stops the job instead of starting over.
+          if git ls-remote --exit-code --heads origin numbers >/dev/null; then
+            git fetch --depth=1 origin +refs/heads/numbers:refs/remotes/origin/numbers
+            git worktree add -B numbers "$DATA_DIR" refs/remotes/origin/numbers
+          else
+            status=$?
+            if [ "$status" -ne 2 ]; then
+              echo "::error::cannot read the numbers branch (git ls-remote exited $status)"
+              exit "$status"
+            fi
+            # First run, or the branch was deleted: start it empty and
+            # seed each file with the last copy main carried, so the
+            # downloads history is never lost.
+            git worktree add --orphan -b numbers "$DATA_DIR"
+            seed() {
+              local rev
+              if git cat-file -e "HEAD:$1" 2>/dev/null; then
+                git show "HEAD:$1" > "$DATA_DIR/$2"
+              elif rev=$(git rev-list -1 HEAD -- "$1") && [ -n "$rev" ]; then
+                git show "$rev^:$1" > "$DATA_DIR/$2"
+              fi
+            }
+            seed docs/_data/numbers.json numbers.json
+            seed docs/_data/stats_history.json stats_history.json
+            seed docs/assets/star-history-dark.svg star-history-dark.svg
+            seed docs/assets/star-history-light.svg star-history-light.svg
+          fi
+          if [ ! -f "$DATA_DIR/README.md" ]; then
+            # shellcheck disable=SC2016  # Markdown backticks, not substitutions
+            printf '%s\n' \
+              '# numbers' \
+              '' \
+              'Data written once a day by `.github/workflows/refresh-numbers.yml`.' \
+              'Nothing here is edited by hand; the next run would overwrite it.' \
+              '' \
+              '- `numbers.json`: PyPI and GNOME Extensions counters for the website.' \
+              '- `stats_history.json`: stars and release downloads, one point per change.' \
+              '- `star-history-dark.svg`, `star-history-light.svg`: the README star chart.' \
+              > "$DATA_DIR/README.md"
+          fi
+
       - name: Fetch upstream counters
-        id: fetch
         run: |
           python3 <<'PY'
-          import datetime, json, sys, urllib.request, urllib.error
+          import datetime, json, os, sys, urllib.request, urllib.error
 
-          NUMBERS_PATH = "docs/_data/numbers.json"
+          NUMBERS_PATH = os.path.join(os.environ["DATA_DIR"], "numbers.json")
           GNOME_EXTENSION_ID = 9407
           PYPI_PACKAGE = "clipman-clipboard"
           UA = "clipman-marketing-numbers/1.0 (+https://github.com/MohammedEl-sayedAhmed/clipman)"
+          COMMENT = ("Refreshed daily by .github/workflows/refresh-numbers.yml onto the "
+                     "numbers branch. docs/index.html reads it from raw.githubusercontent.com, "
+                     "because the browser cannot read PyPI stats or extensions.gnome.org "
+                     "directly (no CORS).")
 
           def get_json(url, timeout=10):
               req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
@@ -87,8 +145,11 @@ jobs:
                   print(f"WARN: fetch {url} failed: {e}", file=sys.stderr)
                   return None
 
-          with open(NUMBERS_PATH) as f:
-              prev = json.load(f)
+          try:
+              with open(NUMBERS_PATH) as f:
+                  prev = json.load(f)
+          except (OSError, ValueError):
+              prev = {}
 
           pypi = get_json(f"https://pypistats.org/api/packages/{PYPI_PACKAGE}/recent")
           gnome = get_json(f"https://extensions.gnome.org/extension-info/?pk={GNOME_EXTENSION_ID}")
@@ -97,11 +158,9 @@ jobs:
           # never wipes the JSON down to zeros. updated_at is carried over
           # unchanged here and only bumped below when a counter actually
           # moved: setting it to now() on every run made the file always
-          # differ, so each run opened a no-op PR — and merging one
-          # re-triggered this workflow via the push path filter, chaining
-          # junk PRs.
+          # differ, so every run would commit.
           new = {
-              "_comment": prev.get("_comment"),
+              "_comment": COMMENT,
               "updated_at": prev.get("updated_at"),
               "pypi": dict(prev.get("pypi", {})),
               "gnome": dict(prev.get("gnome", {})),
@@ -125,7 +184,7 @@ jobs:
 
           # Stamp a fresh timestamp only when a counter changed. If the
           # fetched data matches what's already committed, the file stays
-          # byte-identical and ``git diff --quiet`` below skips the PR.
+          # byte-identical and the commit step below has nothing to do.
           if new["pypi"] != prev.get("pypi", {}) or new["gnome"] != prev.get("gnome", {}):
               new["updated_at"] = (datetime.datetime.now(tz=datetime.timezone.utc)
                                    .replace(microsecond=0)
@@ -145,57 +204,19 @@ jobs:
       - name: Refresh self-hosted stats (star chart + downloads history)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 scripts/refresh_stats.py
+        run: python3 scripts/refresh_stats.py --out "$DATA_DIR"
 
-      - name: Open auto-merge PR if changed
+      - name: Commit to the numbers branch if anything changed
         env:
-          # Same PAT-with-fallback as checkout: the PR must be created by a
-          # real account for its required checks to run and ``--auto`` to
-          # complete without a manual nudge.
-          GH_TOKEN: ${{ secrets.NUMBERS_TOKEN || secrets.GITHUB_TOKEN }}
           GH_COMMIT_AUTHOR: github-actions[bot]
           GH_COMMIT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
         run: |
-          if git diff --quiet docs/_data/numbers.json docs/_data/stats_history.json docs/assets/star-history-dark.svg docs/assets/star-history-light.svg; then
-            echo "Numbers unchanged; nothing to push."
+          cd "$DATA_DIR"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Numbers unchanged; nothing to commit."
             exit 0
           fi
-          # Supersede any earlier open numbers PR before opening today's so
-          # stale refreshes don't pile up. With NUMBERS_TOKEN set each PR
-          # runs its checks and auto-merges within minutes, so there is
-          # rarely a prior one still open to close.
-          #
-          # NB: filter client-side, not with ``--search``. gh pr list
-          # --search hits the code-search index, which is eventually
-          # consistent and returned nothing in this runner, so no PR was
-          # ever closed and refreshes piled up. The plain REST list
-          # (--json) is immediately consistent; match the title prefix with
-          # jq instead.
-          mapfile -t stale < <(gh pr list --state open --limit 100 --json number,title \
-            --jq '.[] | select(.title | startswith("chore(numbers)")) | .number') || stale=()
-          for n in "${stale[@]:-}"; do
-            [ -n "$n" ] && gh pr close "$n" --delete-branch --comment "Superseded by a newer daily numbers refresh ($(date -u +%F)). Approve the most recent chore(numbers) PR instead." || true
-          done
-          # Branch protection on main requires status checks to pass
-          # before any push lands. Direct ``git push origin HEAD:main``
-          # would fail with GH006 "Protected branch update failed". So
-          # we push a transient branch, open a PR, and ask GitHub to
-          # auto-merge it once the required checks pass.
-          branch="chore/numbers-$(date -u +%Y%m%d-%H%M%S)"
-          git config user.name  "$GH_COMMIT_AUTHOR"
-          git config user.email "$GH_COMMIT_EMAIL"
-          git checkout -b "$branch"
-          git add docs/_data/numbers.json docs/_data/stats_history.json docs/assets/star-history-dark.svg docs/assets/star-history-light.svg
-          # NOTE: no ``[skip ci]`` here. Branch protection on main requires
-          # the status checks to run+pass before the PR can merge; a
-          # ``[skip ci]`` commit message suppresses all workflow runs, so
-          # the required checks would never start and ``--auto`` merge
-          # would block forever. The checks must run on this PR.
-          git commit -m "chore(numbers): refresh marketing counters"
-          git push origin "$branch"
-          gh pr create \
-            --base main \
-            --head "$branch" \
-            --title "chore(numbers): refresh marketing counters" \
-            --body "Automated daily refresh of marketing counters and the self-hosted star chart. Supersedes any earlier open numbers PR. Opened via NUMBERS_TOKEN so required checks run automatically; auto-merges once they pass."
-          gh pr merge "$branch" --auto --squash --delete-branch
+          git -c user.name="$GH_COMMIT_AUTHOR" -c user.email="$GH_COMMIT_EMAIL" \
+            commit -q -m "chore(numbers): refresh marketing counters"
+          git push origin numbers

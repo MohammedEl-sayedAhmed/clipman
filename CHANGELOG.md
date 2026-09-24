@@ -425,6 +425,13 @@ change what a reader would do:
   The apt step is capped at four minutes; apt retries with a 30 s fetch
   timeout so a stalled mirror fails inside the cap. The last red run on
   `main` was an apt stall that consumed the whole job budget.
+- The daily numbers refresh no longer opens a pull request. It used a
+  personal access token to open and auto-merge one PR a day under the
+  maintainer's name, which moved `main` every day, put every open pull
+  request behind, and would stall when the token expired. It now commits
+  the counters, the star chart and the downloads history to a separate
+  `numbers` branch with the built-in token. The website and the README
+  read them from there, and `NUMBERS_TOKEN` is no longer used.
 
 ## [1.2.1] - 2026-08-22
 
