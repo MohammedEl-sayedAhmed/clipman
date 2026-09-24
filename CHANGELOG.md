@@ -93,6 +93,30 @@ All notable changes to Clipman are documented in this file.
   off, detected clips stay masked but are never deleted.
 - The benchmark corpus ships as `tests/sensitive_corpus.py` and
   `tests/test_sensitive.py` asserts zero false positives on it.
+- Ordinary code was still flagged, and so deleted 30 seconds after the
+  copy: a secret-named key followed by code (`token = self.get_token()`,
+  `api_key = config.api_key`, `SECRET_KEY = os.environ.get(...)`), CSS
+  class names and names such as `sk-prod-cluster-01`, and
+  `curl -u "$USER:$TOKEN"`. A labelled value that reads as code (a call,
+  an index, a dotted name, an `@name` reference) is no longer a secret,
+  and an `sk-` key needs a key-length body.
+- SSH public keys and Stripe publishable keys (`pk_live_`) are no longer
+  treated as secrets: they are meant to be shared, and flagging one
+  deleted it right after the user copied it to paste somewhere.
+- Newly caught: `DB_PASS=`-style labels, `sshpass -p`, and Discord
+  webhook URLs.
+- One large clip could freeze the daemon: 64 KB of `sk-` took about 19 s
+  to check, and a long line full of `http`, `curl` or `mysql` 3 to 4 s,
+  on the main loop. Every pattern is bounded now, and those clips take
+  about 30 ms, the same as plain text.
+- A pinned sensitive clip was purged anyway. A pin now keeps it, and its
+  row shows no countdown.
+- "Purge sensitive entries now" did nothing while auto-clear was off,
+  which is exactly when it is needed. It now removes every sensitive
+  entry, pinned or not.
+- Two different clips copied within 100 ms kept only the first. After a
+  busy moment, queued copies arrive back to back, so real clips were
+  lost. Only the same content repeated that fast is dropped now.
 
 ### Fixed — daemon start-up and incognito on the bus
 

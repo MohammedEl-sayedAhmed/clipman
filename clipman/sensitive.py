@@ -5,10 +5,18 @@ So a false positive means data loss, while a false negative only leaves
 a secret in the local history, which 0700 file permissions already
 protect. For that reason the detector only matches known shapes and
 never guesses from randomness or character classes. It knows vendor
-tokens with a unique prefix, private and SSH keys, JSON Web Tokens, URLs
-with a password inside, labelled values such as ``PASSWORD=...``,
+tokens with a unique prefix, private keys, JSON Web Tokens, URLs with a
+password inside, labelled values such as ``PASSWORD=...``,
 ``Authorization`` headers, card numbers that pass Luhn, TOTP seeds, and
 a few command lines that take a password inline.
+
+Public keys (SSH public keys, Stripe publishable keys) are meant to be
+shared, so they are not flagged: flagging one deleted it 30 seconds
+after the user copied it to paste somewhere. A labelled value that reads
+as code (a call, an index, a dotted name) is not flagged either.
+
+Every pattern is bounded, so a hostile or merely huge clip costs
+linear time: this runs on the GTK main loop.
 
 A bare password with no label is not detected on purpose. Nothing tells
 ``Tr0ub4dor&3`` apart from a Wi-Fi name or a licence key, and the old
@@ -37,8 +45,9 @@ _VENDOR_PATTERNS = [
     r"github_pat_[A-Za-z0-9_]{16,}",
     # AWS access key ids: type prefix, then 16 chars with a digit.
     r"(?:AKIA|ASIA|ABIA|ACCA)(?=[A-Z]*\d)[A-Z0-9]{16}",
-    # Stripe secret, restricted, publishable and webhook keys.
-    r"(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{16,}",
+    # Stripe secret, restricted and webhook keys. Publishable keys (pk_)
+    # ship in web pages; they are not secrets.
+    r"(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}",
     r"whsec_[A-Za-z0-9]{24,}",
     # Slack tokens, app tokens and incoming webhooks.
     r"xox[abopers]-[A-Za-z0-9-]{10,}",
@@ -76,26 +85,23 @@ _VENDOR_PATTERNS = [
     r"[a-f0-9]{32}-us\d{1,2}",
     # age identities.
     r"AGE-SECRET-KEY-1[A-Z0-9]{58}",
+    # Discord webhooks: whoever has the URL can post as the webhook.
+    r"discord(?:app)?\.com/api/webhooks/\d{16,20}/[A-Za-z0-9_-]{60,}",
 ]
 _VENDOR = [re.compile(_LB + p + _RB, _A) for p in _VENDOR_PATTERNS]
 
-# "sk-" is shared by OpenAI-style keys and CSS class names such as
-# "sk-fading-circle", so the body must contain a letter and a digit.
-_SK_KEY = re.compile(
-    _LB + r"sk-(?:[A-Za-z0-9]{1,12}-){0,3}"
-    r"(?=[A-Za-z0-9_-]*\d)(?=[A-Za-z0-9_-]*[A-Za-z])[A-Za-z0-9_-]{12,}",
-    _A)
+# "sk-" is shared by OpenAI-style keys (sk-..., sk-proj-..., sk-ant-...)
+# and CSS class names or names such as "sk-fading-circle" or
+# "sk-prod-cluster-01". Candidates are whole tokens, found in linear time;
+# _has_sk_key then checks the body: long, with a letter, a digit and an
+# unbroken random-looking run.
+_SK_CANDIDATE = re.compile(_LB + r"sk-[A-Za-z0-9_-]{32,}", _A)
+_SK_RUN = re.compile(r"[A-Za-z0-9]{16}", _A)
+_SK_MAX_TOKEN = 256
 
 # Private key material; certificates and public keys are not secrets.
 _PRIVATE_KEY = re.compile(
     r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----|PuTTY-User-Key-File-\d",
-    _A)
-
-# SSH public keys stay sensitive, as the app has always treated them.
-_SSH_KEY = re.compile(
-    _LB + r"(?:ssh-(?:rsa|dss|ed25519)|ecdsa-sha2-nistp(?:256|384|521)|"
-    r"sk-(?:ssh-ed25519|ecdsa-sha2-nistp256)@openssh\.com)"
-    r"[ \t]+AAAA[A-Za-z0-9+/]{16,}",
     _A)
 
 # URL with credentials in the authority: scheme://user:pass@host.
@@ -119,7 +125,9 @@ _JWT = re.compile(_LB + r"eyJ[A-Za-z0-9_-]{8,}", _A)
 _KEYWORDS = (
     r"(?:password|passwd|passphrase|passcode|pwd|secret|token|apikey|"
     r"(?:api|private|access|account|secret|app|signing|encryption|"
-    r"master|auth)[_-]?key)")
+    r"master|auth)[_-]?key|"
+    # DB_PASS, SMTP_PASS: "pass" only as a suffix, never in "bypass".
+    r"(?<=[A-Za-z0-9][_-])pass(?![A-Za-z]))")
 _LABEL = re.compile(
     _KEYWORDS + r"""["']?[ \t]*([=:])[ \t]*["']?([^\s"';,]{8,})""",
     re.I | _A)
@@ -143,14 +151,21 @@ _TOTP_LABEL = re.compile(
     r"(?![A-Za-z0-9])",
     _A)
 
-# Command lines that take a password inline.
+# Command lines that take a password inline. They are only looked for in
+# lines of command length, and the gap between the command and its flag is
+# bounded: a long line full of "http" or "mysql" used to cost seconds.
+_CLI_MAX_LINE = 1024
 _CLI_DASH_P = re.compile(
     r"(?<![A-Za-z0-9])(?:mysql|mysqldump|mysqladmin|mariadb|sshpass)\b"
-    r"""[^\n]*?[ \t]-p([^\s"']{6,})""",
+    r"""[^\n]{0,300}?[ \t]-p([^\s"']{6,})""",
+    _A)
+_SSHPASS_P = re.compile(
+    r"(?<![A-Za-z0-9])sshpass\b[^\n]{0,300}?[ \t]-p[ \t]+"
+    r"""["']?([^\s"']{4,})""",
     _A)
 _CLI_USER_PASS = re.compile(
-    r"(?<![A-Za-z0-9])(?:curl|wget|http|https)\b[^\n]*?[ \t]"
-    r"""(?:-u|--user|-a|--auth)[ \t=]+["']?([^\s:"']{1,64}:[^\s"']{4,})""",
+    r"(?<![A-Za-z0-9])(?:curl|wget|http|https)\b[^\n]{0,300}?[ \t]"
+    r"""(?:-u|--user|-a|--auth)[ \t=]+["']?([^\s:"']{1,64}):([^\s"']{4,})""",
     _A)
 _NETRC = re.compile(
     r"^[ \t]*machine\s+\S+\s+(?:login\s+\S+\s+)?password[ \t]+(\S{6,})",
@@ -170,6 +185,11 @@ _PLACEHOLDER_WORDS = (
     "****", "todo", "here",
 )
 _VALUE_BAD_LEAD = frozenset("$<{[%(~/=*.")
+# A value that reads as code: a call or an index anywhere, a dotted name
+# such as config.api_key, or an @name reference such as a GTK colour.
+_CODE_CHARS = frozenset("()[]")
+_DOTTED_NAME = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)+", _A)
+_AT_NAME = re.compile(r"@[A-Za-z_][\w-]*", _A)
 
 
 def _plausible_value(value):
@@ -183,6 +203,9 @@ def _plausible_value(value):
     if len(value) < 8 or value[0] in _VALUE_BAD_LEAD:
         return False
     if "://" in value or "{{" in value or "${" in value:
+        return False
+    if _CODE_CHARS.intersection(value) or _DOTTED_NAME.fullmatch(value) \
+            or _AT_NAME.fullmatch(value):
         return False
     lowered = value.lower()
     if any(word in lowered for word in _PLACEHOLDER_WORDS):
@@ -253,12 +276,38 @@ def _has_auth_header(text):
     return False
 
 
-def _has_cli_password(text):
-    for match in _CLI_DASH_P.finditer(text):
-        if _plausible_value(match.group(1)):
+def _has_sk_key(text):
+    for match in _SK_CANDIDATE.finditer(text):
+        body = match.group(0)[3:]
+        if len(body) > _SK_MAX_TOKEN:
+            continue  # a run of text, not a key
+        # Skip up to three short namespace segments: proj-, ant-api03-.
+        for _ in range(3):
+            head, sep, rest = body.partition("-")
+            if not (sep and 1 <= len(head) <= 12 and head.isalnum()
+                    and len(rest) >= 32):
+                break
+            body = rest
+        if (any(ch.isdigit() for ch in body)
+                and any(ch.isalpha() for ch in body)
+                and _SK_RUN.search(body)):
             return True
-    if _CLI_USER_PASS.search(text):
-        return True
+    return False
+
+
+def _has_cli_password(text):
+    for line in text.split("\n"):
+        if len(line) > _CLI_MAX_LINE:
+            continue
+        for regex in (_CLI_DASH_P, _SSHPASS_P):
+            for match in regex.finditer(line):
+                if _plausible_value(match.group(1)):
+                    return True
+        for match in _CLI_USER_PASS.finditer(line):
+            user, secret = match.group(1), match.group(2)
+            # "$USER:$TOKEN" is a shell expansion, not a password.
+            if user[0] not in _VALUE_BAD_LEAD and secret[0] not in _VALUE_BAD_LEAD:
+                return True
     for match in _NETRC.finditer(text):
         if _plausible_value(match.group(1)):
             return True
@@ -332,9 +381,9 @@ def is_sensitive(text):
     for regex in _VENDOR:
         if regex.search(text):
             return True
-    if _SK_KEY.search(text) or _PRIVATE_KEY.search(text):
+    if _has_sk_key(text) or _PRIVATE_KEY.search(text):
         return True
-    if _SSH_KEY.search(text) or _CRED_URL.search(text):
+    if _CRED_URL.search(text):
         return True
     if _BARE_CRED.match(text):
         return True

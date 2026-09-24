@@ -703,11 +703,28 @@ class TestClipboardDB(unittest.TestCase):
         )
         self.db.conn.commit()
 
-        # delete_expired_sensitive should still delete it (pinned doesn't protect from sensitive cleanup)
+        # A pin means "keep this": the timed purge leaves it alone.
         deleted = self.db.delete_expired_sensitive(max_age_seconds=30)
-        # Current implementation doesn't check pinned status for sensitive cleanup
-        # This test documents the actual behavior
-        self.assertEqual(deleted, 1)
+        self.assertEqual(deleted, 0)
+        self.assertEqual(len(self.db.get_entries()), 1)
+
+    def test_purge_sensitive_removes_all_even_pinned(self):
+        """"Purge sensitive entries now" removes every sensitive clip."""
+        pinned = self.db.add_entry("text", content_text="pinned secret", sensitive=True)
+        self.db.toggle_pin(pinned)
+        self.db.add_entry("text", content_text="fresh secret", sensitive=True)
+        self.db.add_entry("text", content_text="ordinary clip")
+        self.assertEqual(self.db.purge_sensitive(), 2)
+        self.assertEqual([e["content_text"] for e in self.db.get_entries()],
+                         ["ordinary clip"])
+
+    def test_purge_sensitive_works_with_autoclear_off(self):
+        """The button reused the timed purge, which does nothing while
+        auto-clear is off, the one time a manual purge is needed."""
+        self.db.set_setting("sensitive_autoclear", "false")
+        self.db.add_entry("text", content_text="secret", sensitive=True)
+        self.assertEqual(self.db.purge_sensitive(), 1)
+        self.assertEqual(len(self.db.get_entries()), 0)
 
 
     # ── _safe_image_path (module-level function) ───────────────────

@@ -836,10 +836,13 @@ aws_secret = [rand(B64, 40) for _ in range(3)]
 S("aws_secret_access_key", *aws_secret,
   "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY")
 
+_stripe_live = "sk_live_" + rand(ALNUM, 24)
+_stripe_live_51 = "sk_live_51" + rand(ALNUM, 97)
+# A publishable key ships in web pages: it is public, not a secret.
+B("stripe_publishable_key", "pk_live_" + rand(ALNUM, 24))
 S("stripe",
-  "sk_live_" + rand(ALNUM, 24),
-  "sk_live_51" + rand(ALNUM, 97),
-  "pk_live_" + rand(ALNUM, 24),
+  _stripe_live,
+  _stripe_live_51,
   "sk_test_" + rand(ALNUM, 24),
   "rk_live_" + rand(ALNUM, 24),
   "whsec_" + rand(ALNUM, 32),
@@ -900,7 +903,9 @@ S("pem_private_key",
   "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg...",
   )
 
-S("ssh_public_key",
+# Public keys are meant to be shared; flagging one deleted it 30 s after
+# the user copied it to paste into a server or a forge.
+B("ssh_public_key",
   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI" + rand(B64, 43) + " mohammed@thinkpad",
   "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQ" + rand(B64, 370) + "= mohammed@thinkpad",
   "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC...",
@@ -1074,6 +1079,39 @@ S("multiline_secret",
   "database:\n  host: db-01.prod.internal\n  user: clipman\n  password: " + rand(ALNUM + "!#", 18),
   "machine api.github.com\n  login MohammedEl-sayedAhmed\n  password " + ghp,
   "export STRIPE_SECRET_KEY=sk_live_" + rand(ALNUM, 24) + "\nexport STRIPE_WEBHOOK_SECRET=whsec_" + rand(ALNUM, 32),
+  )
+
+
+# Code that names a secret without holding one. The old rule flagged all
+# of these, and a flagged clip is deleted 30 s after the copy.
+B("code",
+  "password = lexer.get_token()",
+  "token = self.get_token()",
+  "current_token = get_cache_token()",
+  "api_key = config.api_key",
+  "SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY')",
+  "const token = localStorage.getItem('token');",
+  "password=request.form['password']",
+  '_DEFAULT_FONT_COLOR_TOKEN = "@card_fg_color"',
+  ".sk-double-bounce2 { animation-delay: -1.0s; }",
+  "kubectl get pods -n sk-prod-cluster-01",
+  'curl -u "$USER:$TOKEN" https://api.example.com/v1/items',
+  "if bypass=enabled_for_tests:",
+  )
+
+S("labelled_pass_suffix",
+  "DB_PASS=" + rand(ALNUM + "!#", 16),
+  "SMTP_PASS=" + rand(ALNUM, 20),
+  "REDIS_PASS: " + rand(ALNUM + "#", 18),
+  )
+
+S("sshpass",
+  "sshpass -p '" + rand(ALNUM, 14) + "' ssh deploy@10.0.0.5",
+  "sshpass -p " + rand(ALNUM, 12) + " scp build.tar.gz host:/srv",
+  )
+
+S("discord_webhook",
+  "https://discord.com/api/webhooks/" + rand(string.digits, 18) + "/" + rand(B64URL, 68),
   )
 
 

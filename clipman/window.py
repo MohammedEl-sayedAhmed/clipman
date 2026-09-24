@@ -1593,8 +1593,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
         return max(0, int(self._sensitive_timeout - (time.time() - created)))
 
     def _sensitive_subtitle(self, entry):
-        """Meta text for a masked row; no countdown when auto-clear is off."""
-        if not self._sensitive_autoclear:
+        """Meta text for a masked row. No countdown when auto-clear is off,
+        or for a pinned row, which the timed purge keeps."""
+        if not self._sensitive_autoclear or entry.get("pinned"):
             return _("Sensitive")
         remaining = self._sensitive_remaining(entry)
         return _("Sensitive — auto-clear in {n} s").format(n=remaining)

@@ -57,8 +57,29 @@ class TestCorpus(unittest.TestCase):
         self.assertEqual(missed_categories, KNOWN_MISSES, missed)
 
     def test_recall_floor(self):
+        # 131 of 167: public keys are no longer counted as secrets, and
+        # DB_PASS-style labels, sshpass and Discord webhooks are caught.
         caught = sum(1 for item in secret if is_sensitive(item["text"]))
-        self.assertGreaterEqual(caught, 129, f"{caught}/{len(secret)} caught")
+        self.assertGreaterEqual(caught, 131, f"{caught}/{len(secret)} caught")
+
+
+class TestLinearTime(unittest.TestCase):
+    """A hostile or huge clip must not freeze the main loop.
+
+    Before the bounds, 64 KB of "sk-" took about 19 s, and 64 KB of
+    "mysql ", "curl " or "http " on one line 3 to 4 s. They take about
+    30 ms now; the limit leaves room for a slow CI runner.
+    """
+
+    def test_repeated_prefixes_are_fast(self):
+        import time
+        size = 64 * 1024
+        for unit in ("sk-", "sk-a", "mysql ", "curl ", "http ", "sshpass "):
+            text = (unit * (size // len(unit) + 1))[:size]
+            with self.subTest(unit=unit):
+                start = time.perf_counter()
+                is_sensitive(text)
+                self.assertLess(time.perf_counter() - start, 1.0)
 
 
 class TestBugReport(unittest.TestCase):
