@@ -3,8 +3,8 @@
 clipman uses GNU gettext for translations. User-visible strings are
 wrapped with `_()` and collected into a single template at
 `po/clipman.pot`. The files scanned are listed in `po/POTFILES.in`:
-`edge_states.py`, `preferences.py`, `snippets_dialog.py` and
-`window.py`. The template currently holds 226 strings.
+`app.py`, `edge_states.py`, `preferences.py`, `snippets_dialog.py` and
+`window.py`. The template currently holds 225 strings.
 
 This guide covers two audiences: translators adding a new language,
 and contributors who added new translatable strings in code. The

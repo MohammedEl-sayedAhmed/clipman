@@ -55,7 +55,8 @@ def _preflight_libadwaita():
 
 
 def _toggle():
-    """Toggle the popup of a running daemon, or start one."""
+    """Toggle the popup of a running daemon, or start one. Return the
+    exit status."""
     import dbus
     try:
         bus = dbus.SessionBus()
@@ -63,12 +64,20 @@ def _toggle():
         dbus.Interface(proxy, "com.clipman.Daemon").Toggle()
     except dbus.exceptions.DBusException:
         print("Clipman daemon is not running. Starting it now...")
-        _start_daemon()
+        return _start_daemon()
+    return 0
 
 
 def _start_daemon():
+    """Run the daemon until it quits; return its exit status.
+
+    A failed start-up ends with a non-zero status, so systemd's
+    Restart=on-failure tries again.
+    """
     from clipman.app import ClipmanApp
-    ClipmanApp().run([])
+    app = ClipmanApp()
+    status = app.run([])
+    return status or app.exit_status
 
 
 def _parser():
@@ -89,7 +98,8 @@ def _parser():
 
 
 def main(argv=None):
-    """Parse arguments, check the system, then run or toggle."""
+    """Parse arguments, check the system, then run or toggle. Return the
+    exit status."""
     args = _parser().parse_args(argv)
     _check_dependencies()
     # The GLib loop must be the default before any bus connection, or a
@@ -98,6 +108,5 @@ def main(argv=None):
     dbus.mainloop.glib.DBusGMainLoop(set_as_default=True)
     _preflight_libadwaita()
     if args.command == "toggle":
-        _toggle()
-    else:
-        _start_daemon()
+        return _toggle()
+    return _start_daemon()

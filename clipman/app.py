@@ -3,6 +3,7 @@ import os
 import shutil
 import signal
 import sqlite3
+from gettext import gettext as _
 import dbus
 import dbus.exceptions
 import gi
@@ -67,17 +68,35 @@ class ClipmanApp(Adw.Application):
         # Why nothing records copies (an edge state id), or None.
         self._recording_problem = None
         self._watcher_dead = False
+        # The process exit status (cli.py returns it). Non-zero when
+        # start-up failed, so systemd's Restart=on-failure tries again.
+        self.exit_status = 0
+        self._db_error_window = None
 
     def do_activate(self):
         if self.window:
             self.window.toggle()
             return
+        try:
+            self._start()
+        except Exception:
+            # GLib prints an exception raised here and carries on, so the
+            # daemon would exit 0 with nothing on screen.
+            logger.exception("Clipman could not start")
+            self._fail()
 
+    def _fail(self):
+        """Quit with a non-zero exit status: start-up failed."""
+        self.exit_status = 1
+        self.quit()
+
+    def _start(self):
         try:
             self.db = ClipboardDB()
-        except sqlite3.OperationalError:
-            # Locked or corrupt database — show the guided error state
-            # (mockup db-corrupt) instead of crashing with a traceback.
+        except (sqlite3.DatabaseError, OSError):
+            # Locked, unreadable or corrupt ("file is not a database" is a
+            # DatabaseError, and OperationalError is one kind of it): show
+            # the guided error state (mockup db-corrupt), not a traceback.
             logger.exception("clipboard database could not be opened")
             self._present_db_error()
             return
@@ -114,7 +133,7 @@ class ClipmanApp(Adw.Application):
             return
         except dbus.exceptions.DBusException:
             logger.exception("Cannot register on the session bus; exiting.")
-            self.quit()
+            self._fail()
             return
 
         # Incognito also pauses the extension (no clip crosses the bus).
@@ -136,6 +155,12 @@ class ClipmanApp(Adw.Application):
         # Only held *after* dbus_service registration succeeds so a
         # NameExistsException doesn't leave us in a held-forever state.
         self.hold()
+
+        # The database opens now (restored from a backup, or repaired), so
+        # the error window has done its job.
+        if self._db_error_window is not None:
+            self._db_error_window.destroy()
+            self._db_error_window = None
 
         # Without the extension, record with wl-paste --watch where it can
         # work. Either way, tell the popup if nothing records copies.
@@ -203,31 +228,84 @@ class ClipmanApp(Adw.Application):
             self.window.set_recording_problem(problem)
 
     def _present_db_error(self):
-        """Minimal window with the db-locked statuspage (no DB available)."""
-        from gi.repository import Gtk
+        """Minimal window with the db-locked statuspage (no DB available).
 
-        from clipman.database import DATA_DIR
+        Closing it ends the process with status 0: the user has seen the
+        problem, so systemd need not start it again. Activating again
+        (Super+V) brings the same window back.
+        """
         from clipman.edge_states import render_edge_state
 
-        def on_action(action_id):
-            if action_id == "reveal-db-folder":
-                import subprocess
-                try:
-                    subprocess.Popen(
-                        ["xdg-open", str(DATA_DIR)],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                    )
-                except OSError:
-                    logger.debug("xdg-open failed", exc_info=True)
-            else:
-                self.quit()
-
-        win = Gtk.ApplicationWindow(application=self)
+        if self._db_error_window is not None:
+            self._db_error_window.present()
+            return
+        win = Adw.ApplicationWindow(application=self)
         win.set_title("Clipman")
         win.set_default_size(420, 480)
-        win.set_child(render_edge_state("db-locked", on_action=on_action))
+        win.set_content(
+            render_edge_state("db-locked", on_action=self._on_db_error_action)
+        )
+        self._db_error_window = win
         win.present()
+
+    def _on_db_error_action(self, action_id):
+        from clipman.database import DATA_DIR
+
+        if action_id == "reveal-db-folder":
+            import subprocess
+            try:
+                subprocess.Popen(
+                    ["xdg-open", str(DATA_DIR)],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            except OSError:
+                logger.debug("xdg-open failed", exc_info=True)
+        elif action_id in ("open-restore", "rechoose-restore"):
+            self._pick_backup()
+
+    def _pick_backup(self):
+        """Ask for the backup to restore. The safety copies that
+        Preferences writes before each restore are in the data folder."""
+        from gi.repository import Gio, Gtk
+
+        from clipman.database import DATA_DIR
+
+        dialog = Gtk.FileDialog()
+        dialog.set_title(_("Restore from backup"))
+        dialog.set_initial_folder(Gio.File.new_for_path(str(DATA_DIR)))
+        dialog.open(self._db_error_window, None, self._on_backup_picked)
+
+    def _on_backup_picked(self, dialog, result):
+        """Put the picked backup in place of the unreadable database, then
+        start as usual and show the restored history."""
+        from clipman.database import restore_backup_file
+
+        try:
+            picked = dialog.open_finish(result)
+        except GLib.Error:
+            return  # dismissed
+        path = picked.get_path() if picked is not None else None
+        try:
+            if path is None:
+                raise ValueError("not a local file")
+            restore_backup_file(path)
+        except (ValueError, OSError) as exc:
+            logger.warning("Could not restore %s: %s", path, exc)
+            self._show_restore_failed()
+            return
+        logger.info("Restored the history from %s", path)
+        self.do_activate()
+        if self.window is not None:
+            self.window.toggle()
+
+    def _show_restore_failed(self):
+        from clipman.edge_states import render_edge_state
+
+        alert = render_edge_state(
+            "restore-failed", on_action=self._on_db_error_action
+        )
+        alert.present(self._db_error_window)
 
     def _update_check_tick_once(self):
         """One-shot initial tick — runs ``_update_check_tick`` then dies.

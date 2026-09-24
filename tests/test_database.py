@@ -1094,6 +1094,53 @@ class TestClipboardDB(unittest.TestCase):
         self.db.import_backup(self._make_backup("empty.db", [self._ENTRIES_V1]))
         self.assertFalse(os.path.exists(old_image))
 
+    # ── Restore from the database-error screen ─────────────────
+
+    def _break_live_db(self):
+        """Close the history and overwrite it with junk, as a crash or a
+        failing disk can leave it. Return the junk."""
+        self.db.close()
+        junk = os.urandom(8192)
+        self.db_path.write_bytes(junk)
+        return junk
+
+    def test_error_screen_restore_keeps_the_damaged_file(self):
+        from clipman.database import ClipboardDB, restore_backup_file
+        backup = self._make_backup("v1.db", [self._ENTRIES_V1], [(
+            "INSERT INTO entries (content_type, content_text, content_hash, "
+            "created_at, accessed_at) VALUES ('text', 'from backup', 'h1', "
+            "1.0, 1.0)", ())])
+        junk = self._break_live_db()
+        Path(f"{self.db_path}-wal").write_bytes(b"old log")
+        restore_backup_file(backup)
+        damaged = sorted(self.data_dir.glob("clipman.db.*.damaged"))
+        self.assertEqual(len(damaged), 1)
+        self.assertEqual(damaged[0].read_bytes(), junk)
+        self.assertEqual(Path(f"{damaged[0]}-wal").read_bytes(), b"old log")
+        self.db = ClipboardDB()
+        self.assertEqual(self._texts(), ["from backup"])
+
+    def test_error_screen_restore_of_a_bad_file_changes_nothing(self):
+        from clipman.database import restore_backup_file
+        junk = self._break_live_db()
+        bad = os.path.join(self.tmpdir, "junk.db")
+        with open(bad, "wb") as f:
+            f.write(os.urandom(4096))
+        with self.assertRaises(ValueError):
+            restore_backup_file(bad)
+        self.assertEqual(self.db_path.read_bytes(), junk)
+        self.assertEqual(list(self.data_dir.glob("clipman.db.*")), [])
+
+    def test_error_screen_restore_without_a_live_file(self):
+        from clipman.database import ClipboardDB, restore_backup_file
+        backup = self._make_backup("v1.db", [self._ENTRIES_V1])
+        self.db.close()
+        self.db_path.unlink()
+        restore_backup_file(backup)
+        self.assertEqual(list(self.data_dir.glob("clipman.db.*.damaged")), [])
+        self.db = ClipboardDB()
+        self.assertEqual(self._texts(), [])
+
     def test_restored_database_is_private(self):
         # A backup made under a common umask is readable by others, as a
         # downloaded file may be.

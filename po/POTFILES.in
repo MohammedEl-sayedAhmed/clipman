@@ -1,5 +1,6 @@
 # Source files with translatable strings, one per line. scripts/dev.sh i18n
 # reads this list. Keep it in sync when a module starts using _().
+clipman/app.py
 clipman/edge_states.py
 clipman/preferences.py
 clipman/snippets_dialog.py
