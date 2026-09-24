@@ -754,7 +754,9 @@ class TestClipboardDB(unittest.TestCase):
 
     # ── enforce_max_entries edge cases ─────────────────────────────
 
-    def test_enforce_max_entries_zero_deletes_all_unpinned(self):
+    def test_enforce_max_entries_zero_keeps_the_history(self):
+        # 0 is outside the 50-5000 range Preferences offers. It used to
+        # delete every unpinned clip, including each new one as it arrived.
         self.db.add_entry("text", content_text="alpha")
         self.db.add_entry("text", content_text="beta")
         self.db.add_entry("text", content_text="gamma")
@@ -762,7 +764,7 @@ class TestClipboardDB(unittest.TestCase):
 
         self.db.set_setting("max_entries", "0")
         self.db.enforce_max_entries()
-        self.assertEqual(self.db.count_entries(), 0)
+        self.assertEqual(self.db.count_entries(), 3)
 
     def test_enforce_max_entries_idempotent(self):
         self.db.add_entry("text", content_text="only entry")
@@ -851,10 +853,11 @@ class TestClipboardDB(unittest.TestCase):
     # ── Robustness: settings and file modes ───────────────────────
 
     def test_max_entries_stored_as_float_string_still_works(self):
-        self.db.set_setting("max_entries", "2.0")
-        for i in range(3):
+        # 60 is inside the 50-5000 range Preferences offers.
+        self.db.set_setting("max_entries", "60.0")
+        for i in range(61):
             self.db.add_entry("text", content_text=f"clip {i}")
-        self.assertEqual(self.db.count_entries(), 2)
+        self.assertEqual(self.db.count_entries(), 60)
 
     def test_max_entries_garbage_falls_back_to_default(self):
         self.db.set_setting("max_entries", "lots")
@@ -931,6 +934,198 @@ class TestClipboardDB(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             self.db.import_backup(backup_path)
         self.assertIn("disallowed objects", str(ctx.exception))
+
+    # ── Restore safety: a failed restore changes nothing ──────────
+
+    # A v1.0-era entries table: no ``sensitive`` column yet.
+    _ENTRIES_V1 = """CREATE TABLE entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        content_type TEXT NOT NULL, content_text TEXT, image_path TEXT,
+        content_hash TEXT NOT NULL UNIQUE, pinned INTEGER NOT NULL DEFAULT 0,
+        created_at REAL NOT NULL, accessed_at REAL NOT NULL)"""
+
+    def _make_backup(self, name, statements, rows=()):
+        import sqlite3 as _sqlite
+        path = os.path.join(self.tmpdir, name)
+        conn = _sqlite.connect(path)
+        for stmt in statements:
+            conn.execute(stmt)
+        for sql, params in rows:
+            conn.execute(sql, params)
+        conn.commit()
+        conn.close()
+        return path
+
+    def _texts(self):
+        return sorted(e["content_text"] for e in self.db.get_entries(limit=100))
+
+    def _assert_history_intact(self, expected):
+        self.assertEqual(self._texts(), expected)
+        # The connection still works: recording carries on.
+        self.assertGreater(self.db.add_entry("text", content_text="after"), 0)
+
+    def test_safety_copies_never_overwrite_each_other(self):
+        self.db.add_entry("text", content_text="original history")
+        first = self.db.write_safety_copy()
+        self.db.add_entry("text", content_text="later clip")
+        second = self.db.write_safety_copy()
+        self.assertNotEqual(first, second)
+        self.assertTrue(os.path.exists(first))
+        self.assertTrue(os.path.exists(second))
+
+    def test_restoring_a_safety_copy_keeps_it(self):
+        """Restoring the safety copy used to overwrite it with the current
+        history first, losing the original for good."""
+        import sqlite3 as _sqlite
+        self.db.add_entry("text", content_text="original history")
+        safety = self.db.write_safety_copy()
+        self.db.clear_unpinned()
+        self.db.add_entry("text", content_text="the wrong history")
+        # What Preferences does: a fresh safety copy, then the import.
+        self.db.write_safety_copy()
+        self.db.import_backup(safety)
+        self.assertEqual(self._texts(), ["original history"])
+        conn = _sqlite.connect(safety)
+        kept = [r[0] for r in conn.execute("SELECT content_text FROM entries")]
+        conn.close()
+        self.assertEqual(kept, ["original history"])
+
+    def test_prune_keeps_the_newest_and_the_restored_copy(self):
+        from clipman.database import prune_safety_copies
+        paths = []
+        for i in range(5):
+            self.db.add_entry("text", content_text=f"clip {i}")
+            paths.append(self.db.write_safety_copy())
+            os.utime(paths[-1], (1000 + i, 1000 + i))
+        prune_safety_copies(keep=3, spare=paths[0])
+        left = [p for p in paths if os.path.exists(p)]
+        self.assertEqual(left, [paths[0]] + paths[2:])
+
+    def test_import_refuses_a_table_missing_columns(self):
+        """The live history used to be replaced before the step that
+        failed, leaving a history the app could not use."""
+        self.db.add_entry("text", content_text="keep me")
+        bad = self._make_backup("no_image_path.db", ["""CREATE TABLE entries (
+            id INTEGER PRIMARY KEY, content_type TEXT, content_text TEXT,
+            content_hash TEXT, pinned INTEGER, created_at REAL,
+            accessed_at REAL)"""])
+        with self.assertRaises(ValueError) as ctx:
+            self.db.import_backup(bad)
+        self.assertIn("image_path", str(ctx.exception))
+        self._assert_history_intact(["keep me"])
+
+    def test_import_refuses_a_virtual_entries_table(self):
+        import sqlite3 as _sqlite
+        self.db.add_entry("text", content_text="keep me")
+        try:
+            bad = self._make_backup("fts.db", [
+                "CREATE VIRTUAL TABLE entries USING fts5(id, content_type, "
+                "content_text, image_path, content_hash, pinned, created_at, "
+                "accessed_at)"])
+        except _sqlite.OperationalError as exc:
+            raise unittest.SkipTest("SQLite built without FTS5") from exc
+        with self.assertRaises(ValueError):
+            self.db.import_backup(bad)
+        self._assert_history_intact(["keep me"])
+
+    def test_import_refuses_a_damaged_file(self):
+        self.db.add_entry("text", content_text="keep me")
+        rows = [("INSERT INTO entries (content_type, content_text, content_hash, "
+                 "created_at, accessed_at) VALUES ('text', ?, ?, 1.0, 1.0)",
+                 ("x" * 400 + str(i), f"h{i}")) for i in range(200)]
+        damaged = self._make_backup("damaged.db", [self._ENTRIES_V1], rows)
+        # Break the headers of pages 2 and 3, which PRAGMA integrity_check
+        # detects. (Garbled text inside a record is not detectable.)
+        with open(damaged, "r+b") as f:
+            for page in (1, 2):
+                f.seek(4096 * page)
+                f.write(b"\xde\xad\xbe\xef" * 8)
+        with self.assertRaises(ValueError):
+            self.db.import_backup(damaged)
+        self._assert_history_intact(["keep me"])
+
+    def test_import_refuses_a_file_that_is_not_a_database(self):
+        self.db.add_entry("text", content_text="keep me")
+        junk = os.path.join(self.tmpdir, "junk.db")
+        with open(junk, "wb") as f:
+            f.write(os.urandom(8192))
+        with self.assertRaises(ValueError):
+            self.db.import_backup(junk)
+        self._assert_history_intact(["keep me"])
+
+    def test_import_refuses_the_live_file(self):
+        """Choosing the live database closed the connection for good."""
+        self.db.add_entry("text", content_text="keep me")
+        with self.assertRaises(ValueError):
+            self.db.import_backup(str(self.db_path))
+        self._assert_history_intact(["keep me"])
+
+    def test_import_migrates_an_old_backup(self):
+        old = self._make_backup("v1.db", [self._ENTRIES_V1], [(
+            "INSERT INTO entries (content_type, content_text, content_hash, "
+            "created_at, accessed_at) VALUES ('text', 'from v1', 'h1', 1.0, 1.0)",
+            ())])
+        self.db.import_backup(old)
+        entries = self.db.get_entries()
+        self.assertEqual([e["content_text"] for e in entries], ["from v1"])
+        self.assertEqual(entries[0]["sensitive"], 0)
+
+    def test_import_deletes_the_images_of_the_replaced_history(self):
+        self.db.add_entry("image", image_data=b"\x89PNG\r\n\x1a\nold screenshot")
+        old_image = self.db.get_entries()[0]["image_path"]
+        self.assertTrue(os.path.exists(old_image))
+        self.db.import_backup(self._make_backup("empty.db", [self._ENTRIES_V1]))
+        self.assertFalse(os.path.exists(old_image))
+
+    def test_restored_database_is_private(self):
+        # A backup made under a common umask is readable by others, as a
+        # downloaded file may be.
+        old_umask = os.umask(0o022)
+        try:
+            backup = self._make_backup("v1.db", [self._ENTRIES_V1])
+        finally:
+            os.umask(old_umask)
+        self.assertNotEqual(os.stat(backup).st_mode & 0o077, 0)
+        self.db.import_backup(backup)
+        self.assertEqual(os.stat(self.db_path).st_mode & 0o777, 0o600)
+
+    def test_export_backup_is_private_from_the_start(self):
+        """The copy used to be readable by others while it was written."""
+        import shutil
+        dest = os.path.join(self.tmpdir, "exported.db")
+        modes = []
+        real_copyfile = shutil.copyfile
+
+        def spy(src, dst, *args, **kwargs):
+            modes.append(os.stat(dst).st_mode & 0o777)
+            return real_copyfile(src, dst, *args, **kwargs)
+
+        old_umask = os.umask(0o022)
+        try:
+            with patch("shutil.copyfile", spy):
+                self.db.export_backup(dest)
+        finally:
+            os.umask(old_umask)
+        self.assertEqual(modes, [0o600])
+        self.assertEqual(os.stat(dest).st_mode & 0o777, 0o600)
+
+    def test_export_refuses_the_live_files(self):
+        self.db.add_entry("text", content_text="keep me")
+        for target in (self.db_path, Path(f"{self.db_path}-wal")):
+            with self.subTest(target=target.name):
+                with self.assertRaises(ValueError):
+                    self.db.export_backup(str(target))
+        self._assert_history_intact(["keep me"])
+
+    def test_max_entries_out_of_range_is_clamped(self):
+        """A restored 0 or -1 deleted every new clip; inf broke copying."""
+        for value in ("0", "-1", "inf"):
+            with self.subTest(value=value):
+                self.db.clear_unpinned()
+                self.db.set_setting("max_entries", value)
+                for i in range(3):
+                    self.db.add_entry("text", content_text=f"{value} clip {i}")
+                self.assertEqual(self.db.count_entries(), 3)
 
 
 if __name__ == "__main__":

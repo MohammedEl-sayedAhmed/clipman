@@ -1344,6 +1344,66 @@ class TestPresentFocused(_WidgetTestCase):
         self.assertEqual(window._focus_idle_id, 0)
 
 
+@unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
+                     "GTK 4 + libadwaita not available")
+class TestRestoreFlow(_WidgetTestCase):
+    """The Preferences restore handler, end to end on a temp database."""
+
+    def _prefs(self):
+        from clipman.preferences import ClipmanPreferences
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        app = self._make_app("com.clipman.TestRestore")
+        parent = ClipmanWindow(application=app, db=db, monitor=None)
+        events = []
+        prefs = ClipmanPreferences(
+            db, parent, on_setting_changed=lambda k, v: events.append(k))
+        return db, prefs, events
+
+    @staticmethod
+    def _texts(db):
+        return [e["content_text"] for e in db.get_entries(limit=100)]
+
+    def test_a_restore_can_be_undone_with_its_safety_copy(self):
+        """Restoring the ``.bak`` used to overwrite it first, so the one
+        way back lost the original history for good."""
+        import sqlite3
+
+        from clipman import database
+
+        db, prefs, events = self._prefs()
+        db.add_entry("text", content_text="original history")
+        # A "wrong" backup: the same history with different text.
+        wrong = str(database.DB_PATH.parent / "wrong.db")
+        db.export_backup(wrong)
+        conn = sqlite3.connect(wrong)
+        conn.execute("UPDATE entries SET content_text = 'wrong history'")
+        conn.commit()
+        conn.close()
+
+        prefs._on_restore_confirmed(None, "restore", wrong)
+        self.assertEqual(self._texts(db), ["wrong history"])
+        safety = sorted(database.DB_PATH.parent.glob("clipman.db.*.bak"))
+        self.assertEqual(len(safety), 1)
+
+        prefs._on_restore_confirmed(None, "restore", str(safety[0]))
+        self.assertEqual(self._texts(db), ["original history"])
+        self.assertEqual(events, ["restore_succeeded", "restore_succeeded"])
+
+    def test_a_failed_restore_changes_nothing(self):
+        from clipman import database
+
+        db, prefs, events = self._prefs()
+        db.add_entry("text", content_text="keep me")
+        junk = database.DB_PATH.parent / "junk.db"
+        junk.write_bytes(b"not a database at all" * 100)
+        prefs._on_restore_confirmed(None, "restore", str(junk))
+        self.assertEqual(events, ["restore_failed"])
+        self.assertEqual(self._texts(db), ["keep me"])
+        self.assertGreater(db.add_entry("text", content_text="still recording"), 0)
+
+
 class TestEdgeStateDeclaration(unittest.TestCase):
     """Module-level invariants of edge_states.py that don't need GTK.
 

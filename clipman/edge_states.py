@@ -182,8 +182,8 @@ STATES: dict[str, StateSpec] = {
         icon_name="dialog-error-symbolic",
         title=_("Restore failed"),
         body=_("That file isn't a Clipman backup, or it includes "
-               "triggers/views we won't import. Pick a .db file exported "
-               "by Clipman."),
+               "triggers/views we won't import. Your history was not "
+               "changed. Pick a .db file exported by Clipman."),
         primary_action=(_("Close"), "close-dialog"),
         secondary_action=(_("Pick another file"), "rechoose-restore"),
     ),

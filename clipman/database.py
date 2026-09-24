@@ -65,9 +65,218 @@ def content_hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+# Columns a restored backup must carry. Older databases lacked only the
+# columns _create_schema adds (entries.sensitive, snippets.use_count), so
+# a table missing one of these cannot be repaired, and the backup is
+# refused before anything is replaced.
+_REQUIRED_COLUMNS = {
+    "entries": {"id", "content_type", "content_text", "image_path",
+                "content_hash", "pinned", "created_at", "accessed_at"},
+    "snippets": {"id", "name", "content_text", "created_at"},
+    "settings": {"key", "value"},
+}
+
+# Safety copies taken before a restore: clipman.db.<time>.bak, never
+# overwritten. Only the newest few are kept, because each one holds the
+# whole history, masked sensitive clips included.
+SAFETY_COPY_KEEP = 3
+
+# The range Preferences offers for the history size.
+MAX_ENTRIES_RANGE = (50, 5000)
+
+
+def _check_backup(conn):
+    """Raise ValueError unless ``conn`` holds a backup this app can use."""
+    if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+        raise ValueError("Invalid backup: the file is damaged")
+    objects = conn.execute("SELECT type, name, sql FROM sqlite_master").fetchall()
+    # Triggers and views could run arbitrary SQL on later writes.
+    dangerous = sorted(name for kind, name, _sql in objects
+                       if kind in ("trigger", "view"))
+    if dangerous:
+        raise ValueError(
+            "Invalid backup: contains disallowed objects: " + ", ".join(dangerous)
+        )
+    tables = {name: sql or "" for kind, name, sql in objects if kind == "table"}
+    if "entries" not in tables:
+        raise ValueError("Invalid backup: missing 'entries' table")
+    for table, required in _REQUIRED_COLUMNS.items():
+        if table not in tables:
+            continue
+        if tables[table].lstrip().upper().startswith("CREATE VIRTUAL"):
+            raise ValueError(f"Invalid backup: '{table}' is not a plain table")
+        have = {row[0] for row in conn.execute(
+            "SELECT name FROM pragma_table_info(?)", (table,))}
+        missing = required - have
+        if missing:
+            raise ValueError(
+                f"Invalid backup: '{table}' lacks {', '.join(sorted(missing))}"
+            )
+
+
+def _sanitize_image_paths(conn):
+    """Null out image paths that point outside IMAGES_DIR."""
+    rows = conn.execute(
+        "SELECT id, image_path FROM entries WHERE image_path IS NOT NULL"
+    ).fetchall()
+    for row_id, image_path in rows:
+        if not _safe_image_path(image_path):
+            conn.execute(
+                "UPDATE entries SET image_path = NULL WHERE id = ?", (row_id,)
+            )
+
+
+def _remove_sidecars(db_path):
+    for suffix in ("-wal", "-shm", "-journal"):
+        _remove_file(f"{db_path}{suffix}")
+
+
+def _prepare_restore(path):
+    """Copy the backup at ``path`` next to the live database, then check,
+    migrate and clean the copy. Returns the copy's path. The live database
+    is never touched here. Raises ValueError when the backup is unusable.
+    """
+    import shutil
+    try:
+        if DB_PATH.exists() and os.path.samefile(path, DB_PATH):
+            raise ValueError("That file is the live history itself; "
+                             "choose a backup")
+    except OSError as exc:
+        raise ValueError(f"Cannot read the backup: {exc}") from exc
+    _ensure_dirs()
+    tmp = DB_PATH.with_name(DB_PATH.name + ".restoring")
+    _remove_file(tmp)
+    _remove_sidecars(tmp)
+    ready = False
+    try:
+        # Created 0600 before any data lands in it, like the live database.
+        os.close(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600))
+        shutil.copyfile(path, tmp)
+        conn = sqlite3.connect(str(tmp))
+        try:
+            # A backup is untrusted input: its schema may not call SQL
+            # functions.
+            conn.execute("PRAGMA trusted_schema=OFF")
+            _check_backup(conn)
+            _create_schema(conn)
+            _sanitize_image_paths(conn)
+            conn.commit()
+        finally:
+            conn.close()
+        ready = True
+    except sqlite3.DatabaseError as exc:
+        raise ValueError(f"Not a valid database: {exc}") from exc
+    finally:
+        if not ready:
+            _remove_file(tmp)
+            _remove_sidecars(tmp)
+    return tmp
+
+
+def _replace_live_db(tmp):
+    """Swap the prepared copy in as the live database, in one rename.
+
+    The caller has closed every connection to the live file. Sidecars
+    left behind belong to the old file and must never be applied to the
+    new one.
+    """
+    _remove_sidecars(DB_PATH)
+    os.replace(tmp, DB_PATH)
+    _remove_sidecars(tmp)
+
+
+def restore_backup_file(path):
+    """Replace the history on disk with the backup at ``path``, with no
+    connection open (the database-error screen, where the live file may
+    not even open). Raises ValueError when the backup is unusable."""
+    _replace_live_db(_prepare_restore(path))
+
+
+def _reap_orphan_images(conn):
+    """Delete image files that no entry points at, so the screenshots of
+    a replaced history do not stay on disk forever."""
+    try:
+        names = set(os.listdir(IMAGES_DIR))
+    except OSError:
+        return
+    used = {os.path.basename(row[0]) for row in conn.execute(
+        "SELECT image_path FROM entries WHERE image_path IS NOT NULL")}
+    for name in names - used:
+        path = IMAGES_DIR / name
+        if path.is_file() and not path.is_symlink():
+            _remove_file(path)
+
+
+def prune_safety_copies(keep=SAFETY_COPY_KEEP, spare=None):
+    """Delete all but the newest ``keep`` safety copies, never ``spare``
+    (the file a restore just read)."""
+    copies = sorted(
+        DB_PATH.parent.glob(DB_PATH.name + ".*.bak"),
+        key=lambda p: (p.stat().st_mtime, p.name),
+    )
+    spared = Path(spare).resolve() if spare else None
+    for old in copies[:max(len(copies) - keep, 0)]:
+        if spared is None or old.resolve() != spared:
+            _remove_file(old)
+
+
+def _create_schema(conn):
+    """Create any missing table or index, and add columns that older
+    databases lack. Safe to run on every open, and on a restored copy."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            content_type TEXT NOT NULL,
+            content_text TEXT,
+            image_path TEXT,
+            content_hash TEXT NOT NULL UNIQUE,
+            pinned INTEGER NOT NULL DEFAULT 0,
+            created_at REAL NOT NULL,
+            accessed_at REAL NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_accessed_at ON entries(accessed_at DESC)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_content_hash ON entries(content_hash)
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS snippets (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            content_text TEXT NOT NULL,
+            created_at REAL NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        )
+    """)
+    # Migration: add sensitive column if missing
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(entries)")]
+    if "sensitive" not in cols:
+        conn.execute(
+            "ALTER TABLE entries ADD COLUMN sensitive INTEGER NOT NULL DEFAULT 0"
+        )
+    # Migration: snippet paste counter ("Snippet · used N×" row meta)
+    scols = [r[1] for r in conn.execute("PRAGMA table_info(snippets)")]
+    if "use_count" not in scols:
+        conn.execute(
+            "ALTER TABLE snippets ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0"
+        )
+    conn.commit()
+
+
 class ClipboardDB:
     def __init__(self):
         _ensure_dirs()
+        self._open()
+        self._create_table()
+
+    def _open(self):
         # Safe: all DB access happens on the GLib main thread (D-Bus callbacks
         # and GTK signal handlers both run on the main loop).
         self.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
@@ -77,54 +286,9 @@ class ClipboardDB:
         # first moment -wal/-shm are guaranteed to exist with our
         # process as the creator.
         _ensure_dirs()
-        self._create_table()
 
     def _create_table(self):
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS entries (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                content_type TEXT NOT NULL,
-                content_text TEXT,
-                image_path TEXT,
-                content_hash TEXT NOT NULL UNIQUE,
-                pinned INTEGER NOT NULL DEFAULT 0,
-                created_at REAL NOT NULL,
-                accessed_at REAL NOT NULL
-            )
-        """)
-        self.conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_accessed_at ON entries(accessed_at DESC)
-        """)
-        self.conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_content_hash ON entries(content_hash)
-        """)
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS snippets (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                content_text TEXT NOT NULL,
-                created_at REAL NOT NULL
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            )
-        """)
-        # Migration: add sensitive column if missing
-        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(entries)")]
-        if "sensitive" not in cols:
-            self.conn.execute(
-                "ALTER TABLE entries ADD COLUMN sensitive INTEGER NOT NULL DEFAULT 0"
-            )
-        # Migration: snippet paste counter ("Snippet · used N×" row meta)
-        scols = [r[1] for r in self.conn.execute("PRAGMA table_info(snippets)")]
-        if "use_count" not in scols:
-            self.conn.execute(
-                "ALTER TABLE snippets ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0"
-            )
-        self.conn.commit()
+        _create_schema(self.conn)
 
     def add_entry(self, content_type: str, content_text: str = None,
                   image_data: bytes = None, sensitive: bool = False) -> int:
@@ -258,8 +422,12 @@ class ClipboardDB:
         # bad setting break every copy.
         try:
             max_entries = int(float(self.get_setting("max_entries", str(MAX_ENTRIES))))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             max_entries = MAX_ENTRIES
+        # Keep to the range Preferences offers: a restored or hand-edited
+        # value of 0 or -1 would delete every new clip.
+        low, high = MAX_ENTRIES_RANGE
+        max_entries = min(max(max_entries, low), high)
         count = self.conn.execute(
             "SELECT COUNT(*) as cnt FROM entries WHERE pinned = 0"
         ).fetchone()["cnt"]
@@ -308,83 +476,61 @@ class ClipboardDB:
 
     def export_backup(self, path: str):
         import shutil
+        # The destination is truncated below, so it must never be the live
+        # database or one of its sidecars.
+        target = Path(path).resolve()
+        live = DB_PATH.resolve()
+        if target in {live} | {Path(f"{live}{s}") for s in ("-wal", "-shm", "-journal")}:
+            raise ValueError("Choose another file: that one is the live history")
         self.conn.commit()
         self.conn.execute("PRAGMA wal_checkpoint(FULL)")
-        shutil.copy2(str(DB_PATH), path)
-        # The exported file inherits the user's umask (typically 0o022),
-        # which leaves clipboard history group/world-readable on
-        # disk. Clamp it to 0o600 — the same posture the live DB and
-        # its sidecars enforce. Best-effort: filesystems that don't
-        # support chmod (vfat, some FUSE mounts) are tolerated.
+        # Create (or clamp) the destination to 0o600 before any history
+        # lands in it: the user's umask (typically 0o022) would otherwise
+        # leave the copy readable by others while it is being written.
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         try:
-            os.chmod(path, 0o600)
+            os.fchmod(fd, 0o600)
         except OSError:
-            # CodeQL py/empty-except: log at debug so the failure is
-            # observable under -v but doesn't spam INFO when the dest
-            # is on a chmod-less filesystem (vfat / some FUSE mounts).
-            logger.debug(
-                "chmod 0o600 failed on exported backup %s", path,
-                exc_info=True,
-            )
+            # A filesystem without modes (vfat, some FUSE mounts) keeps
+            # its own; the export still works.
+            logger.debug("chmod 0o600 failed on exported backup %s", path,
+                         exc_info=True)
+        finally:
+            os.close(fd)
+        shutil.copyfile(str(DB_PATH), path)
+
+    def write_safety_copy(self) -> str:
+        """Save the current history as ``clipman.db.<time>.bak`` next to
+        the live database, never over an existing file, and return its
+        path. Taken before a restore, so a bad restore can be undone."""
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        path = DB_PATH.with_name(f"{DB_PATH.name}.{stamp}.bak")
+        n = 1
+        while path.exists():
+            n += 1
+            path = DB_PATH.with_name(f"{DB_PATH.name}.{stamp}-{n}.bak")
+        self.export_backup(str(path))
+        return str(path)
 
     def import_backup(self, path: str):
-        import shutil
-        from urllib.parse import quote
-        # Validate the backup is a real SQLite database with expected tables
-        try:
-            # URL-encode path to prevent SQLite URI parameter injection
-            # (a filename containing '?' could inject mode=rw, etc.)
-            safe_uri = "file:" + quote(str(path), safe="/") + "?mode=ro"
-            test_conn = sqlite3.connect(safe_uri, uri=True)
-            schema = {(r[0], r[1]) for r in test_conn.execute(
-                "SELECT type, name FROM sqlite_master"
-            ).fetchall()}
-            test_conn.close()
-        except sqlite3.Error as e:
-            raise ValueError(f"Not a valid database: {e}")
-        tables = {name for typ, name in schema if typ == "table"}
-        if "entries" not in tables:
-            raise ValueError("Invalid backup: missing 'entries' table")
-        # Reject backups containing triggers or views (could execute
-        # arbitrary SQL on INSERT/UPDATE/DELETE after import)
-        dangerous = {name for typ, name in schema
-                     if typ in ("trigger", "view")}
-        if dangerous:
-            raise ValueError(
-                f"Invalid backup: contains disallowed objects: "
-                f"{', '.join(sorted(dangerous))}"
-            )
-        self.conn.close()
-        shutil.copy2(path, str(DB_PATH))
-        # Clamp the newly-restored DB to 0o600 — the source file may
-        # have arrived from a wider-permissioned location (downloads,
-        # USB stick, /tmp).
-        try:
-            os.chmod(str(DB_PATH), 0o600)
-        except OSError:
-            # CodeQL py/empty-except: log at debug so the failure is
-            # observable under -v but doesn't spam INFO when the
-            # destination is on a chmod-less filesystem.
-            logger.debug(
-                "chmod 0o600 failed on imported DB %s", DB_PATH,
-                exc_info=True,
-            )
-        self.conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self.conn.execute("PRAGMA journal_mode=WAL")
-        _ensure_dirs()
-        self._create_table()
-        # Sanitize any image_path values that point outside IMAGES_DIR
-        bad = self.conn.execute(
-            "SELECT id, image_path FROM entries WHERE image_path IS NOT NULL"
-        ).fetchall()
-        for row in bad:
-            if not _safe_image_path(row["image_path"]):
-                self.conn.execute(
-                    "UPDATE entries SET image_path = NULL WHERE id = ?",
-                    (row["id"],)
-                )
+        """Replace the whole history with the backup at ``path``.
+
+        The backup is checked, migrated and cleaned in a copy next to the
+        live database first, and only a copy that passed every step
+        replaces it, in one rename. Any failure leaves the history, and
+        this connection, as they were.
+        """
+        tmp = _prepare_restore(path)
         self.conn.commit()
+        self.conn.close()
+        try:
+            _replace_live_db(tmp)
+        finally:
+            # Reopen whichever file is live now: the restored one, or the
+            # old one if the rename failed.
+            self._open()
+            _remove_file(tmp)
+        _reap_orphan_images(self.conn)
 
     # --- Snippets ---
 

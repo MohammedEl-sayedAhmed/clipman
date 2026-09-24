@@ -128,6 +128,29 @@ All notable changes to Clipman are documented in this file.
 - `update_entry_text` had no caller and could break the unique hash
   constraint; removed. `get_latest_text` returns the newest text clip
   regardless of pins, for the `${clipboard}` snippet token.
+- Restoring a backup could lose the whole history. Every restore first
+  saved the current history as `clipman.db.bak`, so restoring that `.bak`
+  (the rollback the dialog offered) overwrote it before reading it, and
+  retrying a failed restore replaced it with the broken history. Safety
+  copies now get their own names (`clipman.db.<time>.bak`), are never
+  overwritten, and the three newest are kept.
+- A restore that failed had already replaced the history. The backup was
+  checked only for an `entries` table, then copied over the live file,
+  and the steps that could fail ran afterwards: a backup with missing
+  columns, a virtual table or damaged pages left a history the app could
+  not use, and recording stopped. Restores now check, migrate and clean
+  a copy first (integrity check, required columns, no triggers, views or
+  virtual tables, the backup's own SQL functions switched off), and swap
+  it in with one rename. A failure changes nothing.
+- Choosing the live database as the restore source closed the database
+  connection until the next restart. It is refused now, and so is
+  exporting over the live database or its `-wal`/`-shm` files.
+- A restore deletes the image files of the history it replaced.
+- An exported backup was readable by other users while it was being
+  written. It is created private before any data lands in it.
+- A `max_entries` of 0 or -1 (from a restored backup, say) deleted every
+  new clip, and `inf` made every copy fail. The value is kept inside the
+  range Preferences offers, 50 to 5000.
 
 ### Fixed — popup window
 

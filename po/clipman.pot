@@ -147,7 +147,7 @@ msgid "Restore failed"
 msgstr ""
 
 #: clipman/edge_states.py:184
-msgid "That file isn't a Clipman backup, or it includes triggers/views we won't import. Pick a .db file exported by Clipman."
+msgid "That file isn't a Clipman backup, or it includes triggers/views we won't import. Your history was not changed. Pick a .db file exported by Clipman."
 msgstr ""
 
 #: clipman/edge_states.py:187
@@ -532,7 +532,7 @@ msgstr ""
 msgid "Hold modifiers (Ctrl, Alt, Super, Shift) and press a key. Press Escape to cancel."
 msgstr ""
 
-#: clipman/preferences.py:674 clipman/preferences.py:849
+#: clipman/preferences.py:674 clipman/preferences.py:848
 #: clipman/snippets_dialog.py:212 clipman/snippets_dialog.py:398
 #: clipman/window.py:947
 msgid "Cancel"
@@ -590,137 +590,137 @@ msgstr ""
 msgid "Restore…"
 msgstr ""
 
-#: clipman/preferences.py:841
+#: clipman/preferences.py:840
 msgid "Restore from backup?"
 msgstr ""
 
-#: clipman/preferences.py:842
+#: clipman/preferences.py:841
 msgid ""
 "This replaces your entire clipboard history with the contents of:\n"
 "\n"
 "{path}\n"
 "\n"
-"A safety copy of the current database will be written next to it as a .bak file. This action cannot be undone from inside Clipman."
+"Your current history is saved first as a safety copy in {folder}. The three newest safety copies are kept."
 msgstr ""
 
-#: clipman/preferences.py:850
+#: clipman/preferences.py:849
 msgid "Restore"
 msgstr ""
 
-#: clipman/preferences.py:884
+#: clipman/preferences.py:885
 msgid "Updates"
 msgstr ""
 
-#: clipman/preferences.py:888
+#: clipman/preferences.py:889
 msgid "Update channel"
 msgstr ""
 
-#: clipman/preferences.py:890
+#: clipman/preferences.py:891
 msgid "Clipman polls the GitHub Releases API at most once per {hours} hours."
 msgstr ""
 
-#: clipman/preferences.py:897
+#: clipman/preferences.py:898
 msgid "Check for updates automatically"
 msgstr ""
 
-#: clipman/preferences.py:899
+#: clipman/preferences.py:900
 msgid "Shows an in-app banner when a newer version is available."
 msgstr ""
 
-#: clipman/preferences.py:909
+#: clipman/preferences.py:910
 msgid "Check frequency"
 msgstr ""
 
-#: clipman/preferences.py:911
+#: clipman/preferences.py:912
 msgid "Every {hours} hours"
 msgstr ""
 
-#: clipman/preferences.py:918
+#: clipman/preferences.py:919
 msgid "Last checked"
 msgstr ""
 
-#: clipman/preferences.py:924 clipman/preferences.py:982
+#: clipman/preferences.py:925 clipman/preferences.py:983
 msgid "Version"
 msgstr ""
 
-#: clipman/preferences.py:927
+#: clipman/preferences.py:928
 msgid "Current version"
 msgstr ""
 
-#: clipman/preferences.py:931 clipman/preferences.py:935
-#: clipman/preferences.py:939
+#: clipman/preferences.py:932 clipman/preferences.py:936
+#: clipman/preferences.py:940
 msgid "Unknown"
 msgstr ""
 
-#: clipman/preferences.py:933
+#: clipman/preferences.py:934
 msgid "Latest known version"
 msgstr ""
 
-#: clipman/preferences.py:941 clipman/window.py:1685
+#: clipman/preferences.py:942 clipman/window.py:1685
 msgid "Release notes"
 msgstr ""
 
-#: clipman/preferences.py:945
+#: clipman/preferences.py:946
 msgid "View on GitHub"
 msgstr ""
 
-#: clipman/preferences.py:962
+#: clipman/preferences.py:963
 msgid "Never"
 msgstr ""
 
-#: clipman/preferences.py:971
+#: clipman/preferences.py:972
 msgid "About"
 msgstr ""
 
-#: clipman/preferences.py:975
+#: clipman/preferences.py:976
 msgid "Clipman"
 msgstr ""
 
-#: clipman/preferences.py:977
+#: clipman/preferences.py:978
 msgid "A Wayland-native clipboard history manager built with GTK 4 + libadwaita."
 msgstr ""
 
-#: clipman/preferences.py:987
+#: clipman/preferences.py:988
 msgid "License"
 msgstr ""
 
-#: clipman/preferences.py:992
+#: clipman/preferences.py:993
 msgid "Maintainer"
 msgstr ""
 
-#: clipman/preferences.py:998
+#: clipman/preferences.py:999
 msgid "Links"
 msgstr ""
 
-#: clipman/preferences.py:1000
+#: clipman/preferences.py:1001
 msgid "Repository"
 msgstr ""
 
-#: clipman/preferences.py:1002
+#: clipman/preferences.py:1003
 msgid "Website"
 msgstr ""
 
-#: clipman/preferences.py:1004
+#: clipman/preferences.py:1005
 msgid "Report an issue"
 msgstr ""
 
-#: clipman/preferences.py:1006
+#: clipman/preferences.py:1007
 msgid "Sponsor on GitHub"
 msgstr ""
 
-#: clipman/preferences.py:1008
+#: clipman/preferences.py:1009
 msgid "Sponsor on PayPal"
 msgstr ""
 
-#: clipman/preferences.py:1013
+#: clipman/preferences.py:1014
 msgid "Open"
 msgstr ""
 
-#: clipman/preferences.py:1021
+#: clipman/preferences.py:1022
 msgid "Credits"
 msgstr ""
 
-#: clipman/preferences.py:1023
+#: clipman/preferences.py:1024
 msgid "Built with GTK 4 + libadwaita. Catppuccin palette by the Catppuccin community. Translations contributed by the community — see po/."
 msgstr ""
 
