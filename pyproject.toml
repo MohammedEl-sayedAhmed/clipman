@@ -34,7 +34,7 @@ Sponsor = "https://github.com/sponsors/MohammedEl-sayedAhmed"
 clipman = "clipman.cli:main"
 
 [project.optional-dependencies]
-lint = ["ruff==0.15.13"]
+lint = ["ruff==0.16.8"]
 # PyGObject cap: CI builds it from source against noble's GLib 2.80; bump deliberately.
 test = ["pytest==9.1.1", "PyGObject>=3.46,<3.59", "dbus-python>=1.3"]
 dev = ["clipman-clipboard[lint,test]"]
@@ -51,6 +51,12 @@ clipman = ["style.css"]
 
 [tool.ruff]
 target-version = "py310"
+
+[tool.ruff.lint]
+# Name the rule set instead of taking ruff's default, which grew from 59
+# to 413 rules in 0.16. This is the pre-0.16 default, so any ruff release
+# checks the same rules as CI. Adopt new rule families on purpose.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.ruff.lint.per-file-ignores]
 # gi.require_version() must run before `from gi.repository import ...`,
