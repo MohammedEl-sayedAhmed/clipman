@@ -152,6 +152,18 @@ All notable changes to Clipman are documented in this file.
   cannot inject keys on Mutter.
 - Masked rows say only "Sensitive" when "Auto-clear sensitive clips"
   is off, instead of counting down to a purge that will not happen.
+- After the first open, the daemon kept one CPU core at 100 % until
+  logout (since 1.2.0). The popup deferred the search-box focus with an
+  idle callback that returned True, so it ran again forever, and every
+  show added another one. The loop also kept pulling focus back into the
+  search box, which broke the keyboard: Enter did nothing. The focus now
+  runs once, and hiding the popup cancels a pending one.
+- Down from the search box now moves into the list. While typing, the
+  focus sits on the entry's inner text field, so the old check never saw
+  the search box as focused.
+- Delete and P with nothing selected no longer act on the first row,
+  which could delete a pinned clip without asking. Only Enter falls back
+  to the first row.
 
 ### Fixed — packaging and release scripts
 

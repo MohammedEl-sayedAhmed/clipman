@@ -286,6 +286,8 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # Pending _move_to_cursor timeout id, so a show->hide within 50ms
         # can cancel it (a stale timer would re-activate a closed popup).
         self._cursor_move_id = 0
+        # Pending one-shot idle that focuses the search box after a show.
+        self._focus_idle_id = 0
         # Incremental list fill: refresh() shows the first screenful
         # immediately, then appends the rest on idle so the popup paints
         # fast and stays responsive instead of freezing to build every row.
@@ -2226,7 +2228,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._activate_selected()
             return True
 
-        search_focused = self.search_entry.has_focus()
+        search_focused = self._search_has_focus()
 
         # "/" (or Ctrl+F) jumps to the search field from anywhere in the
         # popup — advertised by the kbd chip inside the field.
@@ -2274,19 +2276,34 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
         return False
 
+    def _search_has_focus(self):
+        """True while the caret is in the search box.
+
+        While typing, the focus sits on the entry's inner Gtk.Text child,
+        so ``search_entry.has_focus()`` is False; check the ancestry.
+        """
+        focus = self.get_focus()
+        return focus is not None and (
+            focus is self.search_entry or focus.is_ancestor(self.search_entry)
+        )
+
     # ------------------------------------------------------------------
     # Keyboard / click shared action helpers
     # ------------------------------------------------------------------
 
-    def _selected_item(self):
-        """Return the selected ``ClipItem``, or the first item if none is
-        selected. Returns ``None`` when the list is empty.
+    def _selected_item(self, fallback_to_first=True):
+        """Return the selected ``ClipItem``.
+
+        With nothing selected, return the first item, or ``None`` when
+        ``fallback_to_first`` is False. Only Enter falls back: Delete and P
+        must never act on a row the user did not pick. Returns ``None``
+        when the list is empty.
         """
         if self._selection.get_n_items() == 0:
             return None
         pos = self._selection.get_selected()
         if pos == Gtk.INVALID_LIST_POSITION:
-            return self._selection.get_item(0)
+            return self._selection.get_item(0) if fallback_to_first else None
         return self._selection.get_item(pos)
 
     def _activate_selected(self):
@@ -2310,9 +2327,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """Delete the selected entry (mirrors its trash button).
 
         Snippets have no inline delete here, so non-entry items are
-        ignored. Returns ``True`` when an entry was deleted.
+        ignored, and so is a list with nothing selected. Returns ``True``
+        when an entry was deleted.
         """
-        item = self._selected_item()
+        item = self._selected_item(fallback_to_first=False)
         if item is None or item.kind != "entry":
             return False
         entry_id = item.data.get("id")
@@ -2325,10 +2343,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
     def _pin_selected(self):
         """Toggle pin on the selected entry (mirrors its star button).
 
-        Snippets have no pin, so non-entry items are ignored. Returns
-        ``True`` when an entry's pin state was toggled.
+        Snippets have no pin, so non-entry items are ignored, and so is a
+        list with nothing selected. Returns ``True`` when an entry's pin
+        state was toggled.
         """
-        item = self._selected_item()
+        item = self._selected_item(fallback_to_first=False)
         if item is None or item.kind != "entry":
             return False
         entry_id = item.data.get("id")
@@ -2463,17 +2482,32 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # incognito is actually on.
         self._update_recording_pill(self._incognito_btn.get_active())
         # grab_focus no-ops on a not-yet-focused Wayland toplevel; defer.
-        GLib.idle_add(self.search_entry.grab_focus)
+        # It must run once: grab_focus() returns True, and an idle callback
+        # that returns True runs again forever, which kept a CPU core busy
+        # and pulled focus back into the search box on every loop.
+        if self._focus_idle_id:
+            GLib.source_remove(self._focus_idle_id)
+        self._focus_idle_id = GLib.idle_add(self._focus_search_once)
         if self._cursor_move_id:
             GLib.source_remove(self._cursor_move_id)
         self._cursor_move_id = GLib.timeout_add(50, self._move_to_cursor)
 
+    def _focus_search_once(self):
+        """Idle callback: focus the search box, then remove itself."""
+        self._focus_idle_id = 0
+        self.search_entry.grab_focus()
+        return GLib.SOURCE_REMOVE
+
     def _hide(self):
-        """Hide the popup and tear down transient state (cursor timer, search
-        debounce, any open child dialog) so nothing resurfaces or latches."""
+        """Hide the popup and tear down transient state (cursor timer, focus
+        idle, search debounce, any open child dialog) so nothing resurfaces
+        or latches."""
         if self._cursor_move_id:
             GLib.source_remove(self._cursor_move_id)
             self._cursor_move_id = 0
+        if self._focus_idle_id:
+            GLib.source_remove(self._focus_idle_id)
+            self._focus_idle_id = 0
         self._cancel_search_debounce()
         self._cancel_fill()
         if self._child_dialog is not None:
