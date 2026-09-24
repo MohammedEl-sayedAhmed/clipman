@@ -21,7 +21,7 @@ on `main`.
 | Release | `release.yml` | `push` of tag matching `v*.*.*`, `workflow_dispatch` | End-to-end release pipeline: pre-flight version checks, matrix tests, builds (PyPI, snap, .deb/.rpm, extension bundle) with a wheel smoke test before the PyPI upload, and publishes to PyPI, Snap Store, AUR, and GitHub Releases. | No (tag-triggered only) |
 | Scorecard | `scorecard.yml` | `push` to `main`, weekly cron (`37 4 * * 1`), `branch_protection_rule` | OSSF Scorecard supply-chain analysis; uploads SARIF to the GitHub Security tab and publishes results. | No |
 | Secret scan | `secret-scan.yml` | `push` to `main`, `pull_request` to `main` | Runs `gitleaks` over full git history to catch committed credentials. | Yes — `gitleaks` |
-| Snap refresh | `snap-refresh.yml` | Weekly cron (`0 4 * * 1`), `workflow_dispatch`, `push`/`pull_request` to `main` touching snap-relevant paths | Rebuilds the snap to pick up Ubuntu archive security updates. The scheduled run publishes every channel: edge from `main`, and beta, candidate and stable from the latest release tag. See ADR 0012. | No |
+| Snap refresh | `snap-refresh.yml` | Weekly cron (`0 4 * * 1`), `workflow_dispatch`, `push`/`pull_request` to `main` touching snap-relevant paths | Rebuilds the snap to pick up Ubuntu archive security updates. The scheduled run publishes every channel: edge from `main`, and beta, candidate and stable from the latest release tag, unless the store is already ahead of that tag. `scripts/snap-plan.sh` makes that plan, and `tests/test_snap_plan.py` checks it. See ADR 0012. | No |
 | Tests | `test.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh test` (pytest under `xvfb-run` with `CLIPMAN_REQUIRE_GTK4=1`) across the Python 3.10 / 3.11 / 3.12 matrix on `ubuntu-24.04`; system packages come from `scripts/deps.sh`. | Yes — `test (3.10)`, `test (3.11)`, `test (3.12)` |
 
 The remaining required context on `main` is `review`, which is enforced
@@ -77,18 +77,24 @@ graph and step contents):
   `aur/PKGBUILD`, `aur/.SRCINFO`, the Flatpak manifest and both
   metainfo files), and that `CHANGELOG.md` has the matching `[X.Y.Z]`
   section, which becomes the GitHub Release body. A mismatch fails the
-  entire pipeline before any artifacts are built.
+  entire pipeline before any artifacts are built. The check is
+  `scripts/release-preflight.sh`; the test suite runs it on a freshly
+  bumped copy too, so a release PR that would fail it fails CI first.
 - **tests** — fan-out matrix on `ubuntu-24.04` for Python 3.10, 3.11,
   and 3.12. `fail-fast: true` so a regression in one interpreter
   short-circuits the whole pipeline.
-- **build-pypi** — `python -m build` produces sdist + wheel uploaded
-  as the `pypi-dist` artifact.
+- **build-pypi** — `python -m build` produces sdist + wheel. Then
+  `scripts/wheel-smoke.sh` installs the wheel in a clean venv and checks
+  that it reports the tag's version and ships `style.css`, the same
+  script the `package (wheel smoke)` check runs on every pull request.
+  Only then is `dist/` uploaded as the `pypi-dist` artifact.
 - **publish-pypi** — `pypa/gh-action-pypi-publish` with OIDC trusted
   publishing per ADR 0004; no long-lived PyPI token is stored. The
   job runs in the `pypi` environment so the trusted-publisher binding
   resolves.
 - **build-snap** — `snapcore/action-build` builds the `.snap`.
-- **publish-snap** — uploads to the Snap Store `stable` channel via
+- **publish-snap** — uploads to the Snap Store and releases to the
+  `stable`, `candidate` and `beta` channels via
   `snapcore/action-publish`. Requires `SNAPCRAFT_STORE_CREDENTIALS`;
   if the secret is unset, the job logs a warning and skips the
   publish step rather than failing.

@@ -4,7 +4,7 @@
 # functions, or run it as a CLI (see --help).
 # shellcheck disable=SC2034  # arrays are read through a nameref
 
-# Package lists: runtime (app), test (Xvfb + build headers), lint (shellcheck),
+# Package lists: runtime (app), test (Xvfb, build headers, jq), lint (shellcheck),
 # i18n (gettext, for compiling translation catalogues)
 
 CLIPMAN_DEPS_RUNTIME_APT=(
@@ -19,16 +19,16 @@ CLIPMAN_DEPS_RUNTIME_PACMAN=(
 )
 
 CLIPMAN_DEPS_TEST_APT=(
-    xvfb python3-venv python3-dev pkg-config
+    xvfb python3-venv python3-dev pkg-config jq
     libcairo2-dev libgirepository-2.0-dev libdbus-1-dev libglib2.0-dev
 )
 CLIPMAN_DEPS_TEST_DNF=(
-    xorg-x11-server-Xvfb python3-devel pkgconf-pkg-config
+    xorg-x11-server-Xvfb python3-devel pkgconf-pkg-config jq
     cairo-devel cairo-gobject-devel gobject-introspection-devel
     dbus-devel glib2-devel
 )
 CLIPMAN_DEPS_TEST_PACMAN=(
-    xorg-server-xvfb python-pip pkgconf cairo gobject-introspection dbus glib2
+    xorg-server-xvfb python-pip pkgconf jq cairo gobject-introspection dbus glib2
 )
 
 CLIPMAN_DEPS_LINT_APT=(shellcheck)

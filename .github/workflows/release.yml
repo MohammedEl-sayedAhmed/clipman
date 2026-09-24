@@ -70,30 +70,7 @@ jobs:
         env:
           EXPECTED: ${{ steps.derive.outputs.version }}
         run: |
-          fail=0
-          check() {  # check <label> <actual>
-            if [ "$2" != "$EXPECTED" ]; then
-              echo "::error::$1 version '$2' does not match tag ($EXPECTED)"
-              fail=1
-            else
-              echo "OK: $1 $2"
-            fi
-          }
-          check pyproject.toml       "$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
-          check clipman/_version.py  "$(grep -m1 '^__version__ = ' clipman/_version.py | cut -d'"' -f2)"
-          check snap/snapcraft.yaml  "$(grep -m1 '^version: ' snap/snapcraft.yaml | sed -E "s/version: ['\"]?([^'\"]+)['\"]?/\1/")"
-          check CITATION.cff         "$(grep -m1 '^version: ' CITATION.cff | cut -d' ' -f2)"
-          check aur/PKGBUILD         "$(grep -m1 '^pkgver=' aur/PKGBUILD | cut -d= -f2)"
-          check aur/.SRCINFO         "$(awk -F' = ' '/^[[:space:]]*pkgver = /{print $2; exit}' aur/.SRCINFO)"
-          check flathub-manifest     "$(cat flathub/*.json | grep -m1 -o 'clipman/archive/refs/tags/v[^"]*\.tar\.gz' | sed -E 's|.*/v(.*)\.tar\.gz|\1|')"
-          for f in data/*.metainfo.xml; do
-            check "$f (first <release>)" "$(grep -m1 -o '<release version="[^"]*"' "$f" | cut -d'"' -f2)"
-          done
-          if ! grep -Eq "^## \[${EXPECTED//./\\.}\] - [0-9]{4}-[0-9]{2}-[0-9]{2}" CHANGELOG.md; then
-            echo "::error::CHANGELOG.md has no '## [$EXPECTED] - <date>' section"
-            fail=1
-          fi
-          exit $fail
+          scripts/release-preflight.sh "$EXPECTED"
 
       - name: Extract release notes for this version from CHANGELOG.md
         id: changelog
@@ -192,15 +169,7 @@ jobs:
         env:
           VERSION: ${{ needs.pre-flight.outputs.version }}
         run: |
-          python -m venv /tmp/smoke
-          /tmp/smoke/bin/pip install --no-deps dist/*.whl
-          tar tzf dist/*.tar.gz | grep -q 'clipman/style.css'
-          # Leave the checkout so the installed package, not the source
-          # tree, is imported.
-          cd /tmp
-          test "$(/tmp/smoke/bin/clipman --version)" = "clipman $VERSION"
-          /tmp/smoke/bin/python -m clipman --version
-          /tmp/smoke/bin/python -c "from importlib.resources import files; assert files('clipman').joinpath('style.css').is_file()"
+          PYTHON=python scripts/wheel-smoke.sh dist "$VERSION"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

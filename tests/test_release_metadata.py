@@ -10,7 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# What scripts/bump-version.sh edits, and the scripts it runs.
+# What scripts/bump-version.sh edits and scripts/release-preflight.sh
+# reads, and the scripts themselves.
 BUMPED_FILES = (
     "pyproject.toml",
     "clipman/_version.py",
@@ -18,8 +19,10 @@ BUMPED_FILES = (
     "aur/PKGBUILD",
     "aur/.SRCINFO",
     "CITATION.cff",
+    "CHANGELOG.md",
     "scripts/bump-version.sh",
     "scripts/update-aur.sh",
+    "scripts/release-preflight.sh",
 )
 BUMPED_GLOBS = ("flathub/*.json", "data/*.metainfo.xml")
 
@@ -58,6 +61,25 @@ def _versions(root):
     return found
 
 
+def _copy_release_files(dest):
+    """Copy the files a release bump touches into dest."""
+    sources = [ROOT / rel for rel in BUMPED_FILES]
+    for pattern in BUMPED_GLOBS:
+        sources.extend(ROOT.glob(pattern))
+    for src in sources:
+        target = dest / src.relative_to(ROOT)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, target)
+
+
+def _preflight(root, version):
+    """Run the release workflow's version check in root."""
+    return subprocess.run(
+        ["bash", "scripts/release-preflight.sh", version],
+        cwd=root, capture_output=True, text=True,
+    )
+
+
 def _srcinfo(root):
     """Return the .SRCINFO that update-aur.sh renders from root's PKGBUILD."""
     return subprocess.run(
@@ -82,13 +104,7 @@ class TestReleaseMetadata(unittest.TestCase):
         # rendered it.
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp)
-            sources = [ROOT / rel for rel in BUMPED_FILES]
-            for pattern in BUMPED_GLOBS:
-                sources.extend(ROOT.glob(pattern))
-            for src in sources:
-                dest = copy / src.relative_to(ROOT)
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(src, dest)
+            _copy_release_files(copy)
             subprocess.run(
                 ["bash", "scripts/bump-version.sh", "9.8.7"],
                 cwd=copy, capture_output=True, text=True, check=True,
@@ -101,6 +117,41 @@ class TestReleaseMetadata(unittest.TestCase):
                 with self.subTest(file=name):
                     self.assertEqual(value, "9.8.7")
             self.assertEqual(_srcinfo(copy), _read("aur/.SRCINFO", copy))
+
+    def test_preflight_passes_on_this_checkout(self):
+        # main always carries a released version with a dated CHANGELOG
+        # section, and a release PR must too.
+        version = _first(r'^version = "([^"]+)"', _read("pyproject.toml"))
+        result = _preflight(ROOT, version)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_preflight_names_each_mismatch(self):
+        result = _preflight(ROOT, "0.0.1")
+        self.assertEqual(result.returncode, 1)
+        for name in ("pyproject.toml", "aur/.SRCINFO", "flathub-manifest", "CHANGELOG.md"):
+            with self.subTest(file=name):
+                self.assertIn(f"::error::{name}", result.stdout)
+
+    def test_release_path_from_bump_to_preflight(self):
+        # The documented path: bump-version.sh, then the dated CHANGELOG
+        # section. The release workflow's pre-flight must accept the
+        # result; the 1.2.2 bump failed it on aur/.SRCINFO.
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp)
+            _copy_release_files(copy)
+            subprocess.run(
+                ["bash", "scripts/bump-version.sh", "9.8.7"],
+                cwd=copy, capture_output=True, text=True, check=True,
+            )
+            result = _preflight(copy, "9.8.7")
+            self.assertEqual(result.returncode, 1)
+            errors = [line for line in result.stdout.splitlines() if "::error::" in line]
+            self.assertEqual(len(errors), 1, errors)
+            self.assertIn("CHANGELOG.md", errors[0])
+            with open(copy / "CHANGELOG.md", "a", encoding="utf-8") as changelog:
+                changelog.write("\n## [9.8.7] - 2026-01-02\n\n- A test release.\n")
+            result = _preflight(copy, "9.8.7")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_tarball_hash_is_the_same_in_aur_and_flatpak(self):
         sha = _first(r"^sha256sums=\('([0-9a-f]{64})'\)", _read("aur/PKGBUILD"))
