@@ -4,6 +4,26 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Added — GNOME Shell 51 support
+
+- The Shell extension (v9) now declares support for GNOME Shell 51. The
+  one API the extension used that Shell 51 removed is
+  `Clutter.get_default_backend()`; the virtual-keyboard lookup now falls
+  back to `global.stage.context.get_backend()`, the replacement the Shell
+  itself has used since 48. Everything else the extension touches
+  (`Meta.Selection` `owner-changed`, `St.Clipboard`, the virtual-keyboard
+  seat API, `Gio.DBusExportedObject`, and `Meta.Window.hide_from_window_list`)
+  is unchanged in 51. Update the README/ADR support window to GNOME Shell
+  45–51. The v9 zip for e.g.o. is built separately (manual upload).
+
+### Fixed — snippet rows lost their icon on GNOME 48+
+
+- Snippet rows used `emblem-documents-symbolic`, which upstream
+  adwaita-icon-theme removed in 48.0 (it existed 42–47). On GNOME 48+
+  the row fell back to a broken-image placeholder. Use
+  `x-office-document-symbolic`, the same document-with-lines glyph that
+  upstream kept, present across the whole 42–51 range.
+
 ### Added — developer tooling
 
 - `scripts/deps.sh`: one manifest of system packages (`runtime`, `test`,
