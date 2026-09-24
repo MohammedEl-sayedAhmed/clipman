@@ -432,6 +432,32 @@ All notable changes to Clipman are documented in this file.
   it, not just the states page. The "Color scheme" row inside the
   Preferences mockup shows the page's theme as well.
 
+### Fixed — small things in the popup
+
+- The window opacity set in Preferences applied only when changed, not
+  at the next start.
+- Each open of the popup now starts at the top with the first section
+  header ("★ Pinned" or "Today") in view; it used to open scrolled just
+  past it.
+- A clip whose first line is blank showed as "(empty)". Rows now show
+  the first line that has text.
+- "Retry" and "Choose another location" after a failed backup, and
+  "Pick another file" after a failed restore, opened a second
+  Preferences instead of acting in the open one. "Retry" now writes the
+  backup to the same file again. Closing such an alert also no longer
+  counts as closing the last dialog, so the popup stays open while
+  Preferences does.
+- Pressing Escape on an alert logged a warning about an unknown answer.
+- Ctrl+N, "Add snippet" and the "+" button opened the snippets editor
+  without starting a new snippet. They now open it on a new one; the
+  "+" tooltip says "New snippet".
+- Searching on the Images tab said "No clips match that search" and
+  suggested a shorter query, although images are never searched. It
+  now says images can't be searched yet (#317 tracks it), with a Clear
+  search button. The design mockup has the new state.
+- The "/" hint inside the search box covered the clear button and long
+  queries. It shows only while the box is empty.
+
 ### Fixed — git hooks
 
 - The trailer-identity check never ran. It read the output of

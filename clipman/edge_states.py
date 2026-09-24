@@ -64,7 +64,8 @@ class StateSpec:
 
 
 # ---------------------------------------------------------------------
-# The specs (16 mockup states + 4 plumbed error states). Order matches the mockup picker (states.html), reading
+# The specs (the mockup's states, plus a few error states it does not
+# show). Order matches the mockup picker (states.html), reading
 # top-to-bottom: Baseline / Informational / Privacy / Setup / Errors.
 # "populated" is a sentinel: it represents the normal list-view popup,
 # is never actually rendered through ``render_edge_state`` (the list
@@ -110,6 +111,16 @@ STATES: dict[str, StateSpec] = {
         title=_("No clips match that search"),
         body=_("Try a shorter query, switch the filter to All, or clear "
                "the search box."),
+        primary_action=(_("Clear search"), "clear-search"),
+    ),
+    "no-image-search": StateSpec(
+        id="no-image-search",
+        kind="statuspage",
+        tone="info",
+        icon_name="image-x-generic-symbolic",
+        title=_("Images can't be searched yet"),
+        body=_("Search looks at text clips only. Clear the search to see "
+               "every image, or switch to All or Text to search your text."),
         primary_action=(_("Clear search"), "clear-search"),
     ),
     "first-run": StateSpec(
@@ -454,6 +465,9 @@ def render_edge_state(
 
     if spec.kind == "alertdialog":
         dialog = Adw.AlertDialog.new(spec.title, spec.body)
+        # Escape answers with the close response, "close" by default,
+        # which no handler knows.
+        dialog.set_close_response("close-dialog")
         if spec.secondary_action is not None:
             dialog.add_response(
                 spec.secondary_action[1], spec.secondary_action[0]

@@ -349,6 +349,10 @@ class SnippetsDialog(Adw.Dialog):
     # Action handlers
     # ------------------------------------------------------------------
 
+    def start_new(self):
+        """Open on a new, unsaved snippet (Ctrl+N, "Add snippet")."""
+        self._on_new_clicked(None)
+
     def _on_new_clicked(self, _btn):
         # Nothing is written until the user saves, so cancelling leaves no
         # empty row behind. Save stays insensitive until the name is filled.

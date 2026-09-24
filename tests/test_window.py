@@ -157,7 +157,8 @@ class TestEdgeStates(_WidgetTestCase):
     """Every declared state must map to a renderable widget."""
 
     EXPECTED_IDS = {
-        "populated", "empty", "no-snippets-yet", "no-results", "first-run",
+        "populated", "empty", "no-snippets-yet", "no-results",
+        "no-image-search", "first-run",
         "incognito-on", "sensitive-shown", "sensitive-cleared",
         "extension-missing", "backup-failed", "restore-failed",
         "network-error", "db-locked", "paused", "paste-target-missing",
@@ -174,7 +175,7 @@ class TestEdgeStates(_WidgetTestCase):
         """
         from clipman.edge_states import STATES
         self.assertEqual(set(STATES.keys()), self.EXPECTED_IDS)
-        self.assertEqual(len(STATES), 20)
+        self.assertEqual(len(STATES), 21)
 
     def test_render_each_state_returns_widget(self):
         from clipman.edge_states import STATES, render_edge_state
@@ -1218,7 +1219,8 @@ class TestWindowConstruction(_WidgetTestCase):
 
         # Side-effect callees we never want to fire during the test:
         #   - _open_url and _reveal_path shell out to xdg-open
-        #   - _on_prefs_clicked spawns Adw.PreferencesWindow
+        #   - _on_prefs_clicked and _open_prefs open Preferences (and
+        #     the backup actions its file chooser)
         #   - _on_snippets_clicked spawns Adw.Dialog
         #   - refresh_update_banner pokes the updates module
         # Replace them with recorders so we can assert the dispatch
@@ -1229,8 +1231,12 @@ class TestWindowConstruction(_WidgetTestCase):
         window._on_prefs_clicked = (
             lambda _b, page=None: called.append(("prefs", page))
         )
-        window._on_snippets_clicked = lambda _b: called.append(
-            ("snippets", None)
+        prefs = MagicMock(name="preferences")
+        window._open_prefs = (
+            lambda page=None: called.append(("prefs", page)) or prefs
+        )
+        window._on_snippets_clicked = lambda _b, new=False: called.append(
+            ("snippets", new)
         )
         window.refresh_update_banner = lambda: called.append(
             ("update-check", None)
@@ -1539,6 +1545,177 @@ class TestKeyboardShortcuts(_WidgetTestCase):
         window.set_focus(window.search_entry.get_delegate())
         self.assertTrue(window._on_key_pressed(None, Gdk.KEY_Down, 0, 0))
         self.assertEqual(window._selection.get_selected(), 0)
+
+
+class TestPopupBehaviour(_WidgetTestCase):
+    """Audit findings UI-13, UI-16, UI-17, UI-19, UI-20, UI-21, UI-27 and
+    UI-28: small things the popup got wrong."""
+
+    def _window(self, db=None):
+        from clipman.window import ClipmanWindow
+
+        app = self._make_app("com.clipman.TestPopupBehaviour")
+        return ClipmanWindow(application=app, db=db or self._make_db(),
+                             monitor=None)
+
+    @staticmethod
+    def _pump(ms):
+        import time
+
+        from gi.repository import GLib
+
+        context = GLib.MainContext.default()
+        end = time.monotonic() + ms / 1000
+        while time.monotonic() < end:
+            while context.pending():
+                context.iteration(False)
+            time.sleep(0.005)
+
+    def test_saved_opacity_applies_at_start(self):
+        """UI-13: only a change in Preferences applied it."""
+        db = self._make_db()
+        db.set_setting("opacity", "0.6")
+        window = self._window(db)
+        self.assertAlmostEqual(window.get_opacity(), 0.6, places=2)
+
+    def test_each_open_starts_at_the_top(self):
+        """UI-16: the list opened scrolled past its first section header."""
+        db = self._make_db()
+        pinned = db.add_entry("text", content_text="pinned note")
+        db.toggle_pin(pinned)
+        for i in range(12):
+            db.add_entry("text", content_text=f"clip {i}")
+        window = self._window(db)
+        self.addCleanup(window.set_visible, False)
+        adjustment = window.listview.get_vadjustment()
+        for _ in range(2):
+            window.toggle()
+            self._pump(600)
+            self.assertEqual(adjustment.get_value(), adjustment.get_lower())
+            window.toggle()
+            self._pump(100)
+
+    def test_row_title_is_the_first_line_with_text(self):
+        """UI-17: a clip starting with a blank line showed "(empty)"."""
+        from clipman.window import _first_line
+
+        self.assertEqual(_first_line("\n    indented block"), "indented block")
+        self.assertEqual(_first_line("   \nsecond line\nthird"), "second line")
+        self.assertEqual(_first_line("first\nsecond"), "first")
+        self.assertEqual(_first_line("  \n\t\n "), "")
+        self.assertEqual(_first_line(""), "")
+        self.assertLessEqual(len(_first_line("x" * 5_000_000)), 121)
+
+    def test_preferences_is_never_opened_twice(self):
+        """UI-19: Retry on a failed backup opened a second Preferences."""
+        window = self._window()
+        handlers = []
+        with patch("clipman.preferences.ClipmanPreferences") as prefs_class:
+            prefs = prefs_class.return_value
+            prefs.connect.side_effect = lambda _sig, cb: handlers.append(cb)
+            window._open_prefs()
+            window._action_retry_backup()
+            window._action_rechoose_backup()
+            window._action_rechoose_restore()
+            self.assertEqual(prefs_class.call_count, 1)
+            prefs.retry_backup.assert_called_once_with()
+            prefs.choose_backup_file.assert_called_once_with()
+            prefs.choose_restore_file.assert_called_once_with()
+            prefs.show_page.assert_called_with("storage")
+            # Closed: the next request opens a new one.
+            for handler in handlers:
+                handler(prefs)
+            self.assertIsNone(window._prefs_dialog)
+            window._open_prefs()
+            self.assertEqual(prefs_class.call_count, 2)
+
+    def test_retry_writes_the_same_backup_file_again(self):
+        from clipman.preferences import ClipmanPreferences
+
+        db = self._make_db()
+        prefs = ClipmanPreferences(db, None, on_setting_changed=None)
+        prefs._on_backup_clicked = MagicMock()
+        prefs.retry_backup()  # nothing tried yet: ask for a file
+        prefs._on_backup_clicked.assert_called_once_with(None)
+
+        events = []
+        prefs._emit_event = lambda name, value: events.append(name)
+        target = os.path.join(tempfile.mkdtemp(), "backup.db")
+        self.addCleanup(shutil.rmtree, os.path.dirname(target), True)
+        with patch.object(db, "export_backup",
+                          side_effect=OSError("disk full")) as export:
+            prefs._write_backup(target)
+            prefs.retry_backup()
+        self.assertEqual([c.args for c in export.call_args_list],
+                         [(target,), (target,)])
+        self.assertEqual(events, ["backup_failed", "backup_failed"])
+
+    def test_preferences_counts_as_an_open_dialog(self):
+        """A failed-backup alert took the one dialog slot, and closing it
+        let the popup hide from under Preferences."""
+        window = self._window()
+        window._prefs_dialog = MagicMock(get_mapped=MagicMock(return_value=True))
+        self.assertTrue(window._child_is_open())
+
+    def test_escape_on_an_alert_is_handled(self):
+        """UI-20: Escape answered "close", which no handler knew."""
+        from clipman.edge_states import STATES, render_edge_state
+
+        window = self._window()
+        for state_id, spec in STATES.items():
+            if spec.kind != "alertdialog":
+                continue
+            with self.subTest(state_id=state_id):
+                alert = render_edge_state(state_id)
+                self.assertEqual(alert.get_close_response(), "close-dialog")
+        with self.assertNoLogs("clipman.window", "WARNING"):
+            window._on_edge_action("close-dialog")
+
+    def test_new_snippet_entry_points_start_a_draft(self):
+        """UI-21: Ctrl+N, "Add snippet" and "+" opened the editor idle."""
+        from gi.repository import Gdk
+
+        window = self._window()
+        window._active_filter = "snippets"
+        opens = {
+            "Ctrl+N": lambda: window._on_key_pressed(
+                None, Gdk.KEY_n, 0, Gdk.ModifierType.CONTROL_MASK),
+            "Add snippet": lambda: window._on_edge_action(
+                "open-snippets-dialog"),
+            "+": lambda: window._new_snippet_btn.emit("clicked"),
+        }
+        with patch("clipman.snippets_dialog.SnippetsDialog.present"):
+            for name, open_editor in opens.items():
+                with self.subTest(entry_point=name):
+                    open_editor()
+                    dialog = window._child_dialog
+                    self.assertTrue(dialog._draft)
+                    self.assertEqual(dialog._title_label.get_text(),
+                                     "New snippet")
+
+    def test_searching_images_says_images_are_not_searchable(self):
+        """UI-27: it showed the generic "no clips match" page."""
+        db = self._make_db()
+        db.add_entry("image", image_data=b"\x89PNG\r\n\x1a\nfake")
+        window = self._window(db)
+        window._search_query = "invoice"
+        window._active_filter = "images"
+        window.refresh()
+        self.assertEqual(window._current_edge_widget.state_spec.id,
+                         "no-image-search")
+        window._active_filter = "text"
+        window.refresh()
+        self.assertEqual(window._current_edge_widget.state_spec.id,
+                         "no-results")
+
+    def test_search_hint_hides_while_typing(self):
+        """UI-28: the "/" chip covered the clear button and the query."""
+        window = self._window()
+        self.assertTrue(window._kbd_chip.get_visible())
+        window.search_entry.set_text("a long query")
+        self.assertFalse(window._kbd_chip.get_visible())
+        window.search_entry.set_text("")
+        self.assertTrue(window._kbd_chip.get_visible())
 
 
 class TestPresentFocused(_WidgetTestCase):
