@@ -114,7 +114,7 @@ Introspect or call them with `gdbus`:
 ### Key Constraints
 
 - **Wayland only** — no X11-specific APIs in the daemon
-- **GTK 4 + libadwaita 1.4+** — the UI is built on `Adw.ApplicationWindow`,
+- **GTK 4 + libadwaita 1.5+** — the UI is built on `Adw.ApplicationWindow`,
   `Adw.Dialog`, `Adw.NavigationSplitView`, `Adw.ActionRow`,
   `Adw.StatusPage`, `Adw.Banner`, and `Adw.AlertDialog`. Ubuntu 22.04 is no
   longer the floor; 24.04+ is the supported baseline.

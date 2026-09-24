@@ -1,6 +1,6 @@
 # Clipman
 
-> Wayland-native clipboard history manager for Linux, built with GTK 4 and libadwaita. Press Super+V to search, pin and paste from a local SQLite-backed history. No telemetry; sensitive data auto-clears.
+> Wayland-native clipboard history manager for GNOME on Linux, built with GTK 4 and libadwaita. Press Super+V to search, pin and paste from a local SQLite-backed history. No telemetry; detected secrets are removed from the history.
 
 - [Project page](https://mohammedel-sayedahmed.github.io/clipman/)
 - [Source](https://github.com/MohammedEl-sayedAhmed/clipman)
@@ -9,11 +9,11 @@
 
 ## Overview
 
-Clipman is a clipboard history manager built specifically for modern Linux desktops running Wayland. Unlike X11-era tools that poll the clipboard or rely on root-window hacks, Clipman cooperates with the compositor through documented protocols: a GNOME Shell extension talking over D-Bus on GNOME sessions, and `wl-clipboard` (`wl-paste --watch`) as a fallback on KDE Plasma, Sway, Hyprland, and other wlroots-based compositors. The daemon runs as a user systemd service and is stateless beyond a single SQLite database under `~/.local/share/clipman/`.
+Clipman is a clipboard history manager for GNOME desktops running Wayland. Unlike X11-era tools that poll the clipboard or rely on root-window hacks, Clipman cooperates with the compositor: a GNOME Shell extension reports every copy to the daemon over D-Bus. On GNOME the extension is required, because GNOME does not offer the data-control protocol that `wl-paste --watch` needs. The daemon runs as a user systemd service when installed with `install.sh`, and is stateless beyond a single SQLite database under `~/.local/share/clipman/`.
 
 ## Architecture
 
-Clipman is written in Python 3.10–3.12 and built on GTK 4 + libadwaita 1.4+. The repository ships two halves: a long-lived daemon (the `clipman/` Python package, entry point `clipman.py`) that watches clipboard selections, persists them in SQLite, and renders the popup UI on demand; and a GNOME Shell extension (`extension/extension.js`) that runs inside the compositor's gjs process and forwards `owner-changed` clipboard events to the daemon over D-Bus.
+Clipman is written in Python 3.10–3.12 and built on GTK 4 + libadwaita 1.5+. The repository ships two halves: a long-lived daemon (the `clipman/` Python package, entry point `clipman.py`) that watches clipboard selections, persists them in SQLite, and renders the popup UI on demand; and a GNOME Shell extension (`extension/extension.js`) that runs inside the compositor's gjs process and forwards `owner-changed` clipboard events to the daemon over D-Bus.
 
 The daemon's UI layer is libadwaita-first:
 
@@ -21,7 +21,7 @@ The daemon's UI layer is libadwaita-first:
 - `clipman/preferences.py` ships the settings surface as an `Adw.Dialog` with a left navigation sidebar and **six panes**: Appearance (theme + accent/font color pickers + opacity + font size), Privacy (start-in-incognito + sensitive-data auto-clear + purge-now), Shortcuts (toggle binding + paste mode), Storage (max entries + database location + backup/restore), Updates (opt-out daily check, see ADR 0007), and About.
 - `clipman/snippets_dialog.py` wraps the reusable-snippet editor in an `Adw.NavigationSplitView` master-detail dialog with a searchable list on the left and an editor form on the right (template variables `${date}`, `${time}`, `${clipboard}` included).
 - `clipman/edge_states.py` declares **20 `StateSpec` entries** — empty history, no search results, incognito paused, sensitive auto-cleared, first-run, extension missing, backup failed, and the other intentional edge moments — dispatched at render time by `render_edge_state` into one of `Adw.StatusPage`, `Adw.Banner`, or `Adw.AlertDialog`.
-- `clipman/style.css` overrides libadwaita's `@named-color` tokens (`@accent_color`, `@window_bg_color`, `@card_bg_color`, …) with the Catppuccin Mocha (dark) and warm-stone (light) palettes, so every Adw widget picks up the theme automatically without per-widget CSS rules.
+- `clipman/window.py` injects the Catppuccin Mocha (dark) and warm-stone (light) palettes as `@define-color` overrides of libadwaita's named colors (`@accent_color`, `@window_bg_color`, `@card_bg_color`, …) ahead of `clipman/style.css`, so every Adw widget picks up the theme without per-widget CSS rules.
 - `clipman/_version.py` is a leaf module holding the single `__version__` string literal; `clipman/__init__.py` re-exports it so the public `clipman.__version__` API still works while submodules can import the constant without re-entering the package root (CodeQL `py/cyclic-import`).
 
 The daemon exposes a session-bus D-Bus interface at `com.clipman.Daemon` (`/com/clipman/Daemon`) for the toggle keybinding and clipboard ingest; the extension owns `org.gnome.Shell.Extensions.clipman` for paste-keystroke and window-placement calls back into the compositor. All storage is local: no network calls (except the opt-out daily update check against `api.github.com/repos/.../releases/latest`), no telemetry, no analytics.
@@ -29,21 +29,20 @@ The daemon exposes a session-bus D-Bus interface at `com.clipman.Daemon` (`/com/
 ## Supported compositors
 
 - GNOME Shell 45–51 (Mutter / Wayland) through the bundled Shell extension; the app baseline is Ubuntu 24.04+ with GNOME 46
-- KDE Plasma 6 (KWin / Wayland) via `wl-clipboard`
-- Sway, Hyprland, river, Niri and other wlroots compositors via `wl-clipboard`
+- KDE Plasma and wlroots compositors (Sway, Hyprland) are not supported yet; issue #318 tracks it
 - X11 sessions are intentionally unsupported; legacy tools cover that case
 
 ## Privacy and security
 
-Sensitive entries (passwords detected via heuristics, content marked secret by the source application, anything captured during an explicit incognito toggle) are auto-cleared after a configurable TTL (default 30 seconds). The SQLite file and its write-ahead-log sidecars are clamped to mode `0600` and the data directory to `0700` on every daemon start, repairing loose permissions in place; the threat model is documented at `docs/threat-model.md`. Image clips are stored as content-addressed PNGs under `~/.local/share/clipman/images/` and pruned with the parent entry.
+Clips that match a known secret shape (vendor API tokens, private keys, JSON Web Tokens, URLs with a password inside, labelled values such as `PASSWORD=…`, Authorization headers, Luhn-valid card numbers, TOTP seeds, and command lines that take a password) are masked and removed from the history after a configurable delay (default 30 seconds). A bare password with no label is not detected, and the system clipboard itself is not cleared (issues #313 and #314). Incognito mode records nothing. The SQLite file and its write-ahead-log sidecars are clamped to mode `0600` and the data directory to `0700` on every daemon start, repairing loose permissions in place; the threat model is documented at `docs/threat-model.md`. Image clips are stored as content-addressed PNGs under `~/.local/share/clipman/images/` and pruned with the parent entry.
 
 ## Features
 
-- Substring search across history and snippets (SQL `LIKE` with escaped wildcards)
+- Substring search over text clips and snippets (SQL `LIKE` with escaped wildcards)
 - Pinning to keep entries past the history-size cap
 - Reusable snippets with template variables (`${date}`, `${time}`, `${clipboard}`)
 - Catppuccin Mocha (dark) and a warm-stone light palette; respects system dark/light preference
-- 70 translatable strings in `po/clipman.pot`, community translations welcome
+- 225 translatable strings in `po/clipman.pot`; no translations yet, and contributions are welcome (issue #321)
 
 ## Distribution
 

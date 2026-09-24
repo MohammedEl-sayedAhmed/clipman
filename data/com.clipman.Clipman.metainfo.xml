@@ -2,7 +2,7 @@
 <component type="desktop-application">
   <id>com.clipman.Clipman</id>
   <name>Clipman</name>
-  <summary>Clipboard history manager for Wayland (GNOME, KDE, Sway, Hyprland)</summary>
+  <summary>Clipboard history manager for GNOME on Wayland</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
   <developer id="io.github.mohammedel-sayedahmed">
@@ -11,7 +11,7 @@
 
   <description>
     <p>
-      Clipman is a clipboard history manager for Wayland (GNOME, KDE, Sway, Hyprland).
+      Clipman is a clipboard history manager for Ubuntu/GNOME on Wayland.
       Press Super+V to view your clipboard history, search entries, pin
       favorites, and instantly paste previous copies — like Windows Win+V,
       but for Linux.
@@ -19,26 +19,21 @@
     <p>Features include:</p>
     <ul>
       <li>Clipboard history with text and image support</li>
-      <li>Full-text search across all entries</li>
+      <li>Search your text clips</li>
       <li>Pin important entries to keep them permanently</li>
-      <li>Inline editing and preview expansion</li>
       <li>Incognito mode to pause history recording</li>
-      <li>Sensitive data detection with auto-clear</li>
-      <li>URL detection with one-click open</li>
-      <li>Reusable text snippets</li>
-      <li>Dark and light themes (Catppuccin)</li>
-      <li>Database backup and restore</li>
+      <li>Detection of labelled passwords, tokens, keys and card numbers, which are masked and removed from the history</li>
       <li>Reusable text snippets with template variables (${date}, ${time}, ${clipboard})</li>
-      <li>wl-clipboard fallback for non-GNOME compositors (KDE, Sway, Hyprland)</li>
-      <li>16 carefully designed edge states (incognito, sensitive auto-clear, first-run, errors)</li>
-      <li>Terminal-aware paste (Ctrl+Shift+V)</li>
+      <li>Terminal-aware paste (Ctrl+Shift+V in terminal apps)</li>
+      <li>A Catppuccin Mocha dark theme and a warm-stone light theme</li>
+      <li>Safe database backup and restore</li>
     </ul>
   </description>
 
   <url type="homepage">https://mohammedel-sayedahmed.github.io/clipman/</url>
   <url type="bugtracker">https://github.com/MohammedEl-sayedAhmed/clipman/issues</url>
   <url type="vcs-browser">https://github.com/MohammedEl-sayedAhmed/clipman</url>
-  <url type="donation">https://github.com/sponsors/MohammedEl-sayedAhmed</url>
+  <url type="donation">https://www.paypal.com/paypalme/mohammedelsayedammar</url>
   <url type="faq">https://mohammedel-sayedahmed.github.io/clipman/#faq</url>
 
   <launchable type="desktop-id">com.clipman.Clipman.desktop</launchable>

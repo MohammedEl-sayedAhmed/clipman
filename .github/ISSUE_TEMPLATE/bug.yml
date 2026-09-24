@@ -39,7 +39,7 @@ body:
     id: clipman-version
     attributes:
       label: Clipman version
-      placeholder: "version + install channel, e.g. output of `pip show clipman-clipboard` / Snap / Flathub / from source (commit)"
+      placeholder: "version + install channel, e.g. output of `pip show clipman-clipboard` / Snap / AUR / .deb / .rpm / from source (commit)"
     validations:
       required: true
 

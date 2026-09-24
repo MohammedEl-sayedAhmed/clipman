@@ -1006,10 +1006,8 @@ class ClipmanPreferences(Adw.Dialog):
              "https://mohammedel-sayedahmed.github.io/clipman/"),
             (_("Report an issue"),
              "https://github.com/MohammedEl-sayedAhmed/clipman/issues/new"),
-            (_("Sponsor on GitHub"),
-             "https://github.com/sponsors/MohammedEl-sayedAhmed"),
             (_("Sponsor on PayPal"),
-             "https://paypal.me/MohammedElsayedAhmed"),
+             "https://www.paypal.com/paypalme/mohammedelsayedammar"),
         ]:
             row = Adw.ActionRow()
             row.set_title(label)
@@ -1024,8 +1022,7 @@ class ClipmanPreferences(Adw.Dialog):
         credits_group.set_title(_("Credits"))
         credits_group.set_description(
             _("Built with GTK 4 + libadwaita. Catppuccin palette by the "
-              "Catppuccin community. Translations contributed by the "
-              "community — see po/.")
+              "Catppuccin community. Translations are welcome — see po/.")
         )
         page.add(credits_group)
 

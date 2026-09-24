@@ -36,7 +36,7 @@
       "name": "Clipman",
       "applicationCategory": "UtilitiesApplication",
       "operatingSystem": "Linux",
-      "description": "Clipman is an open-source, Wayland-native clipboard history manager for Ubuntu/GNOME and any compositor with wl-clipboard. Press Super+V to browse, search, pin and paste from a local SQLite-backed history. Privacy is built in: incognito mode pauses recording, sensitive data (passwords, tokens, cards) is auto-cleared after 30 seconds, and nothing leaves the machine.",
+      "description": "Clipman is an open-source, Wayland-native clipboard history manager for Ubuntu/GNOME. Press Super+V to browse, search, pin and paste from a local SQLite-backed history. Privacy is built in: incognito mode pauses recording, detected secrets (labelled passwords, tokens, keys, cards) are removed from the history after 30 seconds, and nothing leaves the machine.",
       "url": "https://mohammedel-sayedahmed.github.io/clipman/",
       "downloadUrl": "https://github.com/MohammedEl-sayedAhmed/clipman",
       "softwareVersion": "1.2.1",
@@ -53,25 +53,25 @@
         { "@type": "Question", "name": "What is Clipman?",
           "acceptedAnswer": { "@type": "Answer", "text": "Clipman is a clipboard history manager for Linux desktops on Wayland. Press Super+V and a popup shows everything you've copied recently — text and images, searchable, pinnable, with reusable snippets. It runs as a local Python + GTK daemon and stores history in a per-user SQLite database with restrictive file permissions." } },
         { "@type": "Question", "name": "How is Clipman different from CopyQ, Klipper, or GPaste?",
-          "acceptedAnswer": { "@type": "Answer", "text": "Three things. First, it's Wayland-native: a GNOME Shell extension watches the clipboard over D-Bus, so there's no polling loop and no subprocesses constantly probing the clipboard. Second, it's quiet — no Electron, no background services beyond a small Python daemon. Third, privacy is built in by default: incognito mode pauses recording entirely, and sensitive-shaped data (passwords, tokens, credit-card-like strings) is auto-cleared on a 30-second timer." } },
+          "acceptedAnswer": { "@type": "Answer", "text": "Three things. First, it's Wayland-native: a GNOME Shell extension watches the clipboard over D-Bus, so there's no polling loop and no subprocesses constantly probing the clipboard. Second, it's quiet — no Electron, no background services beyond a small Python daemon. Third, privacy is built in by default: incognito mode pauses recording entirely, and detected secrets (labelled passwords, tokens, keys, card numbers) are removed from the history on a 30-second timer." } },
         { "@type": "Question", "name": "Does Clipman work outside GNOME?",
-          "acceptedAnswer": { "@type": "Answer", "text": "Yes. The GNOME Shell extension (ID 9407) is the smoothest path on GNOME — events flow over D-Bus with zero polling. On KDE, Sway, Hyprland, and any other compositor with wl-clipboard installed, Clipman falls back to wl-paste --watch, which is still event-driven (no busy-poll). The popup UI is identical either way." } },
+          "acceptedAnswer": { "@type": "Answer", "text": "Not yet. Clipman is built for GNOME on Wayland: its GNOME Shell extension is how it sees what you copy. Support for KDE Plasma and wlroots compositors such as Sway and Hyprland is planned (GitHub issue #318)." } },
         { "@type": "Question", "name": "Is my clipboard data ever uploaded anywhere?",
           "acceptedAnswer": { "@type": "Answer", "text": "No. Clipboard data never leaves your machine. History lives in a SQLite database at ~/.local/share/clipman/clipman.db with restrictive file permissions (0600). There is no telemetry, no sync, and no cloud. The only network activity is an optional once-daily version check against the GitHub Releases API — it sends no identifiers or clipboard data, can be switched off in Preferences → Updates, and is off by default on Snap and Flatpak (those channels update themselves). Backups are explicit, off by default, and write to a local file you choose." } },
         { "@type": "Question", "name": "How does sensitive-data detection actually work?",
-          "acceptedAnswer": { "@type": "Answer", "text": "When something lands on the clipboard, Clipman checks it against local heuristics — Luhn-valid credit-card patterns, JWT/PEM-shaped strings, GitHub-like tokens, password-mime-typed payloads, and a few others. Matches are stored but masked in the list and queued for auto-clear on a configurable 10–300-second timer (default 30s). Detection runs in-process; no rules are downloaded." } },
+          "acceptedAnswer": { "@type": "Answer", "text": "When something lands on the clipboard, Clipman checks it against known secret shapes, locally: vendor API tokens (GitHub, AWS, Stripe, Slack, OpenAI and others), private keys, JSON Web Tokens, URLs with a password inside, labelled values such as PASSWORD=…, Authorization headers, Luhn-valid card numbers, TOTP seeds, and command lines that take a password. Matches are stored masked in the list and removed from the history on a configurable 10–300-second timer (default 30 s). A bare password with no label is not detected, and the system clipboard itself is not cleared; both are planned. Detection runs in-process; no rules are downloaded." } },
         { "@type": "Question", "name": "Can I use Clipman without the GNOME extension?",
-          "acceptedAnswer": { "@type": "Answer", "text": "Yes. The extension is an optimization, not a requirement. Without it, Clipman uses wl-clipboard's wl-paste --watch to subscribe to clipboard changes — event-driven, no polling. You lose the Super+V keybinding wired through GNOME Shell, but you can bind any shortcut yourself to call `clipman toggle`." } },
+          "acceptedAnswer": { "@type": "Answer", "text": "No. On GNOME the extension is how Clipman sees what you copy: GNOME offers no other way (wl-paste --watch needs the data-control protocol, which GNOME does not have). install.sh sets it up; otherwise install it from extensions.gnome.org (ID 9407)." } },
         { "@type": "Question", "name": "What about Wayland's clipboard security restrictions?",
-          "acceptedAnswer": { "@type": "Answer", "text": "Wayland deliberately scopes clipboard access to focused windows, which breaks naive X11-era managers when they're not focused. Clipman doesn't try to fight that — the GNOME Shell extension reads the clipboard from inside the compositor (where it's allowed), and the wl-clipboard fallback uses the protocol's documented data-control or selection paths. Pasting is implemented by simulating a Ctrl+V into the target window, not by writing directly to it." } }
+          "acceptedAnswer": { "@type": "Answer", "text": "Wayland deliberately scopes clipboard access to focused windows, which breaks naive X11-era managers when they're not focused. Clipman doesn't try to fight that — the GNOME Shell extension reads the clipboard from inside the compositor, where it's allowed. Pasting is implemented by simulating a paste keystroke (Ctrl+V, or Ctrl+Shift+V in terminals) in the focused window, not by writing directly to it." } }
       ]
     },
     {
       "@type": "HowTo",
       "name": "Install and use Clipman",
       "step": [
-        { "@type": "HowToStep", "name": "Install", "text": "Run `sudo snap install clipman` (Ubuntu/GNOME) or `pipx install --system-site-packages clipman-clipboard` (any distro)." },
-        { "@type": "HowToStep", "name": "Activate", "text": "Log out and back in once so the GNOME Shell extension registers, then run `./install.sh` from the source checkout if you're not on snap." },
+        { "@type": "HowToStep", "name": "Install", "text": "Run `sudo snap install clipman` (Ubuntu/GNOME) or `pipx install --system-site-packages clipman-clipboard` (other GNOME distributions)." },
+        { "@type": "HowToStep", "name": "Activate", "text": "Set up the GNOME Shell extension, autostart and the Super+V shortcut (the README's Finish the setup section; install.sh does this for source installs), then log out and back in once." },
         { "@type": "HowToStep", "name": "Summon", "text": "Press Super+V from anywhere to open the popup." },
         { "@type": "HowToStep", "name": "Use", "text": "Click a row to paste it into the focused window. Pin items you want to keep. Save snippets with Ctrl+N. Toggle incognito with the eye icon." }
       ]
@@ -1214,7 +1214,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
       <div class="feature">
         <div class="feature-copy">
           <h3>The thing you copied yesterday is one keystroke away.</h3>
-          <p>Super+V opens the popup. Type to full-text search across text and images. Pin what you reuse. Save snippets with templates. Filter tabs split All, Text, Images, and Snippets.</p>
+          <p>Super+V opens the popup. Type to search your text clips. Pin what you reuse. Save snippets with templates. Filter tabs split All, Text, Images, and Snippets.</p>
         </div>
         <div class="feature-visual">
           <img src="design/screenshots/snippets-editing-dark.png"
@@ -1226,8 +1226,8 @@ footer.site .legal .mono { font-size: 0.78rem; }
 
       <div class="feature right">
         <div class="feature-copy">
-          <h3>Your passwords <span class="accent">leave on their own</span>.</h3>
-          <p>Incognito mode pauses recording entirely. Passwords, tokens, and card-shaped strings auto-clear after 30 seconds. The history file ships with restrictive permissions (0600) by default.</p>
+          <h3>Detected secrets <span class="accent">leave on their own</span>.</h3>
+          <p>Incognito mode pauses recording entirely. Labelled passwords, tokens, keys and card numbers are masked, and removed from the history after 30 seconds. The history file ships with restrictive permissions (0600) by default.</p>
         </div>
         <div class="feature-visual">
           <img src="design/screenshots/states-incognito-on-dark.png"
@@ -1239,8 +1239,8 @@ footer.site .legal .mono { font-size: 0.78rem; }
 
       <div class="feature" id="privacy">
         <div class="feature-copy">
-          <h3>No polling. No subprocesses. No flicker.</h3>
-          <p>A GNOME Shell extension forwards clipboard events over D-Bus, so the daemon wakes only when you copy. wl-clipboard handles KDE, Sway, and Hyprland the same way — event-driven, no busy-loop.</p>
+          <h3>No polling. No flicker.</h3>
+          <p>A GNOME Shell extension forwards clipboard events over D-Bus, so the daemon wakes only when you copy.</p>
         </div>
         <div class="feature-visual">
           <img src="design/screenshots/preferences-privacy-dark.png"
@@ -1253,7 +1253,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
       <div class="feature right" id="design">
         <div class="feature-copy">
           <h3>Looks like the rest of your desktop, on purpose.</h3>
-          <p>Catppuccin Mocha for dark, stone for light. Six accent presets, opacity 30–100 %, font size 8–20 px. Built on GTK and libadwaita with a single design-token system so the theme behaves identically on every surface.</p>
+          <p>Catppuccin Mocha for dark, stone for light. Free-form accent and font colours, opacity 30–100 %, font size 8–20 px. Built on GTK and libadwaita with a single design-token system so the theme behaves identically on every surface.</p>
           <div style="margin-top: 18px;">
             <a class="btn" href="design/index.html">Browse the design workspace →</a>
           </div>
@@ -1268,8 +1268,8 @@ footer.site .legal .mono { font-size: 0.78rem; }
 
       <div class="feature">
         <div class="feature-copy">
-          <h3>Sixteen polished states for the moments that matter.</h3>
-          <p>Empty history, no-results, incognito paused, sensitive auto-cleared, first-run, extension missing, backup failed — every edge is intentional and consistent across the app, with a tone that never shouts.</p>
+          <h3>Polished states for the moments that matter.</h3>
+          <p>Empty history, no-results, sensitive auto-cleared, first-run, extension missing, backup failed — every edge is intentional and consistent across the app, with a tone that never shouts.</p>
           <div style="margin-top: 18px;">
             <a class="btn" href="design/states.html">Browse every state →</a>
           </div>
@@ -1305,7 +1305,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
 
       <div class="tab-panel"><pre id="tab-cmd">sudo snap install clipman</pre></div>
       <p class="tab-hint" id="tab-hint">
-        Log out and back in once to activate the GNOME Shell extension, then press <span class="mono">Super+V</span>.
+        Then install the GNOME Shell extension, and set up autostart and the shortcut: <a href="https://github.com/MohammedEl-sayedAhmed/clipman#finish-the-setup">finish the setup</a>.
         ·
         <a href="https://snapcraft.io/clipman">snapcraft.io/clipman</a>
       </p>
@@ -1325,11 +1325,11 @@ footer.site .legal .mono { font-size: 0.78rem; }
         </details>
         <details>
           <summary>How is Clipman different from CopyQ, Klipper, or GPaste?</summary>
-          <div class="answer">Three things. First, it's Wayland-native: a GNOME Shell extension watches the clipboard over D-Bus, so there's no polling loop and no subprocesses constantly probing the clipboard. Second, it's quiet — no Electron, no background services beyond a small Python daemon. Third, privacy is built in by default: incognito mode pauses recording entirely, and sensitive-shaped data (passwords, tokens, credit-card-like strings) is auto-cleared on a 30-second timer.</div>
+          <div class="answer">Three things. First, it's Wayland-native: a GNOME Shell extension watches the clipboard over D-Bus, so there's no polling loop and no subprocesses constantly probing the clipboard. Second, it's quiet — no Electron, no background services beyond a small Python daemon. Third, privacy is built in by default: incognito mode pauses recording entirely, and detected secrets (labelled passwords, tokens, keys, card numbers) are removed from the history on a 30-second timer.</div>
         </details>
         <details>
           <summary>Does Clipman work outside GNOME?</summary>
-          <div class="answer">Yes. The GNOME Shell extension (ID 9407) is the smoothest path on GNOME — events flow over D-Bus with zero polling. On KDE, Sway, Hyprland, and any other compositor with <span class="mono">wl-clipboard</span> installed, Clipman falls back to <span class="mono">wl-paste --watch</span>, which is still event-driven (no busy-poll). The popup UI is identical either way.</div>
+          <div class="answer">Not yet. Clipman is built for GNOME on Wayland: its GNOME Shell extension is how it sees what you copy. Support for KDE Plasma and wlroots compositors such as Sway and Hyprland is planned in <a href="https://github.com/MohammedEl-sayedAhmed/clipman/issues/318">#318</a>.</div>
         </details>
         <details>
           <summary>Is my clipboard data ever uploaded anywhere?</summary>
@@ -1337,15 +1337,15 @@ footer.site .legal .mono { font-size: 0.78rem; }
         </details>
         <details>
           <summary>How does sensitive-data detection actually work?</summary>
-          <div class="answer">When something lands on the clipboard, Clipman checks it against local heuristics — Luhn-valid credit-card patterns, JWT/PEM-shaped strings, GitHub-like tokens, password-mime-typed payloads, and a few others. Matches are stored but masked in the list and queued for auto-clear on a configurable 10–300-second timer (default 30 s). Detection runs in-process; no rules are downloaded.</div>
+          <div class="answer">When something lands on the clipboard, Clipman checks it against known secret shapes, locally: vendor API tokens (GitHub, AWS, Stripe, Slack, OpenAI and others), private keys, JSON Web Tokens, URLs with a password inside, labelled values such as PASSWORD=…, Authorization headers, Luhn-valid card numbers, TOTP seeds, and command lines that take a password. Matches are stored masked in the list and removed from the history on a configurable 10–300-second timer (default 30 s). A bare password with no label is not detected, and the system clipboard itself is not cleared; both are planned (<a href="https://github.com/MohammedEl-sayedAhmed/clipman/issues/313">#313</a>, <a href="https://github.com/MohammedEl-sayedAhmed/clipman/issues/314">#314</a>). Detection runs in-process; no rules are downloaded.</div>
         </details>
         <details>
           <summary>Can I use Clipman without the GNOME extension?</summary>
-          <div class="answer">Yes. The extension is an optimization, not a requirement. Without it, Clipman uses <span class="mono">wl-clipboard</span>'s <span class="mono">wl-paste --watch</span> to subscribe to clipboard changes — event-driven, no polling. You lose the Super+V keybinding wired through GNOME Shell, but you can bind any shortcut yourself to call <span class="mono">clipman toggle</span>.</div>
+          <div class="answer">No. On GNOME the extension is how Clipman sees what you copy: GNOME offers no other way (<span class="mono">wl-paste --watch</span> needs the data-control protocol, which GNOME does not have). <span class="mono">install.sh</span> sets it up; otherwise install it from <a href="https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/">extensions.gnome.org</a>.</div>
         </details>
         <details>
           <summary>What about Wayland's clipboard security restrictions?</summary>
-          <div class="answer">Wayland deliberately scopes clipboard access to focused windows, which breaks naive X11-era managers when they're not focused. Clipman doesn't try to fight that — the GNOME Shell extension reads the clipboard from inside the compositor (where it's allowed), and the wl-clipboard fallback uses the protocol's documented data-control or selection paths. Pasting is implemented by simulating a <span class="mono">Ctrl+V</span> into the target window, not by writing directly to it.</div>
+          <div class="answer">Wayland deliberately scopes clipboard access to focused windows, which breaks naive X11-era managers when they're not focused. Clipman doesn't try to fight that — the GNOME Shell extension reads the clipboard from inside the compositor, where it's allowed. Pasting is implemented by simulating a paste keystroke (<span class="mono">Ctrl+V</span>, or <span class="mono">Ctrl+Shift+V</span> in terminals) in the focused window, not by writing directly to it.</div>
         </details>
       </div>
     </div>
@@ -1382,7 +1382,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
         <h4>Author</h4>
         <ul>
           <li><a href="https://github.com/MohammedEl-sayedAhmed">Mohammed El-sayed Ahmed</a></li>
-          <li><a href="https://github.com/sponsors/MohammedEl-sayedAhmed">Sponsor</a> <a href="https://www.paypal.com/paypalme/mohammedelsayedammar" style="font-size:0.78em;opacity:0.7;margin-left:6px;" title="Or via PayPal">· PayPal</a></li>
+          <li><a href="https://www.paypal.com/paypalme/mohammedelsayedammar">Donate with PayPal</a></li>
           <li><a href="https://github.com/MohammedEl-sayedAhmed/clipman/issues">Report an issue</a></li>
           <li><a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/LICENSE">License (Apache-2.0)</a></li>
         </ul>
@@ -1448,17 +1448,17 @@ footer.site .legal .mono { font-size: 0.78rem; }
     // ---- Install tabs ----
     const TABS = {
         snap:   { cmd: 'sudo snap install clipman',
-                  hint: '<a href="https://snapcraft.io/clipman" style="display:inline-block;vertical-align:middle;margin-right:14px;"><img src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" alt="Get it from the Snap Store" height="40"></a>Log out and back in once to activate the GNOME Shell extension, then press <span class="mono">Super+V</span>.' },
+                  hint: '<a href="https://snapcraft.io/clipman" style="display:inline-block;vertical-align:middle;margin-right:14px;"><img src="https://snapcraft.io/static/images/badges/en/snap-store-black.svg" alt="Get it from the Snap Store" height="40"></a>Then install the GNOME Shell extension, and set up autostart and the shortcut: <a href="https://github.com/MohammedEl-sayedAhmed/clipman#finish-the-setup">finish the setup</a>.' },
         pypi:   { cmd: 'pipx install --system-site-packages clipman-clipboard',
-                  hint: 'The <span class="mono">--system-site-packages</span> flag is required so the venv can see the distro <span class="mono">python3-gi</span> and GTK4 bindings. After install, run <span class="mono">./install.sh</span> from a source checkout to register the GNOME Shell extension and the keybinding. · <a href="https://pypi.org/project/clipman-clipboard/">pypi.org/project/clipman-clipboard</a>' },
+                  hint: 'The <span class="mono">--system-site-packages</span> flag is required so the venv can see the distro <span class="mono">python3-gi</span> and GTK4 bindings. Then <a href="https://github.com/MohammedEl-sayedAhmed/clipman#finish-the-setup">finish the setup</a>: the extension, autostart and the shortcut. · <a href="https://pypi.org/project/clipman-clipboard/">pypi.org/project/clipman-clipboard</a>' },
         aur:    { cmd: 'yay -S clipman-clipboard   # or: paru -S clipman-clipboard',
-                  hint: 'AUR package builds and registers everything for you. · <a href="https://aur.archlinux.org/packages/clipman-clipboard">aur.archlinux.org/packages/clipman-clipboard</a>' },
+                  hint: 'The package installs the extension and a user service; <a href="https://github.com/MohammedEl-sayedAhmed/clipman#finish-the-setup">finish the setup</a> to turn them on and bind the shortcut. · <a href="https://aur.archlinux.org/packages/clipman-clipboard">aur.archlinux.org/packages/clipman-clipboard</a>' },
         deb:    { cmd: 'sudo apt install ./clipman_*_all.deb',
-                  hint: 'Download the .deb from the GitHub Releases page first. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/releases">releases</a>' },
+                  hint: 'Download the .deb from the GitHub Releases page first, then <a href="https://github.com/MohammedEl-sayedAhmed/clipman#finish-the-setup">finish the setup</a>. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/releases">releases</a>' },
         rpm:    { cmd: 'sudo dnf install ./clipman-*.noarch.rpm',
-                  hint: 'Download the .rpm from the GitHub Releases page first. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/releases">releases</a>' },
+                  hint: 'Download the .rpm from the GitHub Releases page first, then <a href="https://github.com/MohammedEl-sayedAhmed/clipman#finish-the-setup">finish the setup</a>. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/releases">releases</a>' },
         source: { cmd: 'git clone https://github.com/MohammedEl-sayedAhmed/clipman\ncd clipman && ./install.sh',
-                  hint: 'Requires Python 3.10+, GTK 4 + libadwaita 1.4+, and either the GNOME Shell extension or wl-clipboard. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CONTRIBUTING.md">contributing guide</a>' },
+                  hint: 'Requires GNOME on Wayland, Python 3.10+, and GTK 4 + libadwaita 1.5+. install.sh sets up the rest. · <a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CONTRIBUTING.md">contributing guide</a>' },
     };
     const tabBtns = document.querySelectorAll('.tabs button');
     const tabCmd  = document.getElementById('tab-cmd');

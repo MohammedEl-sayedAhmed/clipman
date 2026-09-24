@@ -339,7 +339,8 @@ jobs:
           install -Dm755 clipman.py "$stage"/usr/lib/clipman/clipman.py
           install -Dm755 launcher.sh "$stage"/usr/lib/clipman/launcher.sh
 
-          # Bundle extension source so install-extension subcommand can find it
+          # Ship the extension; users copy it into ~/.local/share (README:
+          # "Finish the setup") until a setup command exists (#323).
           cp extension/extension.js "$stage"/usr/lib/clipman/extension/
           cp extension/metadata.json "$stage"/usr/lib/clipman/extension/
 
@@ -381,7 +382,7 @@ jobs:
             --license Apache-2.0 \
             --maintainer "MohammedEl-sayedAhmed <noreply@github.com>" \
             --url "https://github.com/MohammedEl-sayedAhmed/clipman" \
-            --description "Clipboard history manager for GNOME on Wayland.\nDesktop integration (GNOME Shell extension + keybinding) is\nper-user; run /usr/share/doc/clipman-clipboard/README.md or the\nupstream install.sh inside this user session to enable it." \
+            --description "Clipboard history manager for GNOME on Wayland.\nThe GNOME Shell extension, autostart and the Super+V shortcut\nare per-user: see \"Finish the setup\" in\n/usr/share/doc/clipman-clipboard/README.md." \
             --depends python3 \
             --depends python3-gi \
             --depends python3-dbus \
@@ -531,7 +532,7 @@ jobs:
 
             **Important install caveats**
 
-            - The `.deb` / `.rpm` install the daemon to `/usr/bin/clipman` and the Python module to `/usr/lib/clipman/`, but **do not** enable the GNOME Shell extension, start the daemon at login, or register the `Super+V` keybinding: those are per-user and not automated yet (#323).
+            - The `.deb` / `.rpm` install the daemon to `/usr/bin/clipman` and the Python module to `/usr/lib/clipman/`, but **do not** enable the GNOME Shell extension, start the daemon at login, or register the `Super+V` keybinding: those are per-user and not automated yet (#323). The README's "Finish the setup" section lists the steps for each package.
 
             ### GNOME Shell extension (manual step — EGO has no upload API)
 

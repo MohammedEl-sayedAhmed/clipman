@@ -15,7 +15,7 @@ the canonical map. Two halves matter for development:
 
 ## Prerequisites
 
-Ubuntu 24.04+ is the baseline (libadwaita 1.4); the same scripts know
+Ubuntu 24.04+ is the baseline (libadwaita 1.5); the same scripts know
 the Fedora (dnf) and Arch (pacman) package names. One command installs
 the system packages, creates `.venv`, and installs the dev extras and
 the git hooks:

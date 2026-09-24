@@ -13,7 +13,7 @@ four of the facts it rests on were already stale when it was written or
 have changed since:
 
 - It gives the support window as Ubuntu 22.04+. The baseline is Ubuntu
-  24.04+ for libadwaita 1.4. `README.md`, `docs/development.md` and the
+  24.04+ for libadwaita 1.5. `README.md`, `docs/development.md` and the
   preflight error in `clipman/cli.py` all say so.
 - It calls the toolkit GTK3 and lists the move to GTK4 as a future MAJOR
   trigger. The app has been GTK 4 + libadwaita since 1.1.0;
@@ -40,7 +40,7 @@ Wayland only. `requires-python` stays open at the top end so a newer
 interpreter is not refused at install time; the classifiers name the
 versions CI actually tests.
 
-**Toolkit.** GTK 4 with libadwaita 1.4+. A future toolkit jump is still
+**Toolkit.** GTK 4 with libadwaita 1.5+. A future toolkit jump is still
 a MAJOR trigger; the GTK3 to GTK4 trigger named in ADR 0010 is spent.
 
 **D-Bus contract, in full.** Removing or renaming any of these, or

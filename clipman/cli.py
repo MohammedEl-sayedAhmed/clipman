@@ -7,7 +7,9 @@ import sys
 
 from clipman._version import __version__
 
-_MIN_ADW_MINOR = 4
+# Adw.Dialog and Adw.AlertDialog, which Preferences and the snippets
+# editor subclass at import time, arrived in libadwaita 1.5.
+_MIN_ADW_MINOR = 5
 
 
 def _check_dependencies():
@@ -31,7 +33,7 @@ def _check_dependencies():
 
 
 def _preflight_libadwaita():
-    """Exit with a readable error on a libadwaita older than 1.4."""
+    """Exit with a readable error on a libadwaita older than 1.5."""
     import gi
     gi.require_version("Adw", "1")
     from gi.repository import Adw
