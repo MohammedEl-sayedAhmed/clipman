@@ -22,17 +22,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-# Force off-screen behaviour so the test runner doesn't need a real
-# display server. Adw still needs to initialise but it's happy to do
-# so with the offscreen backend.
-os.environ.setdefault("GDK_BACKEND", "x11")
-os.environ.setdefault("GTK_A11Y", "none")
+# tests/__init__.py chooses the display (a private one, or none) and the
+# GTK environment before this module is imported.
 
 try:
     import gi
     gi.require_version("Gtk", "4.0")
     gi.require_version("Adw", "1")
-    from gi.repository import Adw, Gio  # noqa: F401
+    from gi.repository import Adw, Gdk, Gio  # noqa: F401
     _HAS_GTK = True
 except (ImportError, ValueError, AttributeError, RuntimeError):
     # ImportError: pygobject / gi missing on the runner.
@@ -49,24 +46,34 @@ _ADW_INIT_OK = False
 if _HAS_GTK:
     try:
         Adw.init()
-        _ADW_INIT_OK = True
+        # Adw.init() succeeds without a display too, and the first widget
+        # then crashes the whole run. Without one, skip the widget tests.
+        _ADW_INIT_OK = Gdk.Display.get_default() is not None
     except Exception:
-        # No display available — skip the widget tests.
         _ADW_INIT_OK = False
 
 # CI sets ``CLIPMAN_REQUIRE_GTK4=1`` so an apt-package rename or a
 # missing typelib turns into a HARD failure instead of a silent skip.
 # Locally the variable stays unset, so contributors without GTK4
 # installed still get the rest of the test suite passing.
-if os.environ.get("CLIPMAN_REQUIRE_GTK4") == "1" and not (_HAS_GTK and _ADW_INIT_OK):
+if os.environ.get("CLIPMAN_REQUIRE_GTK4") == "1" and not _HAS_GTK:
     raise RuntimeError(
         "CLIPMAN_REQUIRE_GTK4=1 but GTK 4 + libadwaita are not "
         "importable in this environment. Install gir1.2-gtk-4.0, "
-        "gir1.2-adw-1 and libadwaita-1-0 (and run under xvfb-run if "
-        "no display is available)."
+        "gir1.2-adw-1 and libadwaita-1-0."
+    )
+if os.environ.get("CLIPMAN_REQUIRE_GTK4") == "1" and not _ADW_INIT_OK:
+    raise RuntimeError(
+        "CLIPMAN_REQUIRE_GTK4=1 but there is no private display for the "
+        "widget tests. Run them with scripts/dev.sh test, which starts "
+        "one with xvfb-run (tests/__init__.py explains the rules)."
     )
 
 
+# On the base class, so every widget test class skips without GTK or a
+# display, including one that forgets its own decorator.
+@unittest.skipUnless(_HAS_GTK and _ADW_INIT_OK,
+                     "GTK 4 + libadwaita or a private display not available")
 class _WidgetTestCase(unittest.TestCase):
     """Shared fixtures for the tests that build real widgets.
 

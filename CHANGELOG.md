@@ -413,6 +413,22 @@ All notable changes to Clipman are documented in this file.
 - The last eight CodeQL alerts on `main` are fixed: seven `except …: pass`
   blocks became `contextlib.suppress` (a missing image file is fine) or
   a debug log, and one stray `pass` went with the dead test block.
+- The suite could open and migrate the real
+  `~/.local/share/clipman/clipman.db`. With `wl-paste` installed, the
+  `toggle` smoke test fell through to a daemon start under the real
+  `HOME`. `tests/__init__.py` now gives every run a scratch `HOME` and
+  XDG folders before any test imports clipman, plus the in-memory
+  GSettings backend, so no test can touch the user's history or GNOME
+  settings. The smoke test also passes its own scratch `HOME`.
+- Without `xvfb-run`, `scripts/dev.sh test` only warned, then ran the
+  GTK tests on the desktop: windows stayed mapped on the live session,
+  and one test wrote its clipboard. It now stops with an install hint.
+  The tests never use Wayland, and use X11 only on a private server
+  (`xvfb-run`, or `CLIPMAN_TEST_PRIVATE_DISPLAY=1`). Broadway also
+  works.
+- With no display at all, the suite crashed: `Adw.init()` succeeds
+  without one, and the first widget segfaulted. The widget tests now
+  skip, or fail with a clear message under `CLIPMAN_REQUIRE_GTK4=1`.
 
 ### Fixed — documentation that did not match the code
 

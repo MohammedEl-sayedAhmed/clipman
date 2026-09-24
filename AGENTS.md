@@ -51,8 +51,12 @@ specific assistant.
   else `.venv/bin/python`, else `python3`.
 - Full suite: `scripts/dev.sh test` — identical to CI: pytest under
   `xvfb-run -a` with `CLIPMAN_REQUIRE_GTK4=1`, falling back to
-  `unittest discover -s tests` when pytest is not importable. Extra
-  arguments go to the runner (`scripts/dev.sh test -k database`). 375 tests.
+  `unittest discover -s tests -t .` when pytest is not importable. Extra
+  arguments go to the runner (`scripts/dev.sh test -k database`).
+  `tests/__init__.py` gives every run a scratch `HOME` and memory
+  GSettings, and GTK only a private display: without `xvfb-run`, `dev.sh
+  test` refuses (set `CLIPMAN_TEST_PRIVATE_DISPLAY=1` for your own private
+  server, or use `GDK_BACKEND=broadway`).
   The `test` extra caps PyGObject below 3.59: CI builds it from source
   against noble's GLib 2.80, so bump the cap deliberately.
 - Lint: `scripts/dev.sh lint` = `ruff check clipman tests scripts clipman.py` +

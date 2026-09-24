@@ -50,15 +50,20 @@ resolve_ruff() {
     fi
 }
 
-# Prefix a command with `xvfb-run -a` when available; otherwise warn once
-# and run it against whatever display the environment provides.
+# Run a command on a private display: `xvfb-run -a` when available. The
+# GTK tests and the screenshots map windows and one test writes the
+# clipboard, so without xvfb-run they must not use the desktop's display.
+# Refuse, unless the caller says it set up a private display itself
+# (CLIPMAN_TEST_PRIVATE_DISPLAY=1, or GDK_BACKEND=broadway).
 with_display() {
     if command -v xvfb-run >/dev/null 2>&1; then
-        xvfb-run -a "$@"
-    else
-        log "warning: xvfb-run not found; running without a virtual display" \
-            "(install the 'test' set: scripts/deps.sh --test --install)"
+        CLIPMAN_TEST_PRIVATE_DISPLAY=1 xvfb-run -a "$@"
+    elif [ "${CLIPMAN_TEST_PRIVATE_DISPLAY:-}" = 1 ] || [ "${GDK_BACKEND:-}" = broadway ]; then
         "$@"
+    else
+        die "xvfb-run not found, and the GTK tests must not run on your desktop." \
+            "Install it with: scripts/deps.sh --test --install" \
+            "(or set CLIPMAN_TEST_PRIVATE_DISPLAY=1 if DISPLAY is a private server)"
     fi
 }
 
@@ -79,7 +84,9 @@ cmd_test() {
         with_display "$py" -m pytest -q "$@"
     else
         log "runner: unittest ($py; pytest not importable — scripts/dev.sh setup installs it)"
-        with_display "$py" -m unittest discover -s tests "$@"
+        # -t . imports the tests as a package, so tests/__init__.py runs
+        # first and points HOME and the display away from the desktop.
+        with_display "$py" -m unittest discover -s tests -t . "$@"
     fi
 }
 
