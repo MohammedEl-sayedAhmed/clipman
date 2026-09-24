@@ -448,13 +448,13 @@ See the [LICENSE](https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/LIC
 
 <a href="https://github.com/MohammedEl-sayedAhmed/clipman/stargazers">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/numbers/star-history-dark.svg" />
-    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/numbers/star-history-light.svg" />
-    <img alt="Star history chart" src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/numbers/star-history-light.svg" />
+    <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/stats/star-history-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/stats/star-history-light.svg" />
+    <img alt="Star history chart" src="https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/stats/star-history-light.svg" />
   </picture>
 </a>
 
-<sub>Chart and <a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/numbers/stats_history.json">download history</a> are regenerated daily from the GitHub API by the numbers workflow, onto the <a href="https://github.com/MohammedEl-sayedAhmed/clipman/tree/numbers"><code>numbers</code> branch</a> — no third-party chart service.</sub>
+<sub>Chart and <a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/stats/stats_history.json">download history</a> are regenerated daily from the GitHub API by the stats workflow, onto the <a href="https://github.com/MohammedEl-sayedAhmed/clipman/tree/stats"><code>stats</code> branch</a> — no third-party chart service.</sub>
 
 ## Acknowledgements
 

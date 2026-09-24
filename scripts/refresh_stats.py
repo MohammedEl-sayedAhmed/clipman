@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Refresh self-hosted GitHub stats: star-history SVGs + downloads history.
 
-Run daily by .github/workflows/refresh-numbers.yml, which passes a
-checkout of the ``numbers`` branch as ``--out``. Writes into that
+Run daily by .github/workflows/refresh-stats.yml, which passes a
+checkout of the ``stats`` branch as ``--out``. Writes into that
 directory:
 
 - ``star-history-dark.svg`` / ``star-history-light.svg`` — a cumulative
@@ -242,7 +242,7 @@ def update_history(path, stars, downloads_total, per_tag):
     except (OSError, ValueError):
         data = {
             "_comment": ("Daily series appended by scripts/refresh_stats.py "
-                         "(refresh-numbers workflow). A point is added only "
+                         "(refresh-stats workflow). A point is added only "
                          "when a value changes."),
             "series": [],
         }
