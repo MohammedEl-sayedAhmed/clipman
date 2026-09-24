@@ -118,8 +118,9 @@ STATES: dict[str, StateSpec] = {
         tone="warning",
         icon_name="application-x-addon-symbolic",
         title=_("GNOME Shell extension isn't connected"),
-        body=_("Clipman records via wl-paste, but auto-paste needs the "
-               "bundled GNOME extension enabled."),
+        body=_("Clipman needs its GNOME Shell extension to record copies "
+               "and to paste. If you just installed Clipman, log out and "
+               "back in. Otherwise, make sure the extension is turned on."),
         primary_action=(_("Open Extensions"), "open-extensions"),
         secondary_action=(_("Install guide"), "open-install-guide"),
     ),
@@ -158,8 +159,10 @@ STATES: dict[str, StateSpec] = {
         tone="warning",
         icon_name="application-x-addon-symbolic",
         title=_("GNOME extension required under snap"),
-        body=_("Snap confinement blocks wl-paste. Install the bundled "
-               "GNOME extension to record clips."),
+        body=_("Clipman needs its GNOME Shell extension to record copies "
+               "and to paste, and the snap can't install it for you. "
+               "Install it from GNOME Extensions, then log out and back "
+               "in."),
         primary_action=(_("Open Extensions"), "open-extensions"),
         secondary_action=(_("Snap notes"), "open-snap-notes"),
     ),
@@ -223,8 +226,9 @@ STATES: dict[str, StateSpec] = {
         tone="warning",
         icon_name="input-keyboard-symbolic",
         title=_("Couldn't auto-paste"),
-        body=_("wtype and ydotool aren't installed, so we left the clip "
-               "on your clipboard. Paste it manually with Ctrl+V."),
+        body=_("wtype and ydotool are missing or can't type here, so we "
+               "left the clip on your clipboard. Paste it manually with "
+               "Ctrl+V."),
         primary_action=(_("Got it"), "close-dialog"),
         secondary_action=(_("Install help"), "open-install-guide"),
     ),
@@ -234,9 +238,9 @@ STATES: dict[str, StateSpec] = {
         tone="warning",
         icon_name="input-keyboard-symbolic",
         title=_("Couldn't auto-paste"),
-        body=_("The GNOME Shell extension did not accept the paste "
-               "request, so we left the clip on your clipboard. Paste "
-               "it manually with Ctrl+V."),
+        body=_("The GNOME Shell extension is off or did not accept the "
+               "paste, so we left the clip on your clipboard. Paste it "
+               "manually with Ctrl+V."),
         primary_action=(_("Got it"), "close-dialog"),
         secondary_action=(_("Open Extensions"), "open-extensions"),
     ),
@@ -246,8 +250,9 @@ STATES: dict[str, StateSpec] = {
         tone="error",
         icon_name="dialog-error-symbolic",
         title=_("Clipman can't watch the clipboard"),
-        body=_("Install wl-clipboard and use a Wayland session, or enable "
-               "the GNOME extension. Until then, copies won't be recorded."),
+        body=_("Clipman records copies here with wl-paste, from the "
+               "wl-clipboard package, which isn't installed. Until you "
+               "install it, copies won't be recorded."),
         primary_action=(_("Copy install command"),
                         "copy-install-wl-clipboard"),
         secondary_action=(_("Setup help"), "open-install-guide"),
@@ -303,15 +308,16 @@ _TONE_CSS = {
 
 
 def build_banner_row(icon_name, title, body, primary_action=None,
-                     tone_css=None, on_action=None):
+                     tone_css=None, on_action=None, dismissible=True):
     """Build the custom banner row (icon · title/desc · action · dismiss X).
 
     Shared by the edge-state renderer below and by callers with dynamic
     text (the update notice in ``window.py``, whose title/desc change per
     release so it can't be a static StateSpec). ``primary_action`` is an
-    optional ``(label, action_id)`` tuple; the dismiss X always fires
-    ``on_action("dismiss-banner")``. GTK is imported lazily for the same
-    reason as ``render_edge_state``.
+    optional ``(label, action_id)`` tuple; the dismiss X fires
+    ``on_action("dismiss-banner")``. A banner that must stay until its
+    problem is solved passes ``dismissible=False`` and gets no X. GTK is
+    imported lazily for the same reason as ``render_edge_state``.
     """
     import gi
     gi.require_version("Gtk", "4.0")
@@ -352,6 +358,8 @@ def build_banner_row(icon_name, title, body, primary_action=None,
             )
         banner.append(btn)
 
+    if not dismissible:
+        return banner
     close = Gtk.Button.new_from_icon_name("window-close-symbolic")
     close.add_css_class("flat")
     close.add_css_class("circular")
@@ -360,6 +368,27 @@ def build_banner_row(icon_name, title, body, primary_action=None,
     if on_action is not None:
         close.connect("clicked", lambda _b: on_action("dismiss-banner"))
     banner.append(close)
+    return banner
+
+
+def render_problem_banner(state_id, on_action=None):
+    """Show a status-page state as a banner that cannot be dismissed.
+
+    Used when nothing records copies but the history is not empty: the
+    list stays usable, and the banner stays until the problem is solved.
+    It carries the state's primary action only.
+    """
+    spec = STATES[state_id]
+    banner = build_banner_row(
+        spec.icon_name,
+        spec.title,
+        spec.body,
+        primary_action=spec.primary_action,
+        tone_css=_TONE_CSS.get(spec.tone),
+        on_action=on_action,
+        dismissible=False,
+    )
+    banner.state_spec = spec
     return banner
 
 

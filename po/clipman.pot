@@ -66,209 +66,209 @@ msgid "GNOME Shell extension isn't connected"
 msgstr ""
 
 #: clipman/edge_states.py:121
-msgid "Clipman records via wl-paste, but auto-paste needs the bundled GNOME extension enabled."
+msgid "Clipman needs its GNOME Shell extension to record copies and to paste. If you just installed Clipman, log out and back in. Otherwise, make sure the extension is turned on."
 msgstr ""
 
-#: clipman/edge_states.py:123 clipman/edge_states.py:163
-#: clipman/edge_states.py:241
+#: clipman/edge_states.py:124 clipman/edge_states.py:166
+#: clipman/edge_states.py:245
 msgid "Open Extensions"
 msgstr ""
 
-#: clipman/edge_states.py:124
+#: clipman/edge_states.py:125
 msgid "Install guide"
 msgstr ""
 
-#: clipman/edge_states.py:131
+#: clipman/edge_states.py:132
 msgid "Incognito is on — new copies are not recorded"
 msgstr ""
 
-#: clipman/edge_states.py:132
+#: clipman/edge_states.py:133
 msgid "Existing entries stay available."
 msgstr ""
 
-#: clipman/edge_states.py:133
+#: clipman/edge_states.py:134
 msgid "Resume recording"
 msgstr ""
 
-#: clipman/edge_states.py:140
+#: clipman/edge_states.py:141
 msgid "Sensitive clip detected"
 msgstr ""
 
-#: clipman/edge_states.py:141
+#: clipman/edge_states.py:142
 msgid "This entry will be cleared automatically after the configured timeout."
 msgstr ""
 
-#: clipman/edge_states.py:143
+#: clipman/edge_states.py:144
 msgid "Settings"
 msgstr ""
 
-#: clipman/edge_states.py:150
+#: clipman/edge_states.py:151
 msgid "Sensitive items cleared"
 msgstr ""
 
-#: clipman/edge_states.py:151
+#: clipman/edge_states.py:152
 msgid "Clips matching token / password patterns were purged after the auto-clear timeout."
 msgstr ""
 
-#: clipman/edge_states.py:153
+#: clipman/edge_states.py:154
 msgid "Open settings"
 msgstr ""
 
-#: clipman/edge_states.py:160
+#: clipman/edge_states.py:161
 msgid "GNOME extension required under snap"
 msgstr ""
 
-#: clipman/edge_states.py:161
-msgid "Snap confinement blocks wl-paste. Install the bundled GNOME extension to record clips."
+#: clipman/edge_states.py:162
+msgid "Clipman needs its GNOME Shell extension to record copies and to paste, and the snap can't install it for you. Install it from GNOME Extensions, then log out and back in."
 msgstr ""
 
-#: clipman/edge_states.py:164
+#: clipman/edge_states.py:167
 msgid "Snap notes"
 msgstr ""
 
-#: clipman/edge_states.py:171
+#: clipman/edge_states.py:174
 msgid "Backup failed"
 msgstr ""
 
-#: clipman/edge_states.py:172
+#: clipman/edge_states.py:175
 msgid "The destination is full, read-only, or otherwise unwritable. Pick a different folder or free up space, then retry."
 msgstr ""
 
-#: clipman/edge_states.py:175 clipman/edge_states.py:197
+#: clipman/edge_states.py:178 clipman/edge_states.py:200
 msgid "Retry"
 msgstr ""
 
-#: clipman/edge_states.py:176
+#: clipman/edge_states.py:179
 msgid "Choose another location"
 msgstr ""
 
-#: clipman/edge_states.py:183
+#: clipman/edge_states.py:186
 msgid "Restore failed"
 msgstr ""
 
-#: clipman/edge_states.py:184
+#: clipman/edge_states.py:187
 msgid "That file isn't a Clipman backup, or it includes triggers/views we won't import. Your history was not changed. Pick a .db file exported by Clipman."
 msgstr ""
 
-#: clipman/edge_states.py:187
+#: clipman/edge_states.py:190
 msgid "Close"
 msgstr ""
 
-#: clipman/edge_states.py:188
+#: clipman/edge_states.py:191
 msgid "Pick another file"
 msgstr ""
 
-#: clipman/edge_states.py:195
+#: clipman/edge_states.py:198
 msgid "Update check failed"
 msgstr ""
 
-#: clipman/edge_states.py:196
+#: clipman/edge_states.py:199
 msgid "Couldn't reach the GitHub Releases API. We'll try again later."
 msgstr ""
 
-#: clipman/edge_states.py:204
+#: clipman/edge_states.py:207
 msgid "Can't open the clipboard database"
 msgstr ""
 
-#: clipman/edge_states.py:205
+#: clipman/edge_states.py:208
 msgid "Another Clipman process may be running, or the database file is corrupt. Close other instances, or restore a backup."
 msgstr ""
 
-#: clipman/edge_states.py:208
+#: clipman/edge_states.py:211
 msgid "Reveal database folder"
 msgstr ""
 
-#: clipman/edge_states.py:209 clipman/preferences.py:771
+#: clipman/edge_states.py:212 clipman/preferences.py:771
 #: clipman/preferences.py:822
 msgid "Restore from backup"
 msgstr ""
 
-#: clipman/edge_states.py:216
+#: clipman/edge_states.py:219
 msgid "Recording paused"
 msgstr ""
 
-#: clipman/edge_states.py:217
+#: clipman/edge_states.py:220
 msgid "Clipman is not capturing new clips right now."
 msgstr ""
 
-#: clipman/edge_states.py:218
+#: clipman/edge_states.py:221
 msgid "Resume"
 msgstr ""
 
-#: clipman/edge_states.py:225 clipman/edge_states.py:236
+#: clipman/edge_states.py:228 clipman/edge_states.py:240
 msgid "Couldn't auto-paste"
 msgstr ""
 
-#: clipman/edge_states.py:226
-msgid "wtype and ydotool aren't installed, so we left the clip on your clipboard. Paste it manually with Ctrl+V."
+#: clipman/edge_states.py:229
+msgid "wtype and ydotool are missing or can't type here, so we left the clip on your clipboard. Paste it manually with Ctrl+V."
 msgstr ""
 
-#: clipman/edge_states.py:228 clipman/edge_states.py:240
-#: clipman/edge_states.py:274
+#: clipman/edge_states.py:232 clipman/edge_states.py:244
+#: clipman/edge_states.py:279
 msgid "Got it"
 msgstr ""
 
-#: clipman/edge_states.py:229
+#: clipman/edge_states.py:233
 msgid "Install help"
 msgstr ""
 
-#: clipman/edge_states.py:237
-msgid "The GNOME Shell extension did not accept the paste request, so we left the clip on your clipboard. Paste it manually with Ctrl+V."
+#: clipman/edge_states.py:241
+msgid "The GNOME Shell extension is off or did not accept the paste, so we left the clip on your clipboard. Paste it manually with Ctrl+V."
 msgstr ""
 
-#: clipman/edge_states.py:248
+#: clipman/edge_states.py:252
 msgid "Clipman can't watch the clipboard"
 msgstr ""
 
-#: clipman/edge_states.py:249
-msgid "Install wl-clipboard and use a Wayland session, or enable the GNOME extension. Until then, copies won't be recorded."
+#: clipman/edge_states.py:253
+msgid "Clipman records copies here with wl-paste, from the wl-clipboard package, which isn't installed. Until you install it, copies won't be recorded."
 msgstr ""
 
-#: clipman/edge_states.py:251
+#: clipman/edge_states.py:256
 msgid "Copy install command"
 msgstr ""
 
-#: clipman/edge_states.py:253
+#: clipman/edge_states.py:258
 msgid "Setup help"
 msgstr ""
 
-#: clipman/edge_states.py:260
+#: clipman/edge_states.py:265
 msgid "Clipboard watcher stopped"
 msgstr ""
 
-#: clipman/edge_states.py:261
+#: clipman/edge_states.py:266
 msgid "The wl-paste helper crashed too many times, so Clipman stopped retrying. Restart the daemon to resume capturing clips."
 msgstr ""
 
-#: clipman/edge_states.py:264
+#: clipman/edge_states.py:269
 msgid "Restart Clipman"
 msgstr ""
 
-#: clipman/edge_states.py:271
+#: clipman/edge_states.py:276
 msgid "Couldn't update the GNOME shortcut"
 msgstr ""
 
-#: clipman/edge_states.py:272
+#: clipman/edge_states.py:277
 msgid "Clipman's keybinding isn't registered with GNOME. Run install.sh to register it, then set the shortcut again."
 msgstr ""
 
-#: clipman/edge_states.py:275
+#: clipman/edge_states.py:280
 msgid "Copy command"
 msgstr ""
 
-#: clipman/edge_states.py:282
+#: clipman/edge_states.py:287
 msgid "Clipboard history is getting large"
 msgstr ""
 
-#: clipman/edge_states.py:283
+#: clipman/edge_states.py:288
 msgid "Older entries will roll off when the cap is reached. Adjust the limit in Preferences if needed."
 msgstr ""
 
-#: clipman/edge_states.py:285
+#: clipman/edge_states.py:290
 msgid "Open Storage settings"
 msgstr ""
 
-#: clipman/edge_states.py:359
+#: clipman/edge_states.py:367
 msgid "Dismiss"
 msgstr ""
 
@@ -324,7 +324,7 @@ msgstr ""
 msgid "Light"
 msgstr ""
 
-#: clipman/preferences.py:146 clipman/preferences.py:185 clipman/window.py:610
+#: clipman/preferences.py:146 clipman/preferences.py:185 clipman/window.py:613
 msgid "Preferences"
 msgstr ""
 
@@ -412,7 +412,7 @@ msgstr ""
 msgid "Privacy"
 msgstr ""
 
-#: clipman/preferences.py:498 clipman/preferences.py:504 clipman/window.py:604
+#: clipman/preferences.py:498 clipman/preferences.py:504 clipman/window.py:607
 msgid "Incognito mode"
 msgstr ""
 
@@ -534,7 +534,7 @@ msgstr ""
 
 #: clipman/preferences.py:676 clipman/preferences.py:850
 #: clipman/snippets_dialog.py:212 clipman/snippets_dialog.py:398
-#: clipman/window.py:949
+#: clipman/window.py:961
 msgid "Cancel"
 msgstr ""
 
@@ -656,7 +656,7 @@ msgstr ""
 msgid "Latest known version"
 msgstr ""
 
-#: clipman/preferences.py:944 clipman/window.py:1688
+#: clipman/preferences.py:944 clipman/window.py:1724
 msgid "Release notes"
 msgstr ""
 
@@ -721,7 +721,7 @@ msgid "Built with GTK 4 + libadwaita. Catppuccin palette by the Catppuccin commu
 msgstr ""
 
 #: clipman/snippets_dialog.py:58 clipman/snippets_dialog.py:77
-#: clipman/window.py:698
+#: clipman/window.py:710
 msgid "Snippets"
 msgstr ""
 
@@ -754,7 +754,7 @@ msgid "Use ${date}, ${time}, or ${clipboard} for substitutions when pasting."
 msgstr ""
 
 #: clipman/snippets_dialog.py:202 clipman/snippets_dialog.py:399
-#: clipman/window.py:1388
+#: clipman/window.py:1424
 msgid "Delete"
 msgstr ""
 
@@ -762,11 +762,11 @@ msgstr ""
 msgid "Save"
 msgstr ""
 
-#: clipman/snippets_dialog.py:252 clipman/window.py:929
+#: clipman/snippets_dialog.py:252 clipman/window.py:941
 msgid "{n} snippet"
 msgstr ""
 
-#: clipman/snippets_dialog.py:254 clipman/window.py:930
+#: clipman/snippets_dialog.py:254 clipman/window.py:942
 msgid "{n} snippets"
 msgstr ""
 
@@ -790,143 +790,143 @@ msgstr ""
 msgid "“{name}” will be removed. This can't be undone."
 msgstr ""
 
-#: clipman/window.py:620
+#: clipman/window.py:623
 msgid "Manage snippets"
 msgstr ""
 
-#: clipman/window.py:661
+#: clipman/window.py:673
 msgid "Search clipboard history…"
 msgstr ""
 
-#: clipman/window.py:695
+#: clipman/window.py:707
 msgid "All"
 msgstr ""
 
-#: clipman/window.py:696
+#: clipman/window.py:708
 msgid "Text"
 msgstr ""
 
-#: clipman/window.py:697
+#: clipman/window.py:709
 msgid "Images"
 msgstr ""
 
-#: clipman/window.py:790
+#: clipman/window.py:802
 msgid "Toggle incognito"
 msgstr ""
 
-#: clipman/window.py:796 clipman/window.py:2095
+#: clipman/window.py:808 clipman/window.py:2117
 msgid "Recording"
 msgstr ""
 
-#: clipman/window.py:802
+#: clipman/window.py:814
 msgid "Clear all"
 msgstr ""
 
-#: clipman/window.py:936
+#: clipman/window.py:948
 msgid "{n} of {total} items"
 msgstr ""
 
-#: clipman/window.py:938
+#: clipman/window.py:950
 msgid "{n} item"
 msgstr ""
 
-#: clipman/window.py:939
+#: clipman/window.py:951
 msgid "{n} items"
 msgstr ""
 
-#: clipman/window.py:945
+#: clipman/window.py:957
 msgid "Clear clipboard history?"
 msgstr ""
 
-#: clipman/window.py:946
+#: clipman/window.py:958
 msgid "This removes all unpinned entries. Pinned entries and snippets are kept. This can't be undone."
 msgstr ""
 
-#: clipman/window.py:950
+#: clipman/window.py:962
 msgid "Clear"
 msgstr ""
 
-#: clipman/window.py:1423
+#: clipman/window.py:1459
 msgid "★ Pinned"
 msgstr ""
 
-#: clipman/window.py:1427 clipman/window.py:1435
+#: clipman/window.py:1463 clipman/window.py:1471
 msgid "Older"
 msgstr ""
 
-#: clipman/window.py:1430
+#: clipman/window.py:1466
 msgid "Today"
 msgstr ""
 
-#: clipman/window.py:1432
+#: clipman/window.py:1468
 msgid "Yesterday"
 msgstr ""
 
-#: clipman/window.py:1434
+#: clipman/window.py:1470
 msgid "Earlier this week"
 msgstr ""
 
-#: clipman/window.py:1526
+#: clipman/window.py:1562
 msgid "(empty)"
 msgstr ""
 
-#: clipman/window.py:1538
+#: clipman/window.py:1574
 msgid "Code"
 msgstr ""
 
-#: clipman/window.py:1576
+#: clipman/window.py:1612
 msgid "Unpin"
 msgstr ""
 
-#: clipman/window.py:1576
+#: clipman/window.py:1612
 msgid "Pin"
 msgstr ""
 
-#: clipman/window.py:1599
+#: clipman/window.py:1635
 msgid "Sensitive"
 msgstr ""
 
-#: clipman/window.py:1601
+#: clipman/window.py:1637
 msgid "Sensitive — auto-clear in {n} s"
 msgstr ""
 
-#: clipman/window.py:1628
+#: clipman/window.py:1664
 msgid "Snippet · used {n}×"
 msgstr ""
 
-#: clipman/window.py:1680
+#: clipman/window.py:1716
 msgid "Update available — v{new}"
 msgstr ""
 
-#: clipman/window.py:1681
+#: clipman/window.py:1717
 msgid "You have v{cur}. See what changed before upgrading."
 msgstr ""
 
-#: clipman/window.py:2091
+#: clipman/window.py:2113
 msgid "Paused"
 msgstr ""
 
-#: clipman/window.py:2116
+#: clipman/window.py:2138
 msgid "Incognito mode: ON — clipboard not recorded"
 msgstr ""
 
-#: clipman/window.py:2118
+#: clipman/window.py:2140
 msgid "Incognito mode: OFF"
 msgstr ""
 
-#: clipman/window.py:2368
+#: clipman/window.py:2390
 msgid "just now"
 msgstr ""
 
-#: clipman/window.py:2371
+#: clipman/window.py:2393
 msgid "{n}m ago"
 msgstr ""
 
-#: clipman/window.py:2374
+#: clipman/window.py:2396
 msgid "{n}h ago"
 msgstr ""
 
-#: clipman/window.py:2376
+#: clipman/window.py:2398
 msgid "{n}d ago"
 msgstr ""
 

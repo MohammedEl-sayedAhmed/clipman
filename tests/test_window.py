@@ -200,6 +200,34 @@ class TestEdgeStates(_WidgetTestCase):
                     self.assertEqual(spec.kind, "statuspage")
                     self.assertIsInstance(widget, Adw.StatusPage)
 
+    def test_problem_banner_offers_the_fix_and_cannot_be_dismissed(self):
+        """A problem that stops recording stays until it is solved."""
+        from gi.repository import Gtk
+
+        from clipman.edge_states import STATES, render_problem_banner
+
+        for state_id in ("first-run", "extension-missing",
+                         "watcher-crashed", "clipboard-blocked"):
+            with self.subTest(state_id=state_id):
+                actions = []
+                banner = render_problem_banner(
+                    state_id, on_action=actions.append
+                )
+                self.assertTrue(banner.has_css_class("edge-banner"))
+                self.assertEqual(banner.state_spec.id, state_id)
+                buttons = []
+                child = banner.get_first_child()
+                while child is not None:
+                    if isinstance(child, Gtk.Button):
+                        buttons.append(child)
+                    child = child.get_next_sibling()
+                # The fix only: no dismiss X.
+                self.assertEqual(len(buttons), 1)
+                buttons[0].emit("clicked")
+                self.assertEqual(
+                    actions, [STATES[state_id].primary_action[1]]
+                )
+
     def test_unknown_state_falls_back_to_empty(self):
         from clipman.edge_states import render_edge_state
         widget = render_edge_state("does-not-exist")
@@ -579,6 +607,118 @@ class TestWindowConstruction(_WidgetTestCase):
         window._present_focused.assert_called_once()
         window._show_edge_state.assert_called_once_with("paste-failed")
         window._simulate_paste.assert_not_called()
+
+    def _problem_window(self, entries=()):
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        for text in entries:
+            db.add_entry("text", content_text=text)
+        app = self._make_app("com.clipman.TestProblem")
+        return ClipmanWindow(application=app, db=db, monitor=None)
+
+    def test_empty_history_shows_why_nothing_is_recorded(self):
+        window = self._problem_window()
+        window.set_recording_problem("first-run")
+        window.refresh()
+        self.assertEqual(window._list_stack.get_visible_child_name(), "empty")
+        self.assertEqual(
+            window._current_edge_widget.state_spec.id, "first-run"
+        )
+        # The page says it already, and the pill would claim "Recording".
+        self.assertFalse(window._recording_banner_slot.get_visible())
+        self.assertFalse(window._recording_pill.get_visible())
+
+    def test_recording_problem_stays_above_the_history(self):
+        """UI-11: the next refresh (opening the popup) used to hide it."""
+        window = self._problem_window(["an older clip"])
+        window.set_recording_problem("watcher-crashed")
+        window.refresh()
+        window.refresh()
+        self.assertEqual(window._list_stack.get_visible_child_name(), "list")
+        self.assertTrue(window._recording_banner_slot.get_visible())
+        self.assertEqual(
+            window._recording_banner.state_spec.id, "watcher-crashed"
+        )
+        self.assertFalse(window._recording_pill.get_visible())
+
+    def test_solved_recording_problem_goes_away(self):
+        window = self._problem_window()
+        window.set_recording_problem("first-run")
+        window.set_recording_problem(None)
+        window.refresh()
+        self.assertIsNone(window._recording_banner)
+        self.assertEqual(window._current_edge_widget.state_spec.id, "empty")
+        self.assertTrue(window._recording_pill.get_visible())
+
+    def test_open_popup_shows_a_new_problem_at_once(self):
+        window = self._problem_window()
+        window.get_visible = lambda: True
+        window.refresh = MagicMock()
+        window.set_recording_problem("first-run")
+        window.refresh.assert_called_once_with()
+        window.set_recording_problem("first-run")
+        window.refresh.assert_called_once_with()  # no change, no refresh
+
+    def _fake_paste_tools(self, **exit_codes):
+        """Put only fake paste tools on PATH; return their call log."""
+        bindir = Path(tempfile.mkdtemp(prefix="clipman-tools-"))
+        self.addCleanup(shutil.rmtree, bindir, ignore_errors=True)
+        calls = bindir / "calls"
+        for tool, code in exit_codes.items():
+            script = bindir / tool
+            script.write_text(
+                f'#!/bin/sh\necho {tool} >> "{calls}"\nexit {code}\n'
+            )
+            script.chmod(0o700)
+        patcher = patch.dict(os.environ, {"PATH": str(bindir)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        return calls
+
+    def _paste_with_tools(self, problem=None, **exit_codes):
+        calls = self._fake_paste_tools(**exit_codes)
+        window = self._problem_window()
+        window.set_recording_problem(problem)
+        window._present_focused = MagicMock()
+        window._show_edge_state = MagicMock()
+        window._simulate_paste()
+        tools = calls.read_text().split() if calls.exists() else []
+        return window, tools
+
+    def test_paste_tool_that_works_needs_no_dialog(self):
+        window, tools = self._paste_with_tools(wtype=0, ydotool=0)
+        self.assertEqual(tools, ["wtype"])
+        window._show_edge_state.assert_not_called()
+
+    def test_paste_tries_the_next_tool_after_a_failure(self):
+        window, tools = self._paste_with_tools(wtype=1, ydotool=0)
+        self.assertEqual(tools, ["wtype", "ydotool"])
+        window._show_edge_state.assert_not_called()
+
+    def test_failed_paste_is_not_silent(self):
+        """UI-9: wtype exits 1 on GNOME; that used to count as a paste."""
+        window, tools = self._paste_with_tools(wtype=1)
+        self.assertEqual(tools, ["wtype"])
+        window._present_focused.assert_called_once_with()
+        window._show_edge_state.assert_called_once_with(
+            "paste-target-missing"
+        )
+
+    def test_failed_paste_without_the_extension_names_it(self):
+        for problem in ("first-run", "extension-missing"):
+            with self.subTest(problem=problem):
+                window, _tools = self._paste_with_tools(problem, wtype=1)
+                window._show_edge_state.assert_called_once_with(
+                    "paste-failed"
+                )
+
+    def test_paste_without_any_tool_says_so(self):
+        window, tools = self._paste_with_tools()
+        self.assertEqual(tools, [])
+        window._show_edge_state.assert_called_once_with(
+            "paste-target-missing"
+        )
 
     def test_type_filters_query_the_database_by_type(self):
         """The Text and Images tabs filter in SQL, not on the newest 200 rows."""

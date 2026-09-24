@@ -3,7 +3,9 @@
 # End to end in a headless GNOME Shell, the way a user meets Clipman:
 #
 #   login 1  run install.sh while the Shell is running (#1: the extension
-#            was never enabled)
+#            was never enabled); until the next login nothing can record
+#            copies, and the daemon says so instead of starting
+#            wl-paste --watch, which GNOME cannot run
 #   login 2  the extension is on, the daemon starts, a copy is recorded,
 #            scripts/extension-smoke.sh passes, the open popup does not
 #            spin a CPU core (#307), and uninstall.sh stops a daemon
@@ -103,6 +105,43 @@ login1() {
         *"'$uuid'"*) pass "the extension is enabled for the next login" ;;
         *) fail "enabled-extensions is $enabled" ;;
     esac
+    without_extension
+}
+
+# The Shell loads a new extension only at login, so the daemon runs
+# without it here. A logging wl-paste shows whether it starts the watcher.
+without_extension() {
+    local real shim="$WORK/shim"
+    real=$(command -v wl-paste) || { fail "wl-paste is not installed"; return; }
+    mkdir -p "$shim"
+    printf '#!/bin/sh\necho "$*" >> "%s/wl-paste.calls"\nexec "%s" "$@"\n' \
+        "$WORK" "$real" > "$shim/wl-paste"
+    chmod 700 "$shim/wl-paste"
+
+    PATH="$shim:$PATH" GDK_BACKEND=wayland python3 "$repo/clipman.py" \
+        > "$WORK/daemon1.log" 2>&1 &
+    local daemon=$!
+    if wait_for 20 has_owner com.clipman.Daemon; then
+        pass "the daemon started without the extension"
+    else
+        fail "the daemon did not start" "$WORK/daemon1.log"
+        kill "$daemon" 2>/dev/null
+        return
+    fi
+    # The daemon decides right after it owns its name; give it a moment.
+    sleep 2
+    if grep -q -- "--watch" "$WORK/wl-paste.calls" 2>/dev/null; then
+        fail "the daemon ran wl-paste --watch, which cannot work on GNOME"
+    else
+        pass "the daemon did not run wl-paste --watch"
+    fi
+    if grep -q "extension is not running" "$WORK/daemon1.log"; then
+        pass "the log says why copies are not recorded"
+    else
+        fail "the log does not say why copies are not recorded" "$WORK/daemon1.log"
+    fi
+    kill "$daemon" 2>/dev/null
+    wait "$daemon" 2>/dev/null
 }
 
 login2() {
@@ -134,6 +173,11 @@ login2() {
         shell_eval "global.display.focus_window ? global.display.focus_window.get_title() : null" \
             | sed 's/^/        | focus window: /'
         shell_eval "Main.overview.visible" | sed 's/^/        | overview open: /'
+    fi
+    if grep -q "not recorded" "$WORK/daemon.log"; then
+        fail "the log says copies are not recorded, with the extension on" "$WORK/daemon.log"
+    else
+        pass "no recording problem is logged"
     fi
 
     if bash "$repo/scripts/extension-smoke.sh" > "$WORK/smoke.out" 2>&1; then

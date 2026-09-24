@@ -11,7 +11,6 @@ module without changes.
 import logging
 import os
 import re
-import shutil
 import subprocess
 import time
 from datetime import date, datetime, timedelta
@@ -278,6 +277,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._active_filter = "all"
         self._css_provider = None
         self._current_edge_banner = None
+        # Why nothing records copies (an edge state id from app.py), or
+        # None. It stays on screen until it is solved.
+        self._recording_problem = None
+        self._recording_banner = None
         # Reference to the currently-open in-app dialog (preferences /
         # snippets / edge alert). dismiss-on-focus-loss checks whether it
         # is still mapped rather than a boolean latch, because hiding the
@@ -639,6 +642,15 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._update_latest = None
         root.append(self._update_banner_slot)
 
+        # -- Recording-problem banner ---------------------------------------
+        # Says why new copies are not recorded while the history still has
+        # entries (an empty history gets the status page instead). No
+        # dismiss button: it goes away when the problem is solved.
+        self._recording_banner_slot = Gtk.Box(
+            orientation=Gtk.Orientation.VERTICAL, spacing=0
+        )
+        root.append(self._recording_banner_slot)
+
         # -- Edge-state banner slot ---------------------------------------
         # Banner-kind edge states (incognito-on, paused, sensitive-shown,
         # sensitive-cleared, network-error, history-too-large) mount
@@ -857,22 +869,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 state_id = "no-results"
             elif is_snippets:
                 state_id = "no-snippets-yet"
-            elif not self._extension_connected():
-                # Empty AND the Shell extension isn't on the bus: guide the
-                # setup instead of a generic empty state (mockup first-run /
-                # snap-required / clipboard-blocked).
-                if os.environ.get("SNAP"):
-                    state_id = "extension-missing"
-                elif shutil.which("wl-paste") is None:
-                    # No extension AND no wl-clipboard: nothing can record.
-                    state_id = "clipboard-blocked"
-                else:
-                    state_id = "first-run"
+            elif self._recording_problem is not None:
+                # Nothing records copies: say why and how to fix it
+                # (mockup first-run / snap-required / clipboard-blocked /
+                # watcher-crashed) instead of a plain empty state.
+                state_id = self._recording_problem
             else:
                 state_id = "empty"
+            # The status page already explains the problem; don't repeat
+            # it in the banner.
+            self._recording_banner_slot.set_visible(
+                state_id != self._recording_problem
+            )
             self._show_edge_state(state_id)
             return
 
+        self._recording_banner_slot.set_visible(True)
         self._list_stack.set_visible_child_name("list")
         # Show the first screenful immediately, then append the rest on idle.
         # Building a couple hundred rows in one go froze the popup for ~0.5s
@@ -1032,9 +1044,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
         "https://github.com/MohammedEl-sayedAhmed/clipman"
         "#readme"
     )
+    # The setup steps the packages leave to the user, snap included.
     _SNAP_NOTES_URL = (
         "https://github.com/MohammedEl-sayedAhmed/clipman"
-        "#alternative-installation"
+        "#finish-the-setup"
     )
 
     # Authoritative list of action_ids the dispatcher handles. The
@@ -1167,9 +1180,32 @@ class ClipmanWindow(Adw.ApplicationWindow):
         except OSError:
             logger.debug("daemon restart failed", exc_info=True)
 
-    def show_watcher_crashed(self):
-        """Public — app.py routes the monitor's watcher-dead callback here."""
-        self._show_edge_state("watcher-crashed")
+    def set_recording_problem(self, state_id):
+        """Public — app.py reports why copies are not recorded.
+
+        ``state_id`` is an edge state (``first-run``, ``extension-missing``,
+        ``watcher-crashed`` or ``clipboard-blocked``), or None once
+        something records copies again. The popup keeps showing it until
+        then: as the status page when the history is empty, otherwise as
+        a banner above the list. The footer pill hides meanwhile, since
+        it would claim "Recording".
+        """
+        if state_id == self._recording_problem:
+            return
+        self._recording_problem = state_id
+        if self._recording_banner is not None:
+            self._recording_banner_slot.remove(self._recording_banner)
+            self._recording_banner = None
+        if state_id is not None:
+            from clipman.edge_states import render_problem_banner
+
+            self._recording_banner = render_problem_banner(
+                state_id, on_action=self._on_edge_action
+            )
+            self._recording_banner_slot.append(self._recording_banner)
+        self._update_recording_pill(self._incognito_btn.get_active())
+        if self.get_visible():
+            self.refresh()
 
     def _action_dismiss_banner(self):
         """X button on an edge banner — remove whatever banner is mounted."""
@@ -1811,40 +1847,37 @@ class ClipmanWindow(Adw.ApplicationWindow):
         Dispatch order: read ``paste_mode`` from the DB; ``auto`` and
         ``ctrl-v`` both fire Ctrl+V (auto is the historical default and
         the most compatible). The other two modes use their respective
-        key sequence tables. If neither wtype nor ydotool is installed
-        we surface ``paste-target-missing`` via the edge state so the
-        user knows to copy manually.
+        key sequence tables. Each tool is tried until one exits 0: wtype
+        exits 1 on GNOME, whose compositor has no virtual-keyboard
+        protocol. When none works, the popup comes back with a dialog
+        so the user knows to paste by hand.
         """
         mode = self.db.get_setting("paste_mode", "auto") or "auto"
         commands = self._PASTE_COMMANDS.get(
             mode, self._PASTE_COMMANDS["ctrl-v"]
         )
-        any_binary_available = False
         for cmd in commands:
             try:
-                subprocess.run(
+                result = subprocess.run(
                     cmd,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     timeout=2,
                     check=False,
                 )
-                # First command that runs (even with a non-zero exit)
-                # is enough — the keystroke was synthesised.
-                return False
             except FileNotFoundError:
                 continue
-            except subprocess.SubprocessError:
-                # The binary exists but failed to drive the
-                # keystroke — still counts as "available", just don't
-                # short-circuit so we try the next backend.
-                any_binary_available = True
+            except (OSError, subprocess.SubprocessError):
+                logger.debug("%s failed", cmd[0], exc_info=True)
                 continue
-        if not any_binary_available:
-            # Neither wtype nor ydotool is installed. Show the popup
-            # again (focused) with the dedicated edge state so the user
-            # has a clear next step.
-            self._present_focused()
+            if result.returncode == 0:
+                return False
+            logger.debug("%s exited with %d", cmd[0], result.returncode)
+        self._present_focused()
+        if self._recording_problem in ("first-run", "extension-missing"):
+            # On GNOME the extension types the paste, and it is off.
+            self._show_edge_state("paste-failed")
+        else:
             self._show_edge_state("paste-target-missing")
         return False
 
@@ -1950,22 +1983,6 @@ class ClipmanWindow(Adw.ApplicationWindow):
         except Exception as exc:
             logger.debug("Shell SimulatePaste() failed: %s", exc, exc_info=True)
             return False
-
-    def _extension_connected(self):
-        """Whether the GNOME Shell extension owns its bus name (cached 60s —
-        refresh() runs often and this is only advisory for empty states)."""
-        now = time.time()
-        cached = getattr(self, "_ext_check", None)
-        if cached is not None and now - cached[0] < 60:
-            return cached[1]
-        try:
-            import dbus
-            bus = dbus.SessionBus()
-            ok = bus.name_has_owner("org.gnome.Shell.Extensions.clipman")
-        except Exception:
-            ok = False
-        self._ext_check = (now, ok)
-        return ok
 
     def _shell_extension_iface(self):
         """Return the GNOME Shell extension's D-Bus interface, or None if it
@@ -2083,9 +2100,14 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._incognito_btn.set_active(not self._incognito_btn.get_active())
 
     def _update_recording_pill(self, incognito):
-        """Reflect incognito state in the footer status pill."""
+        """Reflect incognito state in the footer status pill.
+
+        The pill hides while nothing can record, as in the mockup's setup
+        and error states; the banner or status page says why.
+        """
         if not hasattr(self, "_recording_pill"):
             return
+        self._recording_pill.set_visible(self._recording_problem is None)
         if incognito:
             self._recording_icon.set_from_icon_name("view-conceal-symbolic")
             self._recording_label.set_text(_("Paused"))
