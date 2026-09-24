@@ -35,8 +35,12 @@ source-side conventions are summarised in `CONTRIBUTING.md` under
    msgfmt --check --statistics po/<lang>.po -o /dev/null
    ```
 
-   `--check` enforces format-string parity with the original `msgid`,
-   so any stray placeholder mismatch is caught here.
+   `--check` catches broken `.po` syntax. It does **not** catch a
+   mistyped placeholder yet: the template does not mark `{name}`
+   placeholders as format strings, so check each one by eye. A wrong
+   placeholder makes that dialog fail at runtime.
+   [#321](https://github.com/MohammedEl-sayedAhmed/clipman/issues/321)
+   tracks fixing this before the first translation lands.
 5. Open a PR adding `po/<lang>.po` only. Mention which language and
    how to verify in the PR description.
 

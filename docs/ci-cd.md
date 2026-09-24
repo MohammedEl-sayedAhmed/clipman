@@ -12,11 +12,11 @@ on `main`.
 | Baseline guard | `baseline-guard.yml` | `push` to `security-baseline` branch | Auto-reverts unauthorized pushes to the security-baseline branch and opens a high-priority security issue; the branch is meant to be written only by the `update-baseline` job in `codeql.yml`. | No (operates on a side branch) |
 | Delete merged branch | `delete-merged-branch.yml` | `pull_request` `closed` | Deletes the head branch of a merged same-repo pull request. GitHub's repository-level auto-delete does not fire for pull requests merged by the Actions auto-merge queue, so this closes that gap. It skips forks and refuses to delete the default branch. | No |
 | CodeQL | `codeql.yml` | `push` to `main`, `pull_request` to `main`, weekly cron (`27 4 * * 1`), `workflow_dispatch` | Runs `security-and-quality` CodeQL queries for Python and JavaScript; on PRs ratchets against the `security-baseline` branch; on push to `main` rebuilds the baseline from the fresh SARIF. | Yes — `Analyze (python)` and `Analyze (javascript)` |
-| Dependency review | `dependency-review.yml` | `pull_request` to `main` | Fails the PR on high-severity vulnerabilities or disallowed licenses introduced by dependency changes. | No (informational; no contexts on protection ruleset) |
+| Dependency review | `dependency-review.yml` | `pull_request` to `main` | Fails the PR on high-severity vulnerabilities or disallowed licenses introduced by dependency changes. | Yes — `review` (its job's name) |
 | Auto-label PR | `labeler.yml` | `pull_request_target` to `main` | Applies path-based labels from `.github/labeler.yml` so triage knows which area a PR touches. | No |
 | Sync labels | `labels.yml` | `push` to `main` touching `.github/labels.yml`, `workflow_dispatch` | Reconciles repository labels with the declarative `.github/labels.yml` source of truth. | No (push-only) |
-| Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests scripts clipman.py`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`, `.githooks/`), plus `scripts/dev.sh hooks-test`, the local git hooks' own test suite, and `scripts/dev.sh validate` (actionlint on the workflows, `appstreamcli` on the metainfo, `desktop-file-validate` on the desktop entry). | `Python (ruff)` and `Shell (shellcheck)` are; `Hooks (self-test)` is not yet |
-| Footprints | `footprints.yml` | `pull_request` to `main` (opened, synchronize, reopened, edited) | `scripts/check-footprints.sh`: blocks AI-tool attribution in the pull request's commits (trailers, messages, added lines), title and description, with the same checks as the local git hooks. A bot's description is skipped. | Yes — `Footprints` |
+| Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests scripts clipman.py`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`, `.githooks/`), plus `scripts/dev.sh hooks-test`, the local git hooks' own test suite, and `scripts/dev.sh validate` (actionlint on the workflows, `appstreamcli` on the metainfo, `desktop-file-validate` on the desktop entry). | `Python (ruff)` and `Shell (shellcheck)` are; `Hooks (self-test)` and `Validate` are not yet |
+| Footprints | `footprints.yml` | `pull_request` to `main` (opened, synchronize, reopened, edited) | `scripts/check-footprints.sh`: blocks AI-tool attribution in the pull request's commits (trailers, messages, added lines), title and description, with the same checks as the local git hooks. A bot's description is skipped. | Not yet |
 | Refresh marketing numbers | `refresh-numbers.yml` | Daily cron (`0 6 * * *`), `workflow_dispatch`, `push` to `main` touching its own paths | Fetches PyPI and GNOME Extensions counts on the runner, rebuilds the self-hosted star-history SVGs and the downloads history, and commits them to the `numbers` branch with the built-in `GITHUB_TOKEN`. No pull request, no personal token; `main` is never touched. | No |
 | Release | `release.yml` | `push` of tag matching `v*.*.*`, `workflow_dispatch` | End-to-end release pipeline: pre-flight version checks, matrix tests, builds (PyPI, snap, .deb/.rpm, extension bundle) with a wheel smoke test before the PyPI upload, and publishes to PyPI, Snap Store, AUR, and GitHub Releases. | No (tag-triggered only) |
 | Scorecard | `scorecard.yml` | `push` to `main`, weekly cron (`37 4 * * 1`), `branch_protection_rule` | OSSF Scorecard supply-chain analysis; uploads SARIF to the GitHub Security tab and publishes results. | No |
@@ -24,8 +24,7 @@ on `main`.
 | Snap refresh | `snap-refresh.yml` | Weekly cron (`0 4 * * 1`), `workflow_dispatch`, `push`/`pull_request` to `main` touching snap-relevant paths | Rebuilds the snap to pick up Ubuntu archive security updates. The scheduled run publishes every channel: edge from `main`, and beta, candidate and stable from the latest release tag, unless the store is already ahead of that tag. `scripts/snap-plan.sh` makes that plan, and `tests/test_snap_plan.py` checks it. See ADR 0012. | No |
 | Tests | `test.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh test` (pytest under `xvfb-run` with `CLIPMAN_REQUIRE_GTK4=1`) across the Python 3.10 / 3.11 / 3.12 matrix on `ubuntu-24.04`; system packages come from `scripts/deps.sh`. `package (wheel smoke)` builds the wheel and runs it from a clean venv. `e2e (headless GNOME Shell)` runs `scripts/dev.sh e2e` in GNOME Shell 46: `install.sh` during a live session, a new login, a copy, the popup, and `uninstall.sh`. | `test (3.10)`, `test (3.11)` and `test (3.12)` are; `package` and `e2e` are not yet |
 
-The remaining required context on `main` is `review`, which is enforced
-by the protection ruleset itself rather than by a workflow file.
+The required context `review` is the job in `dependency-review.yml`.
 
 ## Release pipeline end-to-end
 
@@ -190,21 +189,27 @@ Required status checks on `main` (from
 - `Analyze (python)` — from `codeql.yml`
 - `Python (ruff)` — from `lint.yml`
 - `Shell (shellcheck)` — from `lint.yml`
-- `Hooks (self-test)` — from `lint.yml`
-- `Footprints` — from `footprints.yml`
 - `gitleaks` — from `secret-scan.yml`
-- `review` — auto-label / review-gating context
+- `review` — from `dependency-review.yml`
 - `test (3.10)` — from `test.yml`
 - `test (3.11)` — from `test.yml`
 - `test (3.12)` — from `test.yml`
 
-Other ruleset settings:
+`Hooks (self-test)`, `Validate`, `Footprints`, `package (wheel smoke)`
+and `e2e (headless GNOME Shell)` run on every pull request but are not
+required yet. Branches must be up to date before merging (`strict`).
+
+Other protection settings (classic branch protection; there are no
+rulesets):
 
 - `required_linear_history`: enabled (rebase or squash merges only,
   no merge commits).
 - `allow_force_pushes`: disabled.
 - `allow_deletions`: disabled.
-- `required_conversation_resolution`: enabled.
+- `required_conversation_resolution`: **disabled**. ADR 0006 decided
+  to require it, but the setting is off, so an unresolved thread (a
+  code-scanning one, say) does not block a merge. AGENTS.md asks to
+  resolve code-scanning threads before merging anyway.
 - `enforce_admins`: disabled (so the maintainer can break glass
   without disabling the rule).
 - `required_signatures`: disabled.
@@ -276,7 +281,7 @@ Start from the shape of `lint.yml` or `test.yml`:
   legitimately needs to push back to the repo.
 
 If the new workflow is meant to gate releases, add its context to the
-branch-protection ruleset under "Required status checks". Otherwise
+branch protection under "Required status checks". Otherwise
 leave it as informational and rely on the ratchet/review path.
 
 Cross-references:

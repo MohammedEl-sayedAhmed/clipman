@@ -1,5 +1,5 @@
 ---
-status: Accepted
+status: Superseded by ADR 0011
 date: 2026-05-22
 deciders: MohammedEl-sayedAhmed
 ---

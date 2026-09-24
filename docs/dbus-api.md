@@ -122,7 +122,9 @@ changes. `content_type` selects the dispatch path:
 
 Any other `content_type` is silently ignored. Storage is deduplicated
 by content hash across the whole history: sending a clip that is
-already stored moves it to the top instead of adding a copy.
+already stored moves it to the top instead of adding a copy. The same
+content arriving again within 100 ms is dropped, as a repeat of one
+copy; different content is always recorded.
 
 ```bash
 gdbus call --session --dest com.clipman.Daemon \
