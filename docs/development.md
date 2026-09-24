@@ -71,10 +71,17 @@ scripts/dev.sh test -k database      # or: make test ARGS="-k database"
 This is the exact command CI runs: pytest under `xvfb-run -a` with
 `CLIPMAN_REQUIRE_GTK4=1`, so a missing GTK 4 fails the widget tests
 instead of skipping them. When pytest is not importable it falls back
-to `unittest discover -s tests`. The interpreter is `$CLIPMAN_PYTHON`,
+to `unittest discover -s tests -t .`. The interpreter is `$CLIPMAN_PYTHON`,
 else `.venv/bin/python`, else `python3`.
 
-The full suite (375 tests) hits the actual SQLite layer, mocks
+The tests never touch your desktop or your data. `tests/__init__.py`
+gives every run a scratch `HOME` and the in-memory GSettings backend,
+and lets GTK use only a private display. So without `xvfb-run`,
+`scripts/dev.sh test` stops instead of opening test windows on your
+screen. If you started a private display yourself (Xephyr, say), set
+`CLIPMAN_TEST_PRIVATE_DISPLAY=1`. `GDK_BACKEND=broadway` works too.
+
+The full suite hits the actual SQLite layer, mocks
 clipboard subprocesses, and exercises the keybinding parser. The CI
 matrix covers Python 3.10–3.12 on `ubuntu-24.04`.
 

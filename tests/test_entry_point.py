@@ -2,6 +2,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from importlib import import_module, resources
 from pathlib import Path
@@ -16,16 +17,28 @@ PYPROJECT = (ROOT / "pyproject.toml").read_text()
 MAIN_BODY = CLI_SOURCE[CLI_SOURCE.index("def main("):]
 
 
-def _run(*args):
-    """Run the entry point in a subprocess with no display."""
+def _run(*args, home=None, path_first=None):
+    """Run the entry point in a subprocess with no display, bus or real home.
+
+    With wl-paste installed, `toggle` finds no daemon and starts one, and
+    the daemon opens its database under HOME. So the run gets a scratch
+    HOME (``home``, or a temporary one).
+    """
     env = {k: v for k, v in os.environ.items()
            if k not in ("DISPLAY", "WAYLAND_DISPLAY")}
     env["GDK_BACKEND"] = "x11"
     env["DBUS_SESSION_BUS_ADDRESS"] = "unix:path=/nonexistent/clipman-test"
-    return subprocess.run(
-        [sys.executable, *args], capture_output=True, timeout=10,
-        cwd=ROOT, env=env,
-    )
+    env["GSETTINGS_BACKEND"] = "memory"
+    if path_first:
+        env["PATH"] = f"{path_first}{os.pathsep}{env.get('PATH', '')}"
+    with tempfile.TemporaryDirectory(prefix="clipman-entry-") as scratch:
+        env["HOME"] = str(home or scratch)
+        for name in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
+            env[name] = os.path.join(env["HOME"], name[4:-5].lower())
+        return subprocess.run(
+            [sys.executable, *args], capture_output=True, timeout=10,
+            cwd=ROOT, env=env,
+        )
 
 
 class TestDBusMainLoopInit(unittest.TestCase):
@@ -54,6 +67,26 @@ class TestDBusMainLoopInit(unittest.TestCase):
         output = result.stdout + result.stderr
         expected = (b"not running", b"missing system dependencies")
         self.assertTrue(any(m in output for m in expected), output[-500:])
+
+    def test_toggle_daemon_start_stays_in_the_scratch_home(self):
+        """The daemon start behind 'toggle' must not open the real database.
+
+        A fake wl-paste passes the dependency check, so the daemon start
+        runs and creates clipman.db. It must land in the run's own HOME.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = Path(tmp) / "bin"
+            bin_dir.mkdir()
+            for tool in ("wl-paste", "wl-copy"):
+                stub = bin_dir / tool
+                stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+                stub.chmod(0o700)
+            home = Path(tmp) / "home"
+            home.mkdir()
+            result = _run("clipman.py", "toggle", home=home, path_first=bin_dir)
+            output = result.stdout + result.stderr
+            self.assertIn(b"Starting it now", output, output[-500:])
+            self.assertTrue((home / ".local/share/clipman/clipman.db").exists())
 
 
 class TestDependencyCheck(unittest.TestCase):

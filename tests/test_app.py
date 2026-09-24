@@ -13,12 +13,8 @@ mirroring the rest of the test suite.
 
 from __future__ import annotations
 
-import os
 import unittest
 from unittest.mock import MagicMock, patch
-
-os.environ.setdefault("GDK_BACKEND", "x11")
-os.environ.setdefault("GTK_A11Y", "none")
 
 # Probe GTK4 + libadwaita availability without taking a strong
 # reference on ``Adw`` — the helper tests under this module never
