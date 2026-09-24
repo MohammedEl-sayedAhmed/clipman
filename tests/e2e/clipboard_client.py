@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Copy text in the headless Shell, the way a user's app does.
 
-Usage: clipboard_client.py TEXT
+Usage: clipboard_client.py TEXT [REPEAT]
 
-Shows a small GTK 4 window, puts TEXT on the clipboard, and keeps serving
-it for a few seconds, so the Shell extension can read it and send it on
-to the daemon.
+Shows a small GTK 4 window, puts TEXT (REPEAT times over, for a big
+copy) on the clipboard, and keeps serving it for a few seconds, so the
+Shell extension can read it and send it on to the daemon.
 """
 
 import sys
@@ -41,4 +41,4 @@ def main(text):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main(sys.argv[1] * (int(sys.argv[2]) if len(sys.argv) > 2 else 1))

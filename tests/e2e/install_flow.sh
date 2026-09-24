@@ -7,9 +7,11 @@
 #            copies, and the daemon says so instead of starting
 #            wl-paste --watch, which GNOME cannot run
 #   login 2  the extension is on, the daemon starts, a copy is recorded,
-#            scripts/extension-smoke.sh passes, the open popup does not
-#            spin a CPU core (#307), and uninstall.sh stops a daemon
-#            started by hand and keeps the data without a terminal (#328)
+#            scripts/extension-smoke.sh passes, a huge copy and an app
+#            that never sends its data cost the Shell little, the open
+#            popup does not spin a CPU core (#307), and uninstall.sh
+#            stops a daemon started by hand and keeps the data without a
+#            terminal (#328)
 #
 # Usage: tests/e2e/install_flow.sh [workdir]
 # Needs gnome-shell, python3 with GTK 4 and libadwaita, dbus and
@@ -63,6 +65,20 @@ sys.exit(0 if found else 1)
 PY
 }
 
+# The length of the newest text in the history.
+newest_length() {
+    python3 - "$HOME/.local/share/clipman/clipman.db" <<'PY'
+import sqlite3, sys
+try:
+    conn = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+    row = conn.execute("SELECT length(content_text) FROM entries "
+                       "WHERE content_type = 'text' ORDER BY id DESC LIMIT 1").fetchone()
+except sqlite3.Error:
+    row = None
+print(row[0] if row else 0)
+PY
+}
+
 # CPU clock ticks the process used over two seconds.
 cpu_ticks() {
     local before after
@@ -70,6 +86,21 @@ cpu_ticks() {
     sleep 2
     after=$(awk '{print $14 + $15}' "/proc/$1/stat")
     echo $((after - before))
+}
+
+shell_pid() {
+    gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+        --method org.freedesktop.DBus.GetConnectionUnixProcessID org.gnome.Shell \
+        | tr -dc '0-9 ' | awk '{print $NF}'
+}
+
+# The most memory the process has used so far, in MB.
+peak_mb() {
+    awk '/^VmHWM:/ {print int($2 / 1024)}' "/proc/$1/status"
+}
+
+pipe_count() {
+    find "/proc/$1/fd" -lname 'pipe:*' 2>/dev/null | wc -l
 }
 
 shell_eval() {
@@ -166,6 +197,7 @@ login2() {
     fi
 
     python3 "$here/clipboard_client.py" "clipman e2e copy" > "$WORK/client.log" 2>&1 &
+    local client=$!
     if wait_for 15 history_has "clipman e2e copy"; then
         pass "a copy reached the history"
     else
@@ -185,6 +217,59 @@ login2() {
     else
         fail "scripts/extension-smoke.sh" "$WORK/smoke.out"
     fi
+
+    # While that client runs, another one cannot take the clipboard.
+    wait "$client"
+    # Count the clipboard owners, so a copy that never took the clipboard
+    # cannot pass the checks below.
+    shell_eval "global._e2eOwners = 0; global.display.get_selection().connect('owner-changed',
+        (_s, type) => { if (type === imports.gi.Meta.SelectionType.SELECTION_CLIPBOARD) global._e2eOwners++; });
+        'counting'" > /dev/null
+
+    # A long copy is read in many chunks, and must arrive whole.
+    python3 "$here/clipboard_client.py" y 1048576 > "$WORK/long.log" 2>&1
+    if [ "$(newest_length)" = 1048576 ]; then
+        pass "a 1 MB copy reached the history whole"
+    else
+        fail "a 1 MB copy did not reach the history whole ($(newest_length) characters)" "$WORK/long.log"
+    fi
+
+    # The extension reads a copy only up to the daemon's 10 MB limit.
+    # Before, the Shell read all of it: its peak grew by 273 MB for 50 MB.
+    local shell peak after owners
+    shell=$(shell_pid)
+    peak=$(peak_mb "$shell")
+    owners=$(shell_eval "global._e2eOwners" | tr -dc '0-9')
+    python3 "$here/clipboard_client.py" z 52428800 > "$WORK/big.log" 2>&1
+    after=$(peak_mb "$shell")
+    if [ "$(shell_eval "global._e2eOwners" | tr -dc '0-9')" -le "$owners" ]; then
+        fail "the 50 MB copy did not take the clipboard" "$WORK/big.log"
+    elif [ $((after - peak)) -lt 100 ]; then
+        pass "a 50 MB copy raised the Shell's peak memory by $((after - peak)) MB ($peak to $after)"
+    else
+        fail "a 50 MB copy raised the Shell's peak memory by $((after - peak)) MB ($peak to $after)" "$WORK/big.log"
+    fi
+
+    # An app that owns the clipboard but never sends the data: each read
+    # must end, at the next copy or after 5 s, and close its pipe. Before,
+    # every read stayed open until the app quit. GNOME's own clipboard
+    # manager keeps one read open, with or without Clipman.
+    local pipes stuck
+    pipes=$(pipe_count "$shell")
+    python3 "$here/stuck_clipboard_client.py" 20 > "$WORK/stuck.log" 2>&1 &
+    stuck=$!
+    if wait_for 20 grep -q "done:" "$WORK/stuck.log"; then
+        sleep 7
+        local left=$(( $(pipe_count "$shell") - pipes ))
+        if [ "$left" -le 1 ]; then
+            pass "reads from a stuck app end (extra pipes open: $left)"
+        else
+            fail "reads from a stuck app stay open (extra pipes open: $left)" "$WORK/stuck.log"
+        fi
+    else
+        fail "the stuck clipboard app did not run" "$WORK/stuck.log"
+    fi
+    kill "$stuck" 2>/dev/null
 
     # Before #307, one open left a core at 100 % (about 200 ticks in 2 s).
     # Idle is far below that, though software rendering on a CI runner

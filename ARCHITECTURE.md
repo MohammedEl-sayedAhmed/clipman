@@ -58,7 +58,10 @@ loads inside the Shell's gjs process. It is compatible with GNOME
 Shell 45 through 51. On clipboard `owner-changed` events the
 extension reads the new content via a MIME-type fallback chain
 (`text/plain;charset=utf-8` -> `UTF8_STRING` -> `text/plain` ->
-`STRING`) and forwards it to the daemon over D-Bus. It also exposes
+`STRING`) and forwards it to the daemon over D-Bus. It reads at most
+10 MB, the daemon's limit, and drops a longer clip. A read ends at the
+next copy or after 5 s, and closes its pipe at once. Nothing is read
+while incognito is on or no process owns `com.clipman.Daemon`. It also exposes
 its own D-Bus surface for the daemon to invoke paste keystrokes and
 popup placement (see [IPC contract](#ipc-contract) below).
 
