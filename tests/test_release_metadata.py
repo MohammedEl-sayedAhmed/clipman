@@ -2,15 +2,30 @@
 
 import json
 import re
+import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+# What scripts/bump-version.sh edits, and the scripts it runs.
+BUMPED_FILES = (
+    "pyproject.toml",
+    "clipman/_version.py",
+    "snap/snapcraft.yaml",
+    "aur/PKGBUILD",
+    "aur/.SRCINFO",
+    "CITATION.cff",
+    "scripts/bump-version.sh",
+    "scripts/update-aur.sh",
+)
+BUMPED_GLOBS = ("flathub/*.json", "data/*.metainfo.xml")
 
-def _read(rel):
-    return (ROOT / rel).read_text(encoding="utf-8")
+
+def _read(rel, root=ROOT):
+    return (root / rel).read_text(encoding="utf-8")
 
 
 def _first(pattern, text):
@@ -18,39 +33,74 @@ def _first(pattern, text):
     return match.group(1) if match else None
 
 
+def _versions(root):
+    """Return the version that each packaging file under root carries."""
+    manifest = next(root.glob("flathub/*.json"))
+    found = {
+        "clipman/_version.py": _first(
+            r'^__version__ = "([^"]+)"', _read("clipman/_version.py", root)
+        ),
+        "snap/snapcraft.yaml": _first(
+            r"^version: '([^']+)'", _read("snap/snapcraft.yaml", root)
+        ),
+        "CITATION.cff": _first(r"^version: (\S+)", _read("CITATION.cff", root)),
+        "aur/PKGBUILD": _first(r"^pkgver=(\S+)", _read("aur/PKGBUILD", root)),
+        "aur/.SRCINFO": _first(r"^\tpkgver = (\S+)", _read("aur/.SRCINFO", root)),
+        manifest.name: _first(
+            r"/clipman/archive/refs/tags/v([^/\"]+)\.tar\.gz",
+            manifest.read_text(encoding="utf-8"),
+        ),
+    }
+    for metainfo in sorted(root.glob("data/*.metainfo.xml")):
+        found[metainfo.name] = _first(
+            r'<release version="([^"]+)"', metainfo.read_text(encoding="utf-8")
+        )
+    return found
+
+
+def _srcinfo(root):
+    """Return the .SRCINFO that update-aur.sh renders from root's PKGBUILD."""
+    return subprocess.run(
+        ["bash", "scripts/update-aur.sh", "--print-srcinfo"],
+        cwd=root, capture_output=True, text=True, check=True,
+    ).stdout
+
+
 class TestReleaseMetadata(unittest.TestCase):
     def test_version_is_the_same_everywhere(self):
         version = _first(r'^version = "([^"]+)"', _read("pyproject.toml"))
-        manifest = next(ROOT.glob("flathub/*.json"))
-        found = {
-            "clipman/_version.py": _first(
-                r'^__version__ = "([^"]+)"', _read("clipman/_version.py")
-            ),
-            "snap/snapcraft.yaml": _first(
-                r"^version: '([^']+)'", _read("snap/snapcraft.yaml")
-            ),
-            "CITATION.cff": _first(r"^version: (\S+)", _read("CITATION.cff")),
-            "aur/PKGBUILD": _first(r"^pkgver=(\S+)", _read("aur/PKGBUILD")),
-            "aur/.SRCINFO": _first(r"^\tpkgver = (\S+)", _read("aur/.SRCINFO")),
-            manifest.name: _first(
-                r"/clipman/archive/refs/tags/v([^/\"]+)\.tar\.gz",
-                manifest.read_text(encoding="utf-8"),
-            ),
-        }
-        for metainfo in sorted(ROOT.glob("data/*.metainfo.xml")):
-            found[metainfo.name] = _first(
-                r'<release version="([^"]+)"', metainfo.read_text(encoding="utf-8")
-            )
-        for name, value in found.items():
+        for name, value in _versions(ROOT).items():
             with self.subTest(file=name):
                 self.assertEqual(value, version)
 
     def test_srcinfo_matches_pkgbuild(self):
-        result = subprocess.run(
-            ["bash", "scripts/update-aur.sh", "--print-srcinfo"],
-            cwd=ROOT, capture_output=True, text=True, check=True,
-        )
-        self.assertEqual(result.stdout, _read("aur/.SRCINFO"))
+        self.assertEqual(_srcinfo(ROOT), _read("aur/.SRCINFO"))
+
+    def test_bump_version_moves_every_file(self):
+        # A file the bump leaves behind fails the release pre-flight and
+        # the two tests above. aur/.SRCINFO was one, before the bump
+        # rendered it.
+        with tempfile.TemporaryDirectory() as tmp:
+            copy = Path(tmp)
+            sources = [ROOT / rel for rel in BUMPED_FILES]
+            for pattern in BUMPED_GLOBS:
+                sources.extend(ROOT.glob(pattern))
+            for src in sources:
+                dest = copy / src.relative_to(ROOT)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src, dest)
+            subprocess.run(
+                ["bash", "scripts/bump-version.sh", "9.8.7"],
+                cwd=copy, capture_output=True, text=True, check=True,
+            )
+            self.assertEqual(
+                _first(r'^version = "([^"]+)"', _read("pyproject.toml", copy)),
+                "9.8.7",
+            )
+            for name, value in _versions(copy).items():
+                with self.subTest(file=name):
+                    self.assertEqual(value, "9.8.7")
+            self.assertEqual(_srcinfo(copy), _read("aur/.SRCINFO", copy))
 
     def test_tarball_hash_is_the_same_in_aur_and_flatpak(self):
         sha = _first(r"^sha256sums=\('([0-9a-f]{64})'\)", _read("aur/PKGBUILD"))

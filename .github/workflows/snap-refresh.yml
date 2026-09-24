@@ -55,8 +55,11 @@ on:
 
 permissions: {}
 
+# Publishing runs (schedule, dispatch) get their own group: GitHub keeps
+# one pending run per group, so a push build sharing the group could
+# replace a pending weekly publish.
 concurrency:
-  group: snap-refresh-${{ github.workflow }}-${{ github.ref }}
+  group: snap-refresh-${{ github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'publish' || 'build' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -90,16 +93,43 @@ jobs:
               *) echo "::error::could not resolve the latest release tag (got '${tag}')" >&2; return 1 ;;
             esac
           }
+          # True when the store's stable channel already holds a version
+          # newer than $1. That happens when a release got as far as the
+          # store but not the GitHub Release: rebuilding the older tag
+          # would roll stable users back.
+          store_is_ahead() {
+            local store
+            store=$(curl -fsS -H 'Snap-Device-Series: 16' \
+              'https://api.snapcraft.io/v2/snaps/info/clipman?fields=version' \
+              | jq -r '.["channel-map"][]
+                        | select(.channel.name == "stable" and .channel.architecture == "amd64")
+                        | .version' | head -n 1) || store=""
+            [ -n "$store" ] && [ "$store" != "${1#v}" ] &&
+              [ "$(printf '%s\n%s\n' "$store" "${1#v}" | sort -V | tail -n 1)" = "$store" ]
+          }
           case "$EVENT" in
             schedule)
               tag="$(latest_tag)" || exit 1
-              matrix=$(jq -nc --arg tag "$tag" '[
-                {ref: "main", channels: "edge",                    slug: "edge"},
-                {ref: $tag,   channels: "beta,candidate,stable",   slug: "stable"}
-              ]')
+              if store_is_ahead "$tag"; then
+                echo "::warning::the store's stable is newer than the latest GitHub Release ($tag): a release is half-finished. Rebuilding edge only, so stable is not rolled back."
+                matrix='[{"ref": "main", "channels": "edge", "slug": "edge"}]'
+              else
+                matrix=$(jq -nc --arg tag "$tag" '[
+                  {ref: "main", channels: "edge",                    slug: "edge"},
+                  {ref: $tag,   channels: "beta,candidate,stable",   slug: "stable"}
+                ]')
+              fi
               ;;
             workflow_dispatch)
-              if [ "$CHANNEL" = "edge" ]; then ref="main"; else ref="$(latest_tag)" || exit 1; fi
+              if [ "$CHANNEL" = "edge" ]; then
+                ref="main"
+              else
+                ref="$(latest_tag)" || exit 1
+                if store_is_ahead "$ref"; then
+                  echo "::error::the store's stable is newer than the latest GitHub Release ($ref): finish that release first, or this would roll $CHANNEL back."
+                  exit 1
+                fi
+              fi
               matrix=$(jq -nc --arg ref "$ref" --arg ch "$CHANNEL" \
                 '[{ref: $ref, channels: $ch, slug: $ch}]')
               ;;

@@ -185,6 +185,23 @@ jobs:
       - name: Build sdist + wheel
         run: python -m build
 
+      # The same check as test.yml's wheel smoke, on the files about to be
+      # published: 1.2.1 reached PyPI with a console script that could not
+      # start (#285).
+      - name: Smoke-test the wheel before it can be published
+        env:
+          VERSION: ${{ needs.pre-flight.outputs.version }}
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --no-deps dist/*.whl
+          tar tzf dist/*.tar.gz | grep -q 'clipman/style.css'
+          # Leave the checkout so the installed package, not the source
+          # tree, is imported.
+          cd /tmp
+          test "$(/tmp/smoke/bin/clipman --version)" = "clipman $VERSION"
+          /tmp/smoke/bin/python -m clipman --version
+          /tmp/smoke/bin/python -c "from importlib.resources import files; assert files('clipman').joinpath('style.css').is_file()"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -254,7 +271,7 @@ jobs:
           if-no-files-found: error
 
   publish-snap:
-    name: Publish to Snap Store (stable)
+    name: Publish to Snap Store (stable, candidate, beta)
     needs: [pre-flight, build-snap]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -295,14 +312,16 @@ jobs:
           fi
           echo "snap=$snap_file" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to Snap Store (stable channel)
+      # All three channels at once. Stable alone left candidate and beta on
+      # the previous release until the weekly snap-refresh rebuilt them.
+      - name: Publish to Snap Store (stable, candidate, beta)
         if: steps.creds.outputs.enabled == 'true'
         uses: snapcore/action-publish@214b86e5ca036ead1668c79afb81e550e6c54d40 # v1.2.0
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         with:
           snap: ${{ steps.resolve.outputs.snap }}
-          release: stable
+          release: stable,candidate,beta
 
   build-distpkgs:
     name: Build .deb + .rpm
@@ -433,106 +452,6 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-  build-appimage:
-    name: Build AppImage
-    needs: [pre-flight, build-pypi]
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    permissions:
-      contents: read
-    steps:
-      - name: Harden runner
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
-        with:
-          egress-policy: audit
-
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ needs.pre-flight.outputs.tag }}
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: "3.12"
-
-      - name: Download PyPI wheel artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: pypi-dist
-          path: dist
-
-      - name: Install python-appimage + FUSE2
-        timeout-minutes: 4
-        run: |
-          opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=60)
-          sudo apt-get update "${opts[@]}"
-          # Ubuntu 24.04 (noble) renamed libfuse2 -> libfuse2t64 (time_t transition).
-          # Prefer the t64 package; fall back to libfuse2 for older runners.
-          sudo apt-get install -y "${opts[@]}" libfuse2t64 || sudo apt-get install -y "${opts[@]}" libfuse2
-          pip install python-appimage==1.4.5
-
-      - name: Stage app recipe
-        env:
-          VERSION: ${{ needs.pre-flight.outputs.version }}
-        run: |
-          stage=appimage-src
-          rm -rf "$stage"
-          install -d "$stage"
-          # Entrypoint
-          cat > "$stage/entrypoint.sh" <<'EOF'
-          #!/bin/sh
-          "{{ python-executable }}" -m clipman "$@"
-          EOF
-          chmod +x "$stage/entrypoint.sh"
-
-          # Requirements file points python-appimage to install our wheel.
-          cp dist/clipman_clipboard-${VERSION}-py3-none-any.whl "$stage"/
-          cat > "$stage/requirements.txt" <<EOF
-          ./clipman_clipboard-${VERSION}-py3-none-any.whl
-          EOF
-
-          # .desktop + icon required by AppImage spec.
-          cat > "$stage/clipman.desktop" <<'EOF'
-          [Desktop Entry]
-          Name=Clipman
-          Comment=Clipboard history manager for GNOME on Wayland
-          Exec=clipman
-          Icon=clipman
-          Terminal=false
-          Type=Application
-          Categories=Utility;
-          EOF
-          cp data/com.clipman.Clipman.svg "$stage/clipman.svg"
-
-      - name: Build AppImage
-        env:
-          VERSION: ${{ needs.pre-flight.outputs.version }}
-        run: |
-          # python-appimage bundles Python 3.12 + wheel. NOT bundled: GTK
-          # runtime, PyGObject bindings — those still need to be installed
-          # system-wide (python3-gi + gir1.2-gtk-4.0 + gir1.2-adw-1). Documented in the
-          # release notes Assets section.
-          python-appimage build app -p 3.12 appimage-src/ || \
-            echo "::warning::AppImage build failed — Python-GTK packaging is brittle. \
-            Continuing without the AppImage artifact; .deb/.rpm/snap/pypi all built fine."
-          # Rename to a deterministic name if the build succeeded.
-          built=$(ls Clipman*-x86_64.AppImage 2>/dev/null | head -n 1 || true)
-          if [ -n "$built" ]; then
-            mv "$built" "clipman-${VERSION}-x86_64.AppImage"
-            ls -l "clipman-${VERSION}-x86_64.AppImage"
-          fi
-
-      - name: Upload AppImage artifact (if produced)
-        if: hashFiles('clipman-*-x86_64.AppImage') != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: appimage-${{ needs.pre-flight.outputs.tag }}
-          path: clipman-*-x86_64.AppImage
-          retention-days: 30
-          if-no-files-found: warn
-
   bundle-extension:
     name: Bundle GNOME Shell extension
     needs: [pre-flight, tests]
@@ -581,7 +500,7 @@ jobs:
 
   github-release:
     name: Create GitHub Release
-    needs: [pre-flight, publish-pypi, publish-snap, bundle-extension, build-distpkgs, build-appimage]
+    needs: [pre-flight, publish-pypi, publish-snap, bundle-extension, build-distpkgs]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -616,13 +535,6 @@ jobs:
           name: distpkgs-${{ needs.pre-flight.outputs.tag }}
           path: release-assets
 
-      - name: Download AppImage (optional)
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        continue-on-error: true
-        with:
-          name: appimage-${{ needs.pre-flight.outputs.tag }}
-          path: release-assets
-
       - name: List assembled assets
         run: ls -lh release-assets
 
@@ -640,32 +552,26 @@ jobs:
 
             | File | Use case | Channel |
             |------|----------|---------|
-            | `clipman_clipboard-*.whl` | `pip install --upgrade clipman-clipboard` | PyPI (also auto-published) |
+            | `clipman_clipboard-*.whl` | `pipx install --system-site-packages clipman-clipboard` | PyPI (also auto-published) |
             | `clipman_clipboard-*.tar.gz` | source build via `pip install` | PyPI (also auto-published) |
             | `clipman_*.deb` | `sudo apt install ./clipman_*.deb` | Debian / Ubuntu (system) |
             | `clipman-*.rpm` | `sudo dnf install ./clipman-*.rpm` | Fedora / RHEL / openSUSE (system) |
-            | `clipman_*.snap` | `sudo snap install --dangerous ./clipman_*.snap` | Any distro w/ snapd (also auto-published to Snap Store stable) |
-            | `clipman-*-x86_64.AppImage` | `chmod +x ./clipman-*.AppImage && ./clipman-*.AppImage` | Any glibc Linux (requires system `python3-gi`/`python3-dbus`) |
+            | `clipman_*.snap` | `sudo snap install --dangerous ./clipman_*.snap` | Any distro w/ snapd (also auto-published to the Snap Store: stable, candidate, beta) |
             | `clipman-extension-*.zip` | upload at <https://extensions.gnome.org/upload/> or unzip into `~/.local/share/gnome-shell/extensions/` | GNOME Extensions website (manual) |
             | `Source code (zip / tar.gz)` | auto-generated by GitHub | git checkout |
 
             **Important install caveats**
 
-            - The `.deb` / `.rpm` install the daemon to `/usr/bin/clipman` and the Python module to `/usr/lib/clipman/`, but **do not** install the GNOME Shell extension or register the `Super+V` keybinding — those are per-user. After installing the package, run upstream `install.sh` from a source checkout, or follow the per-user setup in `docs/development.md`.
-            - The `AppImage` bundles a Python 3.12 runtime + clipman, but **not** GTK or PyGObject. It still requires system `python3-gi`, `gir1.2-gtk-4.0` and `gir1.2-adw-1` packages installed (almost every desktop Linux already has them). GTK can't be trivially bundled in an AppImage; if a full self-contained binary is critical, the Snap or Flatpak builds are better fits.
+            - The `.deb` / `.rpm` install the daemon to `/usr/bin/clipman` and the Python module to `/usr/lib/clipman/`, but **do not** enable the GNOME Shell extension, start the daemon at login, or register the `Super+V` keybinding: those are per-user and not automated yet (#323).
 
             ### GNOME Shell extension (manual step — EGO has no upload API)
 
             Download `clipman-extension-${{ needs.pre-flight.outputs.tag }}.zip` and upload it at <https://extensions.gnome.org/upload/>. Existing source installs pick up the new extension automatically via `install.sh`.
           draft: false
           prerelease: false
-          # Tolerate missing patterns: the AppImage build is best-effort
-          # (Python+GTK packaging is brittle). We'd rather ship a release
-          # without the AppImage than fail the whole pipeline on that one
-          # glob. .deb / .rpm / snap / extension / wheel / sdist are all
-          # produced by required-success jobs, so a missing one of those
-          # would already have failed an upstream job before we got here.
-          fail_on_unmatched_files: false
+          # Every file comes from a job that must succeed first, so a
+          # missing one means a broken glob: fail loudly.
+          fail_on_unmatched_files: true
           files: |
             release-assets/clipman-extension-${{ needs.pre-flight.outputs.tag }}.zip
             release-assets/clipman_*.snap
@@ -673,7 +579,6 @@ jobs:
             release-assets/clipman_clipboard-*.whl
             release-assets/clipman_*.deb
             release-assets/clipman-*.rpm
-            release-assets/clipman-*-x86_64.AppImage
 
   publish-aur:
     # Refresh the AUR package after a successful GitHub Release.

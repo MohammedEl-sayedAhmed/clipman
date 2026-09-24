@@ -70,8 +70,23 @@ All notable changes to Clipman are documented in this file.
   would crash on its first window. It is declared as package data, and a
   new CI job builds the wheel, installs it into a clean venv and runs the
   entry point.
-- The AppImage entrypoint ran `python -m clipman.app`, which has no
-  `__main__` and exited at once; it now runs `python -m clipman`.
+- The release pipeline runs the same wheel check before it publishes to
+  PyPI, and fails if the wheel does not report the tag's version.
+- `scripts/bump-version.sh` now regenerates `aur/.SRCINFO` too. Without
+  it, the release pre-flight and two tests failed on every version bump.
+- The AppImage job is removed. It passed the wheel by a relative path
+  that never resolved, hid the failure behind a warning, and so no
+  release ever had an AppImage, though the release notes listed one. Even
+  when built, it could not start, because the bundled Python cannot see
+  the system's GTK bindings. #319 tracks a real, self-contained AppImage.
+- Releases publish the snap to stable, candidate and beta together, and
+  the weekly snap refresh refuses to rebuild an older tag onto a store
+  channel that already holds a newer version, so a half-finished release
+  can no longer roll stable back. Its publishing runs no longer share a
+  concurrency group with push builds, which could cancel a pending
+  weekly publish.
+- `setuptools>=77`: the PEP 639 license string needs it, and builds
+  without isolation failed on 68 to 76.
 
 ### Fixed — sensitive-data detection deleted ordinary clips
 
