@@ -1,18 +1,23 @@
-/* Shared theme persistence for every design-workspace page.
+/* Shared theme handling for every design-workspace page.
  *
- * Convention: every page in docs/design/* sets <body class="theme-dark"> or
- * "theme-light" and shows two toggle buttons inside .theme-toggle. The
- * marketing page at docs/index.html uses <html data-theme="dark|light"> and
- * the same localStorage key. This file:
+ * Convention: every page in docs/design/* sets <body class="theme-dark">
+ * (the default, as on the marketing page) and shows two toggle buttons
+ * inside .theme-toggle. The marketing page at docs/index.html uses
+ * <html data-theme="dark|light"> and the same localStorage key. This file:
  *
- *   1. On load, reads the shared localStorage key ('clipman-theme') and
- *      applies the resulting class to <body>, preserving any other classes
- *      that were on it (e.g. .embed when this page is iframed).
- *   2. Synchronises the .active state of the two .theme-toggle buttons so
- *      the UI reflects the active theme.
- *   3. Listens for clicks on the toggle buttons and writes back to the
+ *   1. On load, picks the theme: ?theme= when the URL has it (the
+ *      marketing page passes it to the popup mockup it embeds), else the
+ *      shared localStorage key ('clipman-theme'), else the page's own
+ *      class. It always applies it, preserving any other classes on
+ *      <body> (e.g. .embed when this page is iframed), and always marks
+ *      the matching toggle button active. Before, it did both only when
+ *      a theme was saved, so a first visit showed the light page with
+ *      "Dark" marked active.
+ *   2. Listens for clicks on the toggle buttons and writes back to the
  *      same localStorage key so the next navigation (and the iframe host)
  *      picks up the preference.
+ *   3. Follows the theme of the page that embeds this one, and of other
+ *      tabs.
  *
  * Loading via <script src="theme.js" defer> at the END of the page means
  * none of the page's own inline scripts need to know about persistence —
@@ -42,17 +47,25 @@
         syncTogglesUI(theme);
     }
 
+    // The page's theme toggle, and any mockup control marked
+    // data-mirrors-theme (the Preferences "Color scheme" row), select the
+    // button named after the theme.
     function syncTogglesUI(theme) {
         const wantLabel = (theme === 'light') ? 'light' : 'dark';
-        document.querySelectorAll('.theme-toggle button').forEach(btn => {
+        document.querySelectorAll(
+            '.theme-toggle button, [data-mirrors-theme] button'
+        ).forEach(btn => {
             const isMatch = (btn.textContent || '').trim().toLowerCase() === wantLabel;
             btn.classList.toggle('active', isMatch);
         });
     }
 
-    // 1. Apply persisted theme on load (before anything visible flashes).
-    const saved = readSaved();
-    if (saved) applyToBody(saved);
+    // 1. Apply the theme on load, and mark its button.
+    const param = new URLSearchParams(location.search).get('theme');
+    const pageTheme = document.body.classList.contains('theme-light')
+        ? 'light' : 'dark';
+    applyToBody((param === 'light' || param === 'dark')
+        ? param : (readSaved() || pageTheme));
 
     // 2. Intercept toggle clicks so we ALSO write the value back to storage.
     //    Page-specific onclick handlers still run and update the body class —
@@ -74,5 +87,16 @@
         if (e.key === KEY && (e.newValue === 'light' || e.newValue === 'dark')) {
             applyToBody(e.newValue);
         }
+    });
+
+    // The embedding page posts its theme when it changes. Only messages
+    // from this origin count (and the file:// case used during local
+    // preview), which also satisfies CodeQL's js/missing-origin-check.
+    window.addEventListener('message', (e) => {
+        if (!e || !e.data) return;
+        const sameOrigin = (e.origin === window.location.origin) || (e.origin === 'null');
+        if (!sameOrigin || e.data.type !== 'clipman-theme') return;
+        const v = e.data.value;
+        if (v === 'light' || v === 'dark') applyToBody(v);
     });
 })();
