@@ -23,7 +23,10 @@ for _name in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_H
 # The keybinding code runs `gsettings set`. With the default backend that
 # writes the user's real GNOME settings; the memory backend keeps nothing.
 os.environ["GSETTINGS_BACKEND"] = "memory"
-os.environ["GTK_A11Y"] = "none"
+# GTK's in-process accessibility backend: widgets keep their accessible
+# names, so tests can check them, and nothing talks to the session's
+# accessibility bus. ("none" dropped the names.)
+os.environ["GTK_A11Y"] = "test"
 os.environ["NO_AT_BRIDGE"] = "1"
 
 

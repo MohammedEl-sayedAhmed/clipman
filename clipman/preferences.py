@@ -179,6 +179,9 @@ class ClipmanPreferences(Adw.Dialog):
             box.append(Gtk.Image.new_from_icon_name(page.get_icon_name()))
             box.append(Gtk.Label(label=page.get_title(), xalign=0))
             row.set_child(box)
+            row.update_property(
+                [Gtk.AccessibleProperty.LABEL], [page.get_title()]
+            )
             row._page_id = pid
             row._page_title = page.get_title()
             self._sidebar.append(row)
@@ -358,6 +361,9 @@ class ClipmanPreferences(Adw.Dialog):
         accent_dialog.set_with_alpha(False)
         self._accent_btn = Gtk.ColorDialogButton(dialog=accent_dialog)
         self._accent_btn.set_valign(Gtk.Align.CENTER)
+        self._accent_btn.update_property(
+            [Gtk.AccessibleProperty.LABEL], [_("Accent color")]
+        )
         argba = Gdk.RGBA()
         argba.parse(self._accent_display_hex(cur_accent))
         self._accent_btn.set_rgba(argba)
@@ -382,6 +388,9 @@ class ClipmanPreferences(Adw.Dialog):
         color_dialog.set_with_alpha(False)
         self._font_color_btn = Gtk.ColorDialogButton(dialog=color_dialog)
         self._font_color_btn.set_valign(Gtk.Align.CENTER)
+        self._font_color_btn.update_property(
+            [Gtk.AccessibleProperty.LABEL], [_("Font color")]
+        )
         rgba = Gdk.RGBA()
         rgba.parse(self._font_color_display_hex(current_font_color))
         self._font_color_btn.set_rgba(rgba)

@@ -1718,6 +1718,130 @@ class TestPopupBehaviour(_WidgetTestCase):
         self.assertTrue(window._kbd_chip.get_visible())
 
 
+class _FakeListItem:
+    """Stands in for the Gtk.ListItem the list factory passes, and keeps
+    what the row tells a screen reader."""
+
+    def __init__(self, item=None):
+        self.item = item
+        self.child = None
+        self.label = None
+        self.description = None
+
+    def set_child(self, child):
+        self.child = child
+
+    def get_child(self):
+        return self.child
+
+    def get_item(self):
+        return self.item
+
+    def set_accessible_label(self, label):
+        self.label = label
+
+    def set_accessible_description(self, description):
+        self.description = description
+
+
+class TestAccessibleNames(_WidgetTestCase):
+    """UI-15: key controls had no accessible name, so a screen reader
+    could not tell the filters, rows or colour buttons apart."""
+
+    def _window(self, db):
+        from clipman.window import ClipmanWindow
+
+        app = self._make_app("com.clipman.TestA11y")
+        return ClipmanWindow(application=app, db=db, monitor=None)
+
+    @staticmethod
+    def _named(widget):
+        from gi.repository import Gtk
+
+        return Gtk.test_accessible_has_property(
+            widget, Gtk.AccessibleProperty.LABEL
+        )
+
+    def test_popup_controls_are_named(self):
+        window = self._window(self._make_db())
+        self.assertTrue(self._named(window.search_entry))
+        for fid, button in window._filter_buttons.items():
+            with self.subTest(filter=fid):
+                self.assertTrue(self._named(button))
+
+    def test_preferences_controls_are_named(self):
+        from clipman.preferences import ClipmanPreferences
+
+        db = self._make_db()
+        prefs = ClipmanPreferences(db, self._window(db),
+                                   on_setting_changed=None)
+        rows = []
+        row = prefs._sidebar.get_first_child()
+        while row is not None:
+            rows.append(row)
+            row = row.get_next_sibling()
+        self.assertEqual(len(rows), 6)
+        for row in rows:
+            with self.subTest(page=row._page_id):
+                self.assertTrue(self._named(row))
+        self.assertTrue(self._named(prefs._accent_btn))
+        self.assertTrue(self._named(prefs._font_color_btn))
+
+    def _bound(self, window, item, list_item=None):
+        list_item = list_item or _FakeListItem()
+        if list_item.child is None:
+            window._row_setup(None, list_item)
+        list_item.item = item
+        window._row_bind(None, list_item)
+        return list_item
+
+    def test_clip_rows_are_named_without_secrets(self):
+        from clipman.window import ClipItem
+
+        db = self._make_db()
+        db.add_entry("text", content_text="hello world")
+        pinned = db.add_entry("text", content_text="\n  pinned note")
+        db.toggle_pin(pinned)
+        db.add_entry("text", content_text="private words 7Q",
+                     sensitive=True)
+        window = self._window(db)
+        rows = {e["content_text"]: e for e in db.get_entries()}
+
+        plain = self._bound(window, ClipItem(rows["hello world"], "entry"))
+        self.assertEqual(plain.label, "hello world")
+        self.assertTrue(plain.description)
+
+        star = self._bound(window, ClipItem(rows["\n  pinned note"], "entry"))
+        self.assertEqual(star.label, "pinned note")
+        self.assertTrue(star.description.startswith("Pinned · "))
+
+        # The row code must hide the text of a clip marked sensitive,
+        # whatever it looks like.
+        hidden = self._bound(
+            window, ClipItem(rows["private words 7Q"], "entry"))
+        self.assertEqual(hidden.label, "Sensitive clip")
+        self.assertNotIn("7Q", hidden.label + hidden.description)
+
+    def test_row_reused_for_a_snippet_drops_the_sensitive_look(self):
+        """A row last bound to a sensitive clip kept its masked styling,
+        and would have read "Sensitive clip", when reused for a snippet."""
+        from clipman.window import ClipItem
+
+        db = self._make_db()
+        db.add_entry("text", content_text="private words 7Q",
+                     sensitive=True)
+        db.add_snippet("Signature", "Best regards")
+        window = self._window(db)
+        list_item = self._bound(
+            window, ClipItem(db.get_entries()[0], "entry"))
+        self._bound(window, ClipItem(db.get_snippets()[0], "snippet"),
+                    list_item)
+        self.assertFalse(list_item.child._clip_title.has_css_class("masked"))
+        self.assertFalse(
+            list_item.child._clip_subtitle.has_css_class("warning"))
+        self.assertEqual(list_item.label, "Signature")
+
+
 class TestPresentFocused(_WidgetTestCase):
     """The deferred search-box focus after a show must run exactly once."""
 

@@ -700,6 +700,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self.search_entry.set_placeholder_text(_("Search clipboard history…"))
         self.search_entry.set_hexpand(True)
         self.search_entry.add_css_class("clipman-search")
+        # A screen reader names controls by their accessible label, not
+        # by a placeholder or a tooltip-less child.
+        self.search_entry.update_property(
+            [Gtk.AccessibleProperty.LABEL], [_("Search clipboard history")]
+        )
         self.search_entry.connect("search-changed", self._on_search_changed)
         # Right-aligned keyboard hint inside the field (mockup's ⌘/ chip);
         # "/" focuses the search from anywhere in the popup.
@@ -746,6 +751,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         ]:
             btn = Gtk.ToggleButton()
             btn.add_css_class("filter-tab")
+            btn.update_property([Gtk.AccessibleProperty.LABEL], [label])
             content = Gtk.Box(
                 orientation=Gtk.Orientation.HORIZONTAL, spacing=6
             )
@@ -1481,6 +1487,17 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._bind_snippet_row(row, item.data)
         else:
             self._bind_entry_row(row, item.data)
+        # What a screen reader says for the row: its title and meta line,
+        # and never a sensitive clip's text.
+        if row._clip_title.has_css_class("masked"):
+            label = _("Sensitive clip")
+        else:
+            label = row._clip_title.get_text().removeprefix("★ ")
+        details = row._clip_subtitle.get_text()
+        if item.kind == "entry" and item.data.get("pinned"):
+            details = _("Pinned · {details}").format(details=details)
+        list_item.set_accessible_label(label)
+        list_item.set_accessible_description(details)
 
     # ------------------------------------------------------------------
     # Section grouping: ★ Pinned / Today / Yesterday / Earlier
@@ -1690,6 +1707,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
         return info
 
     def _bind_snippet_row(self, row, snippet):
+        # The row may last have shown a sensitive clip.
+        row._clip_title.remove_css_class("masked")
+        row._clip_subtitle.remove_css_class("warning")
         row._clip_title.set_text(snippet["name"])
         uses = snippet.get("use_count") or 0
         # Mockup meta: "Snippet · used 14×"; before first use show the

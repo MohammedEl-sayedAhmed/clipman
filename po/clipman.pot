@@ -17,8 +17,8 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: clipman/app.py:275 clipman/edge_states.py:223 clipman/preferences.py:775
-#: clipman/preferences.py:846
+#: clipman/app.py:275 clipman/edge_states.py:223 clipman/preferences.py:784
+#: clipman/preferences.py:855
 msgid "Restore from backup"
 msgstr ""
 
@@ -332,277 +332,277 @@ msgstr ""
 msgid "Light"
 msgstr ""
 
-#: clipman/preferences.py:148 clipman/preferences.py:187 clipman/window.py:638
+#: clipman/preferences.py:148 clipman/preferences.py:190 clipman/window.py:638
 msgid "Preferences"
 msgstr ""
 
-#: clipman/preferences.py:296
+#: clipman/preferences.py:299
 msgid "Appearance"
 msgstr ""
 
-#: clipman/preferences.py:301
+#: clipman/preferences.py:304
 msgid "Theme"
 msgstr ""
 
-#: clipman/preferences.py:303
+#: clipman/preferences.py:306
 msgid "Choose how Clipman looks. The popup updates immediately."
 msgstr ""
 
-#: clipman/preferences.py:308
+#: clipman/preferences.py:311
 msgid "Color scheme"
 msgstr ""
 
-#: clipman/preferences.py:310
+#: clipman/preferences.py:313
 msgid "Dark uses Catppuccin Mocha; Light uses warm stone."
 msgstr ""
 
-#: clipman/preferences.py:327
+#: clipman/preferences.py:330
 msgid "Catppuccin theme"
 msgstr ""
 
-#: clipman/preferences.py:329
+#: clipman/preferences.py:332
 msgid "Off: follow your system GNOME theme and accent color."
 msgstr ""
 
-#: clipman/preferences.py:343
+#: clipman/preferences.py:346
 msgid "Accent"
 msgstr ""
 
-#: clipman/preferences.py:345
+#: clipman/preferences.py:348
 msgid "Accent for controls and highlights; font color for clip text."
 msgstr ""
 
-#: clipman/preferences.py:352
+#: clipman/preferences.py:355 clipman/preferences.py:365
 msgid "Accent color"
 msgstr ""
 
-#: clipman/preferences.py:354
+#: clipman/preferences.py:357
 msgid "Toggles, active tabs and highlights. Pick any colour or reset."
 msgstr ""
 
-#: clipman/preferences.py:366 clipman/preferences.py:393
+#: clipman/preferences.py:372 clipman/preferences.py:402
 msgid "Reset to theme default"
 msgstr ""
 
-#: clipman/preferences.py:375
+#: clipman/preferences.py:381 clipman/preferences.py:392
 msgid "Font color"
 msgstr ""
 
-#: clipman/preferences.py:377
+#: clipman/preferences.py:383
 msgid "Pick any colour, or reset to the theme default."
 msgstr ""
 
-#: clipman/preferences.py:405
+#: clipman/preferences.py:414
 msgid "Layout"
 msgstr ""
 
-#: clipman/preferences.py:408
+#: clipman/preferences.py:417
 msgid "Window opacity"
 msgstr ""
 
-#: clipman/preferences.py:410
+#: clipman/preferences.py:419
 msgid "100% is fully opaque. Lower values are see-through."
 msgstr ""
 
-#: clipman/preferences.py:427
+#: clipman/preferences.py:436
 msgid "Font size"
 msgstr ""
 
-#: clipman/preferences.py:428
+#: clipman/preferences.py:437
 msgid "Affects clip content; UI chrome unchanged."
 msgstr ""
 
-#: clipman/preferences.py:437
+#: clipman/preferences.py:446
 msgid "Show count badges on filter tabs"
 msgstr ""
 
-#: clipman/preferences.py:496
+#: clipman/preferences.py:505
 msgid "Privacy"
 msgstr ""
 
-#: clipman/preferences.py:500 clipman/preferences.py:506 clipman/window.py:632
+#: clipman/preferences.py:509 clipman/preferences.py:515 clipman/window.py:632
 msgid "Incognito mode"
 msgstr ""
 
-#: clipman/preferences.py:502
+#: clipman/preferences.py:511
 msgid "When on, new copies are ignored. History stays untouched."
 msgstr ""
 
-#: clipman/preferences.py:508
+#: clipman/preferences.py:517
 msgid "Takes effect immediately and applies on every launch. Useful on shared machines or before a password manager."
 msgstr ""
 
-#: clipman/preferences.py:520
+#: clipman/preferences.py:529
 msgid "Sensitive data"
 msgstr ""
 
-#: clipman/preferences.py:522
+#: clipman/preferences.py:531
 msgid "Clips that look like API tokens, keys, credential URLs, labelled passwords or card numbers are masked and auto-cleared."
 msgstr ""
 
-#: clipman/preferences.py:528
+#: clipman/preferences.py:537
 msgid "Auto-clear sensitive clips"
 msgstr ""
 
-#: clipman/preferences.py:530
+#: clipman/preferences.py:539
 msgid "When off, detected clips stay masked but are kept."
 msgstr ""
 
-#: clipman/preferences.py:540
+#: clipman/preferences.py:549
 msgid "Auto-clear delay"
 msgstr ""
 
-#: clipman/preferences.py:541
+#: clipman/preferences.py:550
 msgid "Seconds before sensitive entries are purged."
 msgstr ""
 
-#: clipman/preferences.py:550
+#: clipman/preferences.py:559
 msgid "Purge sensitive entries now"
 msgstr ""
 
-#: clipman/preferences.py:552
+#: clipman/preferences.py:561
 msgid "Clears every entry flagged as sensitive immediately."
 msgstr ""
 
-#: clipman/preferences.py:554
+#: clipman/preferences.py:563
 msgid "Purge now"
 msgstr ""
 
-#: clipman/preferences.py:589
+#: clipman/preferences.py:598
 msgid "Shortcuts"
 msgstr ""
 
-#: clipman/preferences.py:593
+#: clipman/preferences.py:602
 msgid "Global shortcut"
 msgstr ""
 
-#: clipman/preferences.py:595
+#: clipman/preferences.py:604
 msgid "Bound through the GNOME Shell extension. Changes apply on next daemon restart."
 msgstr ""
 
-#: clipman/preferences.py:600
+#: clipman/preferences.py:609
 msgid "Toggle clipboard popup"
 msgstr ""
 
-#: clipman/preferences.py:603
+#: clipman/preferences.py:612
 msgid "Not set"
 msgstr ""
 
-#: clipman/preferences.py:605
+#: clipman/preferences.py:614
 msgid "Change…"
 msgstr ""
 
-#: clipman/preferences.py:615
+#: clipman/preferences.py:624
 msgid "Paste behaviour"
 msgstr ""
 
-#: clipman/preferences.py:619
+#: clipman/preferences.py:628
 msgid "When I select a clip"
 msgstr ""
 
-#: clipman/preferences.py:621
+#: clipman/preferences.py:630
 msgid "Auto-paste simulates a keystroke into the focused window."
 msgstr ""
 
-#: clipman/preferences.py:643
+#: clipman/preferences.py:652
 msgid "In-popup shortcuts"
 msgstr ""
 
-#: clipman/preferences.py:645
+#: clipman/preferences.py:654
 msgid "Work whenever the popup has focus. Not customisable (yet)."
 msgstr ""
 
-#: clipman/preferences.py:648
+#: clipman/preferences.py:657
 msgid "Search"
 msgstr ""
 
-#: clipman/preferences.py:649
+#: clipman/preferences.py:658
 msgid "Navigate clips"
 msgstr ""
 
-#: clipman/preferences.py:650
+#: clipman/preferences.py:659
 msgid "Paste selected"
 msgstr ""
 
-#: clipman/preferences.py:651
+#: clipman/preferences.py:660
 msgid "New snippet (Snippets view)"
 msgstr ""
 
-#: clipman/preferences.py:652
+#: clipman/preferences.py:661
 msgid "Close popup"
 msgstr ""
 
-#: clipman/preferences.py:674
+#: clipman/preferences.py:683
 msgid "Press a key combination"
 msgstr ""
 
-#: clipman/preferences.py:675
+#: clipman/preferences.py:684
 msgid "Hold modifiers (Ctrl, Alt, Super, Shift) and press a key. Press Escape to cancel."
 msgstr ""
 
-#: clipman/preferences.py:678 clipman/preferences.py:874
+#: clipman/preferences.py:687 clipman/preferences.py:883
 #: clipman/snippets_dialog.py:213 clipman/snippets_dialog.py:416
-#: clipman/window.py:999
+#: clipman/window.py:1005
 msgid "Cancel"
 msgstr ""
 
-#: clipman/preferences.py:723
+#: clipman/preferences.py:732
 msgid "Storage"
 msgstr ""
 
-#: clipman/preferences.py:727
+#: clipman/preferences.py:736
 msgid "History"
 msgstr ""
 
-#: clipman/preferences.py:730
+#: clipman/preferences.py:739
 msgid "Maximum entries to keep"
 msgstr ""
 
-#: clipman/preferences.py:732
+#: clipman/preferences.py:741
 msgid "Older entries roll off when the cap is reached."
 msgstr ""
 
-#: clipman/preferences.py:742
+#: clipman/preferences.py:751
 msgid "Database location"
 msgstr ""
 
-#: clipman/preferences.py:749
+#: clipman/preferences.py:758
 msgid "Stored entries"
 msgstr ""
 
-#: clipman/preferences.py:757
+#: clipman/preferences.py:766
 msgid "Backup &amp; restore"
 msgstr ""
 
-#: clipman/preferences.py:759
+#: clipman/preferences.py:768
 msgid "Export your history as a portable .clipman file."
 msgstr ""
 
-#: clipman/preferences.py:763 clipman/preferences.py:806
+#: clipman/preferences.py:772 clipman/preferences.py:815
 msgid "Export backup"
 msgstr ""
 
-#: clipman/preferences.py:765
+#: clipman/preferences.py:774
 msgid "Saves a copy you can store off-machine."
 msgstr ""
 
-#: clipman/preferences.py:767
+#: clipman/preferences.py:776
 msgid "Export…"
 msgstr ""
 
-#: clipman/preferences.py:777
+#: clipman/preferences.py:786
 msgid "Replaces all current history — you'll be asked to confirm."
 msgstr ""
 
-#: clipman/preferences.py:779
+#: clipman/preferences.py:788
 msgid "Restore…"
 msgstr ""
 
-#: clipman/preferences.py:866
+#: clipman/preferences.py:875
 msgid "Restore from backup?"
 msgstr ""
 
-#: clipman/preferences.py:867
+#: clipman/preferences.py:876
 msgid ""
 "This replaces your entire clipboard history with the contents of:\n"
 "\n"
@@ -611,125 +611,125 @@ msgid ""
 "Your current history is saved first as a safety copy in {folder}. The three newest safety copies are kept."
 msgstr ""
 
-#: clipman/preferences.py:875
+#: clipman/preferences.py:884
 msgid "Restore"
 msgstr ""
 
-#: clipman/preferences.py:911
+#: clipman/preferences.py:920
 msgid "Updates"
 msgstr ""
 
-#: clipman/preferences.py:915
+#: clipman/preferences.py:924
 msgid "Update channel"
 msgstr ""
 
-#: clipman/preferences.py:917
+#: clipman/preferences.py:926
 msgid "Clipman polls the GitHub Releases API at most once per {hours} hours."
 msgstr ""
 
-#: clipman/preferences.py:924
+#: clipman/preferences.py:933
 msgid "Check for updates automatically"
 msgstr ""
 
-#: clipman/preferences.py:926
+#: clipman/preferences.py:935
 msgid "Shows an in-app banner when a newer version is available."
 msgstr ""
 
-#: clipman/preferences.py:936
+#: clipman/preferences.py:945
 msgid "Check frequency"
 msgstr ""
 
-#: clipman/preferences.py:938
+#: clipman/preferences.py:947
 msgid "Every {hours} hours"
 msgstr ""
 
-#: clipman/preferences.py:945
+#: clipman/preferences.py:954
 msgid "Last checked"
 msgstr ""
 
-#: clipman/preferences.py:951 clipman/preferences.py:1009
+#: clipman/preferences.py:960 clipman/preferences.py:1018
 msgid "Version"
 msgstr ""
 
-#: clipman/preferences.py:954
+#: clipman/preferences.py:963
 msgid "Current version"
 msgstr ""
 
-#: clipman/preferences.py:958 clipman/preferences.py:962
-#: clipman/preferences.py:966
+#: clipman/preferences.py:967 clipman/preferences.py:971
+#: clipman/preferences.py:975
 msgid "Unknown"
 msgstr ""
 
-#: clipman/preferences.py:960
+#: clipman/preferences.py:969
 msgid "Latest known version"
 msgstr ""
 
-#: clipman/preferences.py:968 clipman/window.py:1759
+#: clipman/preferences.py:977 clipman/window.py:1779
 msgid "Release notes"
 msgstr ""
 
-#: clipman/preferences.py:972
+#: clipman/preferences.py:981
 msgid "View on GitHub"
 msgstr ""
 
-#: clipman/preferences.py:989
+#: clipman/preferences.py:998
 msgid "Never"
 msgstr ""
 
-#: clipman/preferences.py:998
+#: clipman/preferences.py:1007
 msgid "About"
 msgstr ""
 
-#: clipman/preferences.py:1002
+#: clipman/preferences.py:1011
 msgid "Clipman"
 msgstr ""
 
-#: clipman/preferences.py:1004
+#: clipman/preferences.py:1013
 msgid "A Wayland-native clipboard history manager built with GTK 4 + libadwaita."
 msgstr ""
 
-#: clipman/preferences.py:1014
+#: clipman/preferences.py:1023
 msgid "License"
 msgstr ""
 
-#: clipman/preferences.py:1019
+#: clipman/preferences.py:1028
 msgid "Maintainer"
 msgstr ""
 
-#: clipman/preferences.py:1025
+#: clipman/preferences.py:1034
 msgid "Links"
 msgstr ""
 
-#: clipman/preferences.py:1027
+#: clipman/preferences.py:1036
 msgid "Repository"
 msgstr ""
 
-#: clipman/preferences.py:1029
+#: clipman/preferences.py:1038
 msgid "Website"
 msgstr ""
 
-#: clipman/preferences.py:1031
+#: clipman/preferences.py:1040
 msgid "Report an issue"
 msgstr ""
 
-#: clipman/preferences.py:1033
+#: clipman/preferences.py:1042
 msgid "Sponsor on PayPal"
 msgstr ""
 
-#: clipman/preferences.py:1038
+#: clipman/preferences.py:1047
 msgid "Open"
 msgstr ""
 
-#: clipman/preferences.py:1046
+#: clipman/preferences.py:1055
 msgid "Credits"
 msgstr ""
 
-#: clipman/preferences.py:1048
+#: clipman/preferences.py:1057
 msgid "Built with GTK 4 + libadwaita. Catppuccin palette by the Catppuccin community. Translations are welcome — see po/."
 msgstr ""
 
 #: clipman/snippets_dialog.py:59 clipman/snippets_dialog.py:78
-#: clipman/window.py:745
+#: clipman/window.py:750
 msgid "Snippets"
 msgstr ""
 
@@ -763,7 +763,7 @@ msgid "Use ${date}, ${time}, or ${clipboard} for substitutions when pasting."
 msgstr ""
 
 #: clipman/snippets_dialog.py:203 clipman/snippets_dialog.py:417
-#: clipman/window.py:1460
+#: clipman/window.py:1466
 msgid "Delete"
 msgstr ""
 
@@ -771,11 +771,11 @@ msgstr ""
 msgid "Save"
 msgstr ""
 
-#: clipman/snippets_dialog.py:260 clipman/window.py:979
+#: clipman/snippets_dialog.py:260 clipman/window.py:985
 msgid "{n} snippet"
 msgstr ""
 
-#: clipman/snippets_dialog.py:262 clipman/window.py:980
+#: clipman/snippets_dialog.py:262 clipman/window.py:986
 msgid "{n} snippets"
 msgstr ""
 
@@ -803,135 +803,147 @@ msgstr ""
 msgid "Search clipboard history…"
 msgstr ""
 
-#: clipman/window.py:742
+#: clipman/window.py:706
+msgid "Search clipboard history"
+msgstr ""
+
+#: clipman/window.py:747
 msgid "All"
 msgstr ""
 
-#: clipman/window.py:743
+#: clipman/window.py:748
 msgid "Text"
 msgstr ""
 
-#: clipman/window.py:744
+#: clipman/window.py:749
 msgid "Images"
 msgstr ""
 
-#: clipman/window.py:837
+#: clipman/window.py:843
 msgid "Toggle incognito"
 msgstr ""
 
-#: clipman/window.py:843 clipman/window.py:2155
+#: clipman/window.py:849 clipman/window.py:2175
 msgid "Recording"
 msgstr ""
 
-#: clipman/window.py:849
+#: clipman/window.py:855
 msgid "Clear all"
 msgstr ""
 
-#: clipman/window.py:986
+#: clipman/window.py:992
 msgid "{n} of {total} items"
 msgstr ""
 
-#: clipman/window.py:988
+#: clipman/window.py:994
 msgid "{n} item"
 msgstr ""
 
-#: clipman/window.py:989
+#: clipman/window.py:995
 msgid "{n} items"
 msgstr ""
 
-#: clipman/window.py:995
+#: clipman/window.py:1001
 msgid "Clear clipboard history?"
 msgstr ""
 
-#: clipman/window.py:996
+#: clipman/window.py:1002
 msgid "This removes all unpinned entries. Pinned entries and snippets are kept. This can't be undone."
 msgstr ""
 
-#: clipman/window.py:1000
+#: clipman/window.py:1006
 msgid "Clear"
 msgstr ""
 
-#: clipman/window.py:1495
+#: clipman/window.py:1493
+msgid "Sensitive clip"
+msgstr ""
+
+#: clipman/window.py:1498
+msgid "Pinned · {details}"
+msgstr ""
+
+#: clipman/window.py:1512
 msgid "★ Pinned"
 msgstr ""
 
-#: clipman/window.py:1499 clipman/window.py:1507
+#: clipman/window.py:1516 clipman/window.py:1524
 msgid "Older"
 msgstr ""
 
-#: clipman/window.py:1502
+#: clipman/window.py:1519
 msgid "Today"
 msgstr ""
 
-#: clipman/window.py:1504
+#: clipman/window.py:1521
 msgid "Yesterday"
 msgstr ""
 
-#: clipman/window.py:1506
+#: clipman/window.py:1523
 msgid "Earlier this week"
 msgstr ""
 
-#: clipman/window.py:1597
+#: clipman/window.py:1614
 msgid "(empty)"
 msgstr ""
 
-#: clipman/window.py:1609
+#: clipman/window.py:1626
 msgid "Code"
 msgstr ""
 
-#: clipman/window.py:1647
+#: clipman/window.py:1664
 msgid "Unpin"
 msgstr ""
 
-#: clipman/window.py:1647
+#: clipman/window.py:1664
 msgid "Pin"
 msgstr ""
 
-#: clipman/window.py:1670
+#: clipman/window.py:1687
 msgid "Sensitive"
 msgstr ""
 
-#: clipman/window.py:1672
+#: clipman/window.py:1689
 msgid "Sensitive — auto-clear in {n} s"
 msgstr ""
 
-#: clipman/window.py:1699
+#: clipman/window.py:1719
 msgid "Snippet · used {n}×"
 msgstr ""
 
-#: clipman/window.py:1751
+#: clipman/window.py:1771
 msgid "Update available — v{new}"
 msgstr ""
 
-#: clipman/window.py:1752
+#: clipman/window.py:1772
 msgid "You have v{cur}. See what changed before upgrading."
 msgstr ""
 
-#: clipman/window.py:2151
+#: clipman/window.py:2171
 msgid "Paused"
 msgstr ""
 
-#: clipman/window.py:2176
+#: clipman/window.py:2196
 msgid "Incognito mode: ON — clipboard not recorded"
 msgstr ""
 
-#: clipman/window.py:2178
+#: clipman/window.py:2198
 msgid "Incognito mode: OFF"
 msgstr ""
 
-#: clipman/window.py:2449
+#: clipman/window.py:2469
 msgid "just now"
 msgstr ""
 
-#: clipman/window.py:2452
+#: clipman/window.py:2472
 msgid "{n}m ago"
 msgstr ""
 
-#: clipman/window.py:2455
+#: clipman/window.py:2475
 msgid "{n}h ago"
 msgstr ""
 
-#: clipman/window.py:2457
+#: clipman/window.py:2477
 msgid "{n}d ago"
 msgstr ""
 
