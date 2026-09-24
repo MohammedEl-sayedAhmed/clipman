@@ -1262,6 +1262,87 @@ class TestKeyboardShortcuts(_WidgetTestCase):
         window._paste_entry = lambda entry: self.fail("should not paste")
         self.assertFalse(window._activate_selected())
 
+    def test_delete_with_nothing_selected_is_noop(self):
+        """Only Enter falls back to the first row. Delete with nothing
+        selected used to remove the top row, even a pinned one."""
+        db, window = self._seeded_window()
+        window._selection.unselect_all()
+        self.assertFalse(window._delete_selected())
+        self.assertEqual(len(db.get_entries(limit=200)), 3)
+
+    def test_pin_with_nothing_selected_is_noop(self):
+        db, window = self._seeded_window()
+        window._selection.unselect_all()
+        self.assertFalse(window._pin_selected())
+        self.assertFalse(any(e["pinned"] for e in db.get_entries(limit=200)))
+
+    def test_search_focus_includes_the_inner_text(self):
+        """While typing, the focus sits on the search entry's inner
+        Gtk.Text, not on the entry, and that must count as the search box
+        being focused."""
+        _db, window = self._seeded_window()
+        window.set_focus(window.search_entry.get_delegate())
+        self.assertTrue(window._search_has_focus())
+        window.set_focus(window.listview)
+        self.assertFalse(window._search_has_focus())
+
+    def test_down_from_search_moves_into_the_list(self):
+        from gi.repository import Gdk
+
+        _db, window = self._seeded_window()
+        window._selection.unselect_all()
+        window.set_focus(window.search_entry.get_delegate())
+        self.assertTrue(window._on_key_pressed(None, Gdk.KEY_Down, 0, 0))
+        self.assertEqual(window._selection.get_selected(), 0)
+
+
+class TestPresentFocused(_WidgetTestCase):
+    """The deferred search-box focus after a show must run exactly once."""
+
+    def _window(self):
+        from clipman.window import ClipmanWindow
+
+        app = self._make_app("com.clipman.TestPresentFocused")
+        window = ClipmanWindow(application=app, db=self._make_db(), monitor=None)
+        # Keep the window unmapped; only the focus logic is under test.
+        window.set_visible = MagicMock()
+        window.present = MagicMock()
+        calls = []
+        # Like the real one, the stand-in returns True, which would keep a
+        # plain idle callback alive.
+        window.search_entry.grab_focus = lambda: calls.append(1) or True
+        return window, calls
+
+    @staticmethod
+    def _drain(iterations=50):
+        from gi.repository import GLib
+
+        context = GLib.MainContext.default()
+        for _ in range(iterations):
+            context.iteration(False)
+
+    def test_focus_idle_runs_once(self):
+        window, calls = self._window()
+        window._present_focused()
+        self._drain()
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(window._focus_idle_id, 0)
+
+    def test_repeated_shows_do_not_stack_focus_idles(self):
+        window, calls = self._window()
+        window._present_focused()
+        window._present_focused()
+        self._drain()
+        self.assertEqual(len(calls), 1)
+
+    def test_hide_cancels_the_pending_focus(self):
+        window, calls = self._window()
+        window._present_focused()
+        window._hide()
+        self._drain()
+        self.assertEqual(calls, [])
+        self.assertEqual(window._focus_idle_id, 0)
+
 
 class TestEdgeStateDeclaration(unittest.TestCase):
     """Module-level invariants of edge_states.py that don't need GTK.
