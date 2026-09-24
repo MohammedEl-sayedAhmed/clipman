@@ -521,6 +521,32 @@ change what a reader would do:
   - The GitHub Sponsors links led nowhere (there is no Sponsors
     listing) and are gone. The About page's PayPal link pointed at an
     unrelated profile; it now opens the maintainer's page.
+- The contributor docs now match the code:
+  - `ARCHITECTURE.md`: the history list is a `Gtk.ListView` of plain
+    rows, not `Adw.ActionRow`s; `window.py` injects the palette ahead of
+    `style.css`; an image-read thread runs beside the update check;
+    detection lives in `sensitive.py`, with a configurable delay; the
+    `wl-paste --watch` fallback cannot run on GNOME. The diagram and
+    the ADR links follow (ADRs 0011 and 0012 replaced 0010 and 0009,
+    whose status now says so).
+  - `CONTRIBUTING.md`'s CSS section described `window.dark
+    @define-color` selectors, which are invalid GTK CSS. It now says
+    how theming works, and its project tree lists every module.
+  - `docs/ci-cd.md` listed `Hooks (self-test)` and `Footprints` as
+    required checks, called Dependency review "not required" (its job
+    is the required `review` check), and said conversation resolution
+    is required. None of that was true; the settings are now described
+    as they are.
+  - `docs/maintaining.md` promised 1.1.x security backports that
+    `SECURITY.md` rules out; both now say only 1.2.x is supported.
+  - `docs/development.md` told developers to run a second daemon beside
+    the service, which exits at once; it now says to stop the service
+    first.
+  - `docs/translating.md` said `msgfmt --check` catches placeholder
+    typos. It does not yet (#321); translators are told to check them
+    by eye.
+  - `docs/dbus-api.md` documents that the same clip repeated within
+    100 ms is dropped.
 
 ### Added — two superseding ADRs
 
@@ -592,8 +618,8 @@ change what a reader would do:
   removes the `libadwaita → libappstream → libcurl` dependency tail
   that made every curl security update trip the Snap Store's daily
   scan (three "outdated Ubuntu packages" emails in five weeks), shrinks
-  the snap to ~13 MB, and hands GTK-stack security rebuilds to
-  Canonical. Only `wtype` and the from-source `wl-clipboard` remain
+  the snap from about 50 MB to under 1 MB, and hands GTK-stack security
+  rebuilds to Canonical. Only `wtype` and the from-source `wl-clipboard` remain
   first-party payload.
 - The weekly snap rebuild now refreshes every published channel —
   stable/candidate/beta are rebuilt from the latest release tag, edge

@@ -56,10 +56,9 @@ Per-channel auth, so you know what to rotate when something expires:
 
 ## Support policy
 
-- The **latest MINOR** and the **previous MINOR** of clipman receive
-  bug fixes and security backports for **6 months** after the older
-  MINOR's release date. Anything older than that is unsupported and
-  will not receive further patch releases.
+- The **latest MINOR** of clipman receives bug fixes and security
+  fixes. Older lines are unsupported and do not get patch releases, as
+  the table in `SECURITY.md` says.
 - Security fixes follow the disclosure window in `SECURITY.md`
   regardless of the support window above — a critical fix lands on
   every still-supported MINOR, and a sufficiently severe issue may
@@ -67,8 +66,8 @@ Per-channel auth, so you know what to rotate when something expires:
 - Currently supported lines (as of v1.2.1), matching the table in
   `SECURITY.md`:
   - **1.2.x** — full support (latest MINOR).
-  - **1.1.x** — security backports only, within the window above.
-  - **1.0.x** and older — unsupported.
+  - **1.1.x** and older — unsupported. (No 1.1.x patch release was
+    ever made.)
 
 ## Deprecation policy
 

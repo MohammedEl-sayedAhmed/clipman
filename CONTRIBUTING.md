@@ -19,19 +19,23 @@ clipman/
 ├── clipman.py                  # Entry point (start daemon / toggle popup)
 ├── clipman/
 │   ├── __init__.py             # i18n/gettext setup; re-exports __version__
+│   ├── __main__.py             # `python -m clipman`
 │   ├── _version.py             # Single source of truth for __version__
+│   ├── cli.py                  # Command line: dependency check, daemon, toggle
 │   ├── app.py                  # Adw.Application lifecycle
-│   ├── clipboard_monitor.py    # Event-driven clipboard change handling
+│   ├── clipboard_monitor.py    # Receives clips (extension, or the fallback watcher) and stores them
 │   ├── database.py             # SQLite storage layer
 │   ├── dbus_service.py         # D-Bus IPC (toggle, clipboard events)
-│   ├── edge_states.py          # 20 declarative StateSpec entries dispatched
+│   ├── edge_states.py          # Declared StateSpec entries dispatched
 │   │                           #   into Adw.StatusPage / Adw.Banner / Adw.AlertDialog
 │   ├── keybindings.py          # gsettings helpers for Super+V customization
 │   ├── preferences.py          # Adw.Dialog + sidebar (6 panes)
+│   ├── sensitive.py            # Sensitive-data detection
+│   ├── shell_bridge.py         # Calls into the GNOME Shell extension
 │   ├── snippets_dialog.py      # Adw.NavigationSplitView master-detail snippet editor
 │   ├── updates.py              # Anonymous update-check against GitHub Releases
 │   ├── window.py               # Adw.ApplicationWindow + Adw.HeaderBar history popup
-│   └── style.css               # libadwaita @-token overrides + Catppuccin palette
+│   └── style.css               # Stylesheet; window.py prepends the palette
 ├── extension/
 │   ├── extension.js            # GNOME Shell extension (clipboard detection, paste)
 │   └── metadata.json           # Extension metadata
@@ -39,27 +43,18 @@ clipman/
 │   ├── com.clipman.Clipman.desktop
 │   ├── com.clipman.Clipman.svg
 │   ├── com.clipman.Clipman.metainfo.xml
+│   ├── io.github.MohammedEl_sayedAhmed.Clipman.{desktop,metainfo.xml}
 │   └── clipman.service         # Systemd user service
 ├── po/
 │   ├── POTFILES.in             # Files with translatable strings
-│   └── clipman.pot             # Translation template (226 strings)
-├── tests/
-│   ├── test_clipboard_monitor.py  # Monitor tests (110 tests)
-│   ├── test_database.py        # Database tests (96 tests)
-│   ├── test_window.py          # Window, classify & render tests (60 tests)
-│   ├── test_updates.py         # Update-check tests (40 tests)
-│   ├── test_keybindings.py     # Keybinding-customization tests (32 tests)
-│   ├── test_app.py             # Application lifecycle tests (10 tests)
-│   ├── test_sensitive.py       # Sensitive-data heuristics (10 tests)
-│   ├── test_entry_point.py     # D-Bus mainloop init tests (9 tests)
-│   ├── test_shell_bridge.py    # Shell-extension bridge tests (4 tests)
-│   ├── test_release_metadata.py  # Packaging-metadata tests (3 tests)
-│   └── test_dbus_service.py    # D-Bus service tests (1 test)
-├── docs/
-│   ├── dark-theme.png          # Screenshot (dark theme)
-│   └── light-theme.png         # Screenshot (light theme)
+│   └── clipman.pot             # Translation template
+├── tests/                      # Unit tests (test_*.py)
+│   └── e2e/                    # A headless GNOME Shell run: install, copy, uninstall
+├── scripts/                    # dev.sh task runner, deps.sh, install and release helpers
+├── docs/                       # ADRs, design mockups, the project page, guides
 ├── snap/
 │   └── snapcraft.yaml          # Snap packaging
+├── aur/                        # AUR packaging
 ├── launcher.sh                 # Environment wrapper for snap terminals
 ├── install.sh
 └── uninstall.sh
@@ -76,7 +71,7 @@ scripts/dev.sh test       # or: make test
 
 `dev-setup.sh` installs the system packages, creates `.venv` and installs the `dev` extras. The venv uses `--system-site-packages`, so the distro's PyGObject and dbus-python bindings are reused and never rebuilt. `dev.sh test` runs pytest under `xvfb-run` with `CLIPMAN_REQUIRE_GTK4=1` (falling back to `unittest` when pytest is not importable); pytest arguments pass through, e.g. `scripts/dev.sh test -k database`.
 
-All 375 tests should pass. GTK 4 is required at test time; a session bus is not. Tests cover the database layer, clipboard monitor, window/classification logic, app lifecycle, keybindings, and the update check. See [docs/development.md](docs/development.md) for the fuller dev setup.
+All tests should pass. GTK 4 is required at test time; a session bus is not. Tests cover the database layer, clipboard monitor, window/classification logic, app lifecycle, keybindings, and the update check. See [docs/development.md](docs/development.md) for the fuller dev setup.
 
 ### Lint
 
@@ -155,32 +150,28 @@ status.set_text(_("{count} items").format(count=total))
 
 ### CSS Theming
 
-The UI stylesheet lives in `clipman/style.css`. With the move to
-GTK 4 + libadwaita, theming is layered:
+The stylesheet lives in `clipman/style.css`. Theming is layered:
 
-1. **libadwaita `@named-color` tokens** (e.g. `@accent_color`,
-   `@window_bg_color`, `@card_bg_color`) carry the bulk of the
-   palette. The stylesheet redefines these tokens so every Adw
-   widget — `Adw.ActionRow`, `Adw.Dialog`,
-   `Adw.HeaderBar`, `Adw.Banner`, etc. — picks up the Catppuccin
-   Mocha (dark) or warm-stone (light) palette automatically without
-   per-widget rules.
-2. **Catppuccin palette overlay**: light- and dark-variant
-   selectors (`window.dark @define-color …` / `window.light …`)
-   write the chosen palette into the `@named-color` slots at theme
-   switch time.
-3. **`string.Template` substitution** is still used for the
-   runtime-tunable knobs (font size, opacity) — variables like
-   `${font_size}px` are substituted before the CSS is handed to
-   `Gtk.CssProvider.load_from_string()`.
+1. **libadwaita named colours.** At load time `clipman/window.py`
+   prepends a block of `@define-color` lines to the stylesheet. They
+   override libadwaita's named colours (`@accent_color`,
+   `@window_bg_color`, `@card_bg_color`, …) with the Catppuccin Mocha
+   (dark) or warm-stone (light) palette, so every Adw widget picks up
+   the theme without per-widget rules. The same block defines Clipman's
+   own tokens (`@clip_dim`, `@incognito`, the `@type_*` tile colours)
+   and the accent override.
+2. **Template substitution.** `style.css` is a `string.Template`: its
+   `${font_size}` and `${font_color}` placeholders are filled in before
+   the CSS reaches `Gtk.CssProvider.load_from_string()`.
+3. **Opacity** is not CSS: the window applies it with `set_opacity()`.
 
-- Prefer overriding `@named-color` tokens over writing per-widget
-  CSS — the Adw widgets honour the tokens consistently.
-- Use `${variable}` when followed by letters/digits (e.g.,
-  `${font_size}px`) for runtime substitution.
-- Never commit `clipman/style.css` with `$variable` placeholders
-  substituted — the runtime template substitution would then
-  double-substitute and the daemon would fail to load the CSS.
+- Use the tokens (`@accent_color`, `@clip_dim`, …); never hard-code a
+  colour that a token already carries.
+- Write `${variable}` when letters or digits follow it, e.g.
+  `${font_size}px`.
+- GTK CSS is not web CSS: there is no `:empty` and no `text-transform`,
+  and one bad selector aborts the whole stylesheet at runtime, which CI
+  does not catch. Check CSS changes with `scripts/dev.sh screenshot`.
 
 ## Submitting Changes
 
@@ -249,7 +240,7 @@ When filing a bug report, please include:
 
 ## Definition of Done
 
-- [ ] `scripts/dev.sh test` passes locally (375 tests)
+- [ ] `scripts/dev.sh test` passes locally
 - [ ] `scripts/dev.sh ruff` is clean
 - [ ] `scripts/dev.sh shellcheck` is clean if any shell script was touched
 - [ ] `CHANGELOG.md` `[Unreleased]` updated for user-visible changes

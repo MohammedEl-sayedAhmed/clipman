@@ -23,7 +23,7 @@ is the final decision-maker on architecture, scope, and dependencies.
   data-on-disk layout, supported platforms, supply-chain posture,
   release pipeline shape, third-party network calls): captured as an
   ADR in `docs/adr/` before or alongside the change that implements
-  them. See `docs/adr/README.md` for the existing 10.
+  them. See `docs/adr/README.md` for the list.
 - **Versioning** follows the policy recorded in
   [ADR 0011](docs/adr/0011-versioning-policy-refresh.md): SemVer 2.0.0 with
   clipman-specific MAJOR triggers.

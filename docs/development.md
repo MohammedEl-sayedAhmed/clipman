@@ -52,8 +52,15 @@ scripts/deps.sh --dev --install      # install it (sudo when needed)
 git clone git@github.com:MohammedEl-sayedAhmed/clipman.git
 cd clipman
 ./install.sh          # registers the keybinding + autostart + extension
+# Log out and back in once, so GNOME loads the extension.
+systemctl --user stop clipman.service   # the service runs a daemon already
 python3 clipman.py    # daemon foreground; Ctrl+C to stop
 ```
+
+Only one daemon can run: a second one logs "Another Clipman daemon is
+already running on the session bus; exiting." and quits.
+So stop the service before running the daemon in a terminal, and
+`systemctl --user start clipman.service` when you are done.
 
 Pop the popup any time with `Super+V` (or run
 `python3 clipman.py toggle` from another terminal).
@@ -148,9 +155,11 @@ scripts/dev.sh screenshot --out /tmp/clipman.png
 
 ### Daemon
 
-Run it in the foreground to see `print()` output and Python tracebacks:
+Run it in the foreground to see `print()` output and Python tracebacks
+(stop the service first, as above):
 
 ```bash
+systemctl --user stop clipman.service
 python3 clipman.py
 ```
 

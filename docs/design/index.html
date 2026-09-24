@@ -252,7 +252,7 @@
             </div>
             <div class="body">
                 <div class="title">Preferences</div>
-                <div class="desc">Settings extracted from the inline panel into AdwPreferencesWindow with groups: Appearance / Privacy / Shortcuts / Storage / Updates / About.</div>
+                <div class="desc">Settings moved from the inline panel into an Adw.Dialog with a sidebar: Appearance / Privacy / Shortcuts / Storage / Updates / About.</div>
                 <span class="status draft">Draft</span>
             </div>
         </a>
@@ -294,21 +294,21 @@
         <thead>
             <tr>
                 <th>UI element</th>
-                <th>libadwaita widget</th>
-                <th>Replaces (current)</th>
+                <th>Shipped (GTK 4)</th>
+                <th>Replaced (GTK 3)</th>
             </tr>
         </thead>
         <tbody>
             <tr><td>Window title bar</td>            <td><code>Adw.HeaderBar</code></td>             <td>Custom CSD header</td></tr>
-            <tr><td>Search field</td>                <td><code>Adw.EntryRow</code> (search)</td>     <td><code>Gtk.SearchEntry</code></td></tr>
-            <tr><td>Filter tabs</td>                 <td><code>Adw.ViewSwitcher</code> (pill)</td>   <td>Custom <code>filter-tab</code> buttons</td></tr>
-            <tr><td>Settings (was inline)</td>       <td><code>Adw.PreferencesWindow</code></td>     <td>Inline settings panel inside main window</td></tr>
-            <tr><td>Day-grouped sections</td>        <td><code>Adw.PreferencesGroup</code></td>      <td>Plain "TODAY" label</td></tr>
-            <tr><td>Clip row</td>                    <td><code>Adw.ActionRow</code></td>             <td>Hand-built Gtk.Box rows</td></tr>
+            <tr><td>Search field</td>                <td><code>Gtk.SearchEntry</code></td>           <td><code>Gtk.SearchEntry</code></td></tr>
+            <tr><td>Filter tabs</td>                 <td>Custom <code>filter-tab</code> toggle buttons</td> <td>Custom <code>filter-tab</code> buttons</td></tr>
+            <tr><td>Settings (was inline)</td>       <td><code>Adw.Dialog</code> with a sidebar</td> <td>Inline settings panel inside main window</td></tr>
+            <tr><td>Day-grouped sections</td>        <td><code>Gtk.ListView</code> section headers</td> <td>Plain "TODAY" label</td></tr>
+            <tr><td>Clip row</td>                    <td>Plain <code>Gtk.Box</code> rows in a virtualised <code>Gtk.ListView</code></td> <td>Hand-built Gtk.Box rows</td></tr>
             <tr><td>Update banner</td>               <td><code>Adw.Banner</code></td>                <td>Custom <code>update-banner</code> box</td></tr>
             <tr><td>Empty / no-results state</td>    <td><code>Adw.StatusPage</code></td>            <td>Hidden listbox</td></tr>
             <tr><td>Snippets edit modal</td>         <td><code>Adw.Dialog</code></td>                <td><code>Gtk.Dialog</code></td></tr>
-            <tr><td>Toast notifications</td>         <td><code>Adw.Toast</code></td>                 <td>(none today)</td></tr>
+            <tr><td>Toast notifications</td>         <td>(not used)</td>                            <td>(none)</td></tr>
         </tbody>
     </table>
     </div>

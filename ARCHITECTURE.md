@@ -7,9 +7,9 @@ processes: a GNOME Shell extension that detects clipboard changes
 natively via `Meta.Selection`'s `owner-changed` signal, and a Python +
 GTK 4 / libadwaita daemon that persists history in a local SQLite
 database. The two halves communicate over D-Bus on the session bus,
-so there is no polling, no screen flicker, and no telemetry. A
-`wl-paste --watch` fallback inside the daemon covers Wayland sessions
-where the extension is not available.
+so there is no polling, no screen flicker, and no telemetry. On GNOME
+the extension is required: the daemon's `wl-paste --watch` fallback
+cannot run there (see [Fallback path](#fallback-path)).
 
 ## Process model
 
@@ -24,8 +24,8 @@ thread; SQLite access is intentionally serialized through the loop
 (see the `check_same_thread=False` comment in `clipman/database.py`).
 
 The UI tree is libadwaita-first: `clipman/window.py` builds an
-`Adw.ApplicationWindow` with an `Adw.HeaderBar` and an
-`Adw.ActionRow`-driven history list; `clipman/preferences.py` ships
+`Adw.ApplicationWindow` with an `Adw.HeaderBar` and a virtualised
+`Gtk.ListView` history list of plain `Gtk.Box` rows; `clipman/preferences.py` ships
 the settings surface as an `Adw.Dialog` with a navigation sidebar and
 six panes
 (Appearance, Privacy, Shortcuts, Storage, Updates, About);
@@ -33,21 +33,23 @@ six panes
 master-detail editor. The 20 declarative edge states from the
 mockups live as `StateSpec` entries in `clipman/edge_states.py` and
 are dispatched at render time by `render_edge_state` into one of
-`Adw.StatusPage`, `Adw.Banner`, or `Adw.AlertDialog`. The
-`clipman/style.css` stylesheet overrides libadwaita's
-`@named-color` tokens with the Catppuccin Mocha (dark) and warm-stone
-(light) palettes
-so the entire surface picks up the theme without per-widget CSS.
+`Adw.StatusPage`, `Adw.Banner`, or `Adw.AlertDialog`.
+`clipman/window.py` prepends the Catppuccin Mocha (dark) or warm-stone
+(light) palette to `clipman/style.css` as `@define-color` overrides of
+libadwaita's named colours, so the entire surface picks up the theme
+without per-widget CSS.
 The package's runtime version literal lives in the leaf module
 `clipman/_version.py` and is re-exported from `clipman/__init__.py`,
 breaking the cyclic import that would otherwise let submodules
 re-enter the package root.
 
-The one exception is the optional update-check worker described in
-[ADR 0007](docs/adr/0007-in-app-update-notifications.md): a background
-thread performs the single anonymous HTTPS request and marshals its
-result back to the UI through `GLib.idle_add`, so no GTK or D-Bus
-state is touched off-thread.
+Two background threads are the exceptions: the optional update-check
+worker described in
+[ADR 0007](docs/adr/0007-in-app-update-notifications.md), which performs
+the single anonymous HTTPS request, and a short-lived
+`clipman-image-read` thread in `clipman/clipboard_monitor.py`, which
+reads an image off the clipboard. Both hand their results back to the
+main loop, so no GTK or D-Bus state is touched off-thread.
 
 ### Extension
 
@@ -62,16 +64,17 @@ popup placement (see [IPC contract](#ipc-contract) below).
 
 ### Fallback path
 
-When the extension is absent (for example on KDE, Sway, or Hyprland,
-or before the user has logged out and back in after install), the
-daemon's `clipman/clipboard_monitor.py` spawns `wl-paste --watch` as
-a subprocess and reads new clipboard contents through `wl-paste`. This
-fallback runs only when the extension's D-Bus name is missing.
+When the extension's D-Bus name is missing, the daemon's
+`clipman/clipboard_monitor.py` spawns `wl-paste --watch` as a
+subprocess and reads new clipboard contents through `wl-paste`. That
+needs the data-control protocol, which GNOME does not offer, so on
+GNOME the watcher exits at once and the extension is required. It
+would work on KDE and wlroots compositors, which are not supported yet
+([#318](https://github.com/MohammedEl-sayedAhmed/clipman/issues/318)).
 
-Under snap confinement, neither `wl-paste --watch` nor the in-shell
-extension is reachable from inside the sandbox; snap users rely on
-the GNOME Shell extension running in their host session and talking
-to the snap-confined daemon over the session bus.
+Under snap confinement the daemon skips the watcher. Snap users rely on
+the GNOME Shell extension running in their host session and talking to
+the snap-confined daemon over the session bus.
 
 ## Data model
 
@@ -95,8 +98,9 @@ Deduplication is content-addressed: every text or image payload is
 SHA256-hashed before insert, and an existing row with the same hash is
 bumped via `accessed_at` rather than duplicated. Image files are
 written into `~/.local/share/clipman/images/` named by their hash, and
-the daemon validates magic bytes (PNG, JPEG, GIF, BMP, WebP) before
-persisting.
+the daemon checks their magic bytes (PNG, JPEG, GIF, BMP, WebP) before
+persisting. The BMP and WebP checks are loose, and a restore does not
+check images ([#335](https://github.com/MohammedEl-sayedAhmed/clipman/issues/335)).
 
 Filesystem permissions are enforced on every startup:
 
@@ -104,10 +108,12 @@ Filesystem permissions are enforced on every startup:
   startup even if the directory pre-existed).
 - Individual image files: `0o600` (created with `os.open` +
   `O_CREAT` and an explicit mode, not `open()`).
+- The database file and its WAL and SHM sidecars: `0o600`.
 
-Sensitive entries detected by `clipman/clipboard_monitor.py` are
-written with `sensitive = 1` and auto-deleted by
-`delete_expired_sensitive` once they are older than 30 seconds.
+Sensitive entries (detected by `clipman/sensitive.py`) are written with
+`sensitive = 1` and deleted by `delete_expired_sensitive` once they are
+older than the auto-clear delay: 10 to 300 seconds, 30 by default. The
+auto-clear can be switched off, and pinned entries are kept.
 
 ## IPC contract
 
@@ -171,11 +177,13 @@ installs (where the user is responsible for updates), and default-OFF
 for Snap and Flatpak (whose stores already push updates). Users can
 toggle it under Settings -> Updates.
 
-Sensitive content detection (tokens, secrets, password-like strings)
-runs in `clipman/clipboard_monitor.py` before the entry is persisted.
-Matching entries are flagged `sensitive = 1`, hidden from search where
-appropriate, and auto-deleted from the database 30 seconds after
-capture. Incognito mode pauses recording entirely.
+Sensitive content detection (`clipman/sensitive.py`: known secret
+shapes such as vendor tokens, private keys and labelled passwords) runs
+before the entry is persisted. Matching entries are flagged
+`sensitive = 1`, masked in the list, and deleted from the database after
+the auto-clear delay (30 seconds by default). Search still matches their
+hidden text ([#336](https://github.com/MohammedEl-sayedAhmed/clipman/issues/336)). Incognito mode pauses recording
+entirely.
 
 No analytics, no crash reporting, no third-party services.
 
@@ -183,7 +191,7 @@ No analytics, no crash reporting, no third-party services.
 
 <p align="center">
   <img src="docs/architecture.svg"
-       alt="Clipman architecture: GNOME Shell extension and Python/GTK 4 + libadwaita daemon communicate over D-Bus; clipboard changes flow from the Wayland clipboard via owner-changed signals through the extension (or wl-paste fallback) into the daemon, which deduplicates by SHA256 and persists to a SQLite WAL store."
+       alt="Clipman architecture: GNOME Shell extension and Python/GTK 4 + libadwaita daemon communicate over D-Bus; clipboard changes flow from the Wayland clipboard via owner-changed signals through the extension (the wl-paste fallback cannot run on GNOME) into the daemon, which deduplicates by SHA256 and persists to a SQLite WAL store."
        width="100%">
 </p>
 
@@ -211,7 +219,7 @@ flowchart LR
         DbusSvc["dbus_service.py<br/>(com.clipman.Daemon)"]:::daemon
         Monitor["clipboard_monitor.py<br/>(dedupe + sensitive detect)"]:::daemon
         Window["window.py<br/>(GTK popup + settings)"]:::daemon
-        Fallback["wl-paste --watch<br/>(used when extension absent)"]:::daemon
+        Fallback["wl-paste --watch<br/>(not on GNOME)"]:::daemon
     end
 
     DB[("SQLite WAL<br/>~/.local/share/clipman/")]:::storage
@@ -250,5 +258,5 @@ under [`docs/adr/`](docs/adr/):
 - D-Bus `SimulatePaste(s mode)` shape and back-compat path: [ADR 0005](docs/adr/0005-paste-mode-as-dbus-arg.md)
 - Solo-friendly branch protection: [ADR 0006](docs/adr/0006-solo-friendly-branch-protection.md)
 - Update-check privacy posture (the single egress): [ADR 0007](docs/adr/0007-in-app-update-notifications.md)
-- Weekly snap rebuild cadence: [ADR 0009](docs/adr/0009-snap-rebuild-cadence.md)
-- Versioning policy: [ADR 0010](docs/adr/0010-versioning-policy.md)
+- Snap on the GNOME extension, with an all-channel weekly refresh: [ADR 0012](docs/adr/0012-snap-gnome-extension-and-all-channel-refresh.md) (supersedes ADR 0009)
+- Versioning policy: [ADR 0011](docs/adr/0011-versioning-policy-refresh.md) (supersedes ADR 0010)

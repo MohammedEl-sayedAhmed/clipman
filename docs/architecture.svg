@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 763" role="img" aria-labelledby="title desc" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" text-rendering="optimizeLegibility">
   <title id="title">clipman architecture</title>
-  <desc id="desc">Capture path: an application writes to the Wayland clipboard, which notifies either the GNOME Shell clipman extension or the wl-paste fallback, both of which forward new entries to the daemon's D-Bus service. The monitor deduplicates by SHA256 and persists to a SQLite WAL store. Paste path: Super+V triggers the keybinding which toggles the GTK popup window; the window reads and writes history with SQLite, then either calls wl-copy or asks the extension to inject a virtual keystroke into the target app.</desc>
+  <desc id="desc">Capture path: an application writes to the Wayland clipboard, which notifies the GNOME Shell clipman extension (the wl-paste fallback cannot run on GNOME), which forwards new entries to the daemon's D-Bus service. The monitor deduplicates by SHA256 and persists to a SQLite WAL store. Paste path: Super+V triggers the keybinding which toggles the GTK popup window; the window reads and writes history with SQLite, then either calls wl-copy or asks the extension to inject a virtual keystroke into the target app.</desc>
 
   <style>
     .lbl      { font-size: 14px; font-weight: 600; }
@@ -107,7 +107,7 @@
 
   <rect x="310" y="478" width="160" height="64" rx="8" class="node dn-fill dn-str"/>
   <text x="390" y="502" text-anchor="middle" class="lbl dn-txt">wl-paste --watch</text>
-  <text x="390" y="520" text-anchor="middle" class="sub dn-txt">fallback</text>
+  <text x="390" y="520" text-anchor="middle" class="sub dn-txt">not on GNOME</text>
 
   <g transform="translate(530, 665)">
     <ellipse cx="70" cy="10" rx="70" ry="12" class="node st-fill st-str"/>
