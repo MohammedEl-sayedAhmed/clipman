@@ -407,6 +407,18 @@ All notable changes to Clipman are documented in this file.
   one extra pipe may stay open, the one GNOME's own clipboard manager
   keeps). The old extension fails the last two.
 
+### Fixed — the snippets editor
+
+- Saving a snippet emptied the editor ("No snippet selected"), although
+  the change was saved. Typing in the search box threw away the edit in
+  progress. Refilling the list removed the selected row, and GTK then
+  reported "nothing selected". The list now refills without touching
+  the editor, and selects the snippet again while the search shows it.
+- A snippet whose name or text had `&` or `<` showed as a blank row,
+  because the row read it as Pango markup. The rows show plain text
+  now, and so does the database path in Preferences → Storage (a home
+  folder can have those characters too).
+
 ### Fixed — git hooks
 
 - The trailer-identity check never ran. It read the output of

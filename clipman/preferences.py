@@ -738,6 +738,8 @@ class ClipmanPreferences(Adw.Dialog):
 
         path_row = Adw.ActionRow()
         path_row.set_title(_("Database location"))
+        # Plain text: a home folder with '&' or '<' is not markup.
+        path_row.set_use_markup(False)
         path_row.set_subtitle(str(database.DB_PATH))
         cap_group.add(path_row)
 

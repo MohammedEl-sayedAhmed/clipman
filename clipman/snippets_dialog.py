@@ -54,6 +54,7 @@ class SnippetsDialog(Adw.Dialog):
         self._dirty = False
         self._draft = False  # "New" was pressed and nothing is saved yet
         self._suppress_dirty = False  # set while we programmatically reload
+        self._rebuilding = False  # set while _reload_list refills the list
 
         self.set_title(_("Snippets"))
         self.set_content_width(820)
@@ -235,18 +236,25 @@ class SnippetsDialog(Adw.Dialog):
         else:
             self._snippets = self.db.get_snippets()
 
-        # Drain existing rows.
-        while True:
-            row = self._listbox.get_row_at_index(0)
-            if row is None:
-                break
-            self._listbox.remove(row)
+        # Removing the selected row emits row-selected(None), which would
+        # empty the editor: after a save, or on each search keystroke with
+        # an edit in progress. The editor keeps what it shows; the list
+        # selects that snippet again when the search still includes it.
+        self._rebuilding = True
+        try:
+            while True:
+                row = self._listbox.get_row_at_index(0)
+                if row is None:
+                    break
+                self._listbox.remove(row)
 
-        for snippet in self._snippets:
-            row = self._make_list_row(snippet)
-            self._listbox.append(row)
-            if snippet["id"] == self._selected_id:
-                self._listbox.select_row(row)
+            for snippet in self._snippets:
+                row = self._make_list_row(snippet)
+                self._listbox.append(row)
+                if snippet["id"] == self._selected_id:
+                    self._listbox.select_row(row)
+        finally:
+            self._rebuilding = False
 
         self._count_label.set_text(
             _("{n} snippet").format(n=len(self._snippets))
@@ -256,6 +264,8 @@ class SnippetsDialog(Adw.Dialog):
 
     def _make_list_row(self, snippet):
         row = Adw.ActionRow()
+        # Plain text: as markup, a '&' or '<' blanked the whole row.
+        row.set_use_markup(False)
         row.set_title(snippet["name"])
         preview = (snippet.get("content_text") or "").split("\n", 1)[0]
         row.set_subtitle(preview[:80])
@@ -274,6 +284,8 @@ class SnippetsDialog(Adw.Dialog):
             index += 1
 
     def _on_row_selected(self, _listbox, row):
+        if self._rebuilding:
+            return
         if row is None:
             self._load_into_form(None)
             return
@@ -364,11 +376,13 @@ class SnippetsDialog(Adw.Dialog):
         self._reload_list()
         # Selecting the row is not enough: _on_row_selected early-returns
         # when the id already matches, so load the saved snippet by hand.
+        # From the database, not the list: a search may hide it there.
         row = self._find_row_by_id(self._selected_id)
         if row is not None:
             self._listbox.select_row(row)
         fresh = next(
-            (s for s in self._snippets if s["id"] == self._selected_id), None
+            (s for s in self.db.get_snippets() if s["id"] == self._selected_id),
+            None,
         )
         if fresh is not None:
             self._load_into_form(fresh)
