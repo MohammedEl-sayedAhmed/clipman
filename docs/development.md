@@ -106,6 +106,17 @@ the same scopes CI uses; `scripts/dev.sh ruff` and
 `scripts/dev.sh shellcheck` run either half alone. Ruff is pinned in
 the `lint` extra so the local version matches CI.
 
+```bash
+scripts/dev.sh validate
+```
+
+`validate` runs `actionlint` on the workflows (it also runs shellcheck on
+every `run:` block), `appstreamcli validate` on both metainfo files and
+`desktop-file-validate` on the desktop entry, as CI's `Validate` job does.
+The lint package set (`scripts/deps.sh --lint`) has everything except
+actionlint, which Ubuntu does not package; CI downloads a release pinned
+by checksum (see `.github/workflows/lint.yml`).
+
 Configuration lives in `pyproject.toml`. The two per-file ignores for
 `E402` in `clipman/app.py` and `clipman/window.py` are intentional —
 `gi.require_version()` legitimately must precede `from gi.repository

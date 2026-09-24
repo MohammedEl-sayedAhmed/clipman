@@ -10,6 +10,8 @@
 #   scripts/dev.sh screenshot [args]    headless render (scripts/screenshot.py)
 #   scripts/dev.sh i18n                 regenerate po/clipman.pot, compile po/*.po
 #   scripts/dev.sh hooks-test           the git-hook footprint-scanner corpus
+#   scripts/dev.sh validate             actionlint on the workflows; appstreamcli
+#                                       and desktop-file-validate on data/
 #   scripts/dev.sh check                lint, then test
 #   scripts/dev.sh help
 #
@@ -137,6 +139,24 @@ cmd_hooks_test() {
     bash .githooks/_test.sh
 }
 
+# The workflows (actionlint, which also runs shellcheck on every `run:`
+# block) and the files distributions install: the AppStream metainfo and
+# the desktop entry.
+cmd_validate() {
+    local tool
+    for tool in actionlint shellcheck appstreamcli desktop-file-validate; do
+        command -v "$tool" >/dev/null 2>&1 ||
+            die "$tool not found; run: scripts/deps.sh --lint --install (actionlint: see .github/workflows/lint.yml)"
+    done
+    actionlint -shellcheck "$(command -v shellcheck)"
+    local metainfo
+    for metainfo in data/*.metainfo.xml; do
+        appstreamcli validate --no-net "$metainfo"
+    done
+    desktop-file-validate data/*.desktop
+    log "validate ok"
+}
+
 cmd_check() {
     cmd_lint
     cmd_test "$@"
@@ -159,6 +179,7 @@ main() {
         i18n)       cmd_i18n ;;
         screenshot) cmd_screenshot "$@" ;;
         hooks-test) cmd_hooks_test ;;
+        validate)   cmd_validate ;;
         check)      cmd_check "$@" ;;
         help|-h|--help) cmd_help ;;
         *)
