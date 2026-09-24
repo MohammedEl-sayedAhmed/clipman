@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import sqlite3
 import hashlib
@@ -52,6 +53,12 @@ def _safe_image_path(image_path: str) -> bool:
         return resolved.parent == IMAGES_DIR.resolve()
     except (OSError, ValueError):
         return False
+
+
+def _remove_file(path):
+    """Delete ``path``; a file that is already gone is fine."""
+    with contextlib.suppress(FileNotFoundError):
+        os.remove(path)
 
 
 def content_hash(data: bytes) -> str:
@@ -232,10 +239,7 @@ class ClipboardDB:
             "SELECT image_path FROM entries WHERE id = ?", (entry_id,)
         ).fetchone()
         if row and row["image_path"] and _safe_image_path(row["image_path"]):
-            try:
-                os.remove(row["image_path"])
-            except FileNotFoundError:
-                pass
+            _remove_file(row["image_path"])
         self.conn.execute("DELETE FROM entries WHERE id = ?", (entry_id,))
         self.conn.commit()
 
@@ -245,10 +249,7 @@ class ClipboardDB:
         ).fetchall()
         for row in rows:
             if _safe_image_path(row["image_path"]):
-                try:
-                    os.remove(row["image_path"])
-                except FileNotFoundError:
-                    pass
+                _remove_file(row["image_path"])
         self.conn.execute("DELETE FROM entries WHERE pinned = 0")
         self.conn.commit()
 
@@ -274,10 +275,7 @@ class ClipboardDB:
         ).fetchall()
         for row in rows:
             if row["image_path"] and _safe_image_path(row["image_path"]):
-                try:
-                    os.remove(row["image_path"])
-                except FileNotFoundError:
-                    pass
+                _remove_file(row["image_path"])
             self.conn.execute("DELETE FROM entries WHERE id = ?", (row["id"],))
         self.conn.commit()
 
@@ -293,10 +291,7 @@ class ClipboardDB:
         ).fetchall()
         for row in rows:
             if row["image_path"] and _safe_image_path(row["image_path"]):
-                try:
-                    os.remove(row["image_path"])
-                except FileNotFoundError:
-                    pass
+                _remove_file(row["image_path"])
             self.conn.execute("DELETE FROM entries WHERE id = ?", (row["id"],))
         if rows:
             self.conn.commit()

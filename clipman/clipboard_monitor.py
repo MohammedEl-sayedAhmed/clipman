@@ -1,3 +1,4 @@
+import contextlib
 import logging
 import os
 import subprocess
@@ -61,20 +62,17 @@ class _WlPasteWatcher:
 
     def stop(self):
         if self._io_watch_id is not None:
-            try:
+            # The watch may already be gone (its callback returned False).
+            with contextlib.suppress(Exception):
                 GLib.source_remove(self._io_watch_id)
-            except Exception:
-                pass
             self._io_watch_id = None
         if self._proc is not None:
             try:
                 self._proc.terminate()
                 self._proc.wait(timeout=2)
             except (OSError, subprocess.TimeoutExpired):
-                try:
+                with contextlib.suppress(OSError):
                     self._proc.kill()
-                except OSError:
-                    pass
             self._proc = None
         self._fd = -1
         self._buf = b""
@@ -152,7 +150,7 @@ class _WlPasteWatcher:
                 if text:
                     self._monitor.handle_new_text(text)
         except (subprocess.SubprocessError, OSError):
-            pass
+            logger.debug("reading the clipboard text failed", exc_info=True)
 
 
 class ClipboardMonitor:
