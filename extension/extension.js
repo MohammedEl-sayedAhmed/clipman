@@ -42,12 +42,30 @@ const PASTE_DBUS_IFACE = `
   </interface>
 </node>`;
 
-const TERMINAL_WM_CLASSES = [
-    'gnome-terminal-server', 'tilix', 'kitty', 'alacritty',
-    'terminator', 'xterm', 'konsole', 'foot', 'wezterm',
-    'st', 'sakura', 'xfce4-terminal', 'mate-terminal',
-    'lxterminal', 'guake', 'tilda', 'cool-retro-term',
-];
+// Terminals paste with Ctrl+Shift+V. Matched against the whole lower-cased
+// wm_class (the Wayland app ID, or the X11 class) or its last dotted part,
+// never as a substring: a substring 'st' matched gnome-system-monitor,
+// steam and jetbrains-studio, and no entry matched org.gnome.Terminal,
+// org.gnome.Ptyxis or org.gnome.Console.
+const TERMINAL_APP_IDS = new Set([
+    'org.gnome.terminal', 'gnome-terminal-server', 'gnome-terminal',
+    'org.gnome.ptyxis', 'org.gnome.ptyxis.devel', 'ptyxis',
+    'org.gnome.console', 'org.gnome.console.devel', 'kgx',
+    'com.gexperts.tilix', 'tilix', 'kitty', 'alacritty', 'terminator',
+    'xterm', 'uxterm', 'org.kde.konsole', 'konsole', 'foot', 'footclient',
+    'org.wezfurlong.wezterm', 'wezterm', 'st', 'st-256color', 'sakura',
+    'xfce4-terminal', 'mate-terminal', 'lxterminal', 'guake', 'tilda',
+    'cool-retro-term', 'com.raggesilver.blackbox', 'com.mitchellh.ghostty',
+    'io.elementary.terminal', 'terminology', 'rio',
+]);
+
+function _isTerminal(wmClass) {
+    const id = (wmClass ?? '').toLowerCase();
+    if (!id)
+        return false;
+    return TERMINAL_APP_IDS.has(id) ||
+        TERMINAL_APP_IDS.has(id.slice(id.lastIndexOf('.') + 1));
+}
 
 // Null-prototype tables: a mode such as "__proto__" must not resolve.
 const PASTE_RECIPES = Object.assign(Object.create(null), {
@@ -68,7 +86,8 @@ export default class ClipmanExtension extends Extension {
         this._destroyed = false;
         this._paused = false;
         this._prevFocus = null;
-        this._hiddenWindows = new Set();
+        // MetaWindow -> its 'unmanaged' handler id.
+        this._hiddenWindows = new Map();
         this._daemonOwner = null;
         this._daemonPid = 0;
         this._deniedSenders = new Set();
@@ -82,20 +101,24 @@ export default class ClipmanExtension extends Extension {
         );
 
         // Learn which connection owns the daemon name; only it may call us.
+        // Our own bus name is claimed only after that first answer. The
+        // daemon pushes SetPaused as soon as the name appears, and a push
+        // that arrived while the owner was still unknown was refused and
+        // never retried, so incognito silently stopped pausing the
+        // extension after every screen unlock (which re-enables us).
+        this._busNameId = null;
         this._daemonWatchId = Gio.bus_watch_name(
             Gio.BusType.SESSION,
             DAEMON_BUS_NAME,
             Gio.BusNameWatcherFlags.NONE,
-            (_connection, _name, owner) => this._onDaemonAppeared(owner),
-            () => this._onDaemonVanished()
-        );
-
-        this._busNameId = Gio.bus_own_name_on_connection(
-            Gio.DBus.session,
-            OWN_BUS_NAME,
-            Gio.BusNameOwnerFlags.NONE,
-            null,
-            () => console.warn(`clipman: lost the bus name ${OWN_BUS_NAME}`)
+            (_connection, _name, owner) => {
+                this._onDaemonAppeared(owner);
+                this._ownBusName();
+            },
+            () => {
+                this._onDaemonVanished();
+                this._ownBusName();
+            }
         );
 
         this._dbusImpl = Gio.DBusExportedObject.wrapJSObject(
@@ -139,6 +162,18 @@ export default class ClipmanExtension extends Extension {
         this._daemonPid = 0;
         this._deniedSenders.clear();
         this._virtualKeyboard = null;
+    }
+
+    _ownBusName() {
+        if (this._busNameId || this._destroyed)
+            return;
+        this._busNameId = Gio.bus_own_name_on_connection(
+            Gio.DBus.session,
+            OWN_BUS_NAME,
+            Gio.BusNameOwnerFlags.NONE,
+            null,
+            () => console.warn(`clipman: lost the bus name ${OWN_BUS_NAME}`)
+        );
     }
 
     // ---- Window list patches (GNOME 45 to 48) -------------------------
@@ -231,6 +266,9 @@ export default class ClipmanExtension extends Extension {
         if (this._daemonOwner !== null && sender === this._daemonOwner)
             return true;
         if (!this._deniedSenders.has(sender)) {
+            // Bounded: a caller that reconnects has a new name each time.
+            if (this._deniedSenders.size >= 64)
+                this._deniedSenders.clear();
             this._deniedSenders.add(sender);
             console.warn(
                 `clipman: denied ${invocation.get_method_name()} from ` +
@@ -306,9 +344,8 @@ export default class ClipmanExtension extends Extension {
 
         // 'auto': Ctrl+V, or Ctrl+Shift+V when a terminal has focus.
         const focusWin = global.display.get_focus_window();
-        const wmClass = focusWin?.get_wm_class()?.toLowerCase() ?? '';
-        const isTerminal = TERMINAL_WM_CLASSES.some(c => wmClass.includes(c));
-        return isTerminal ? PASTE_RECIPES['ctrl-shift-v'] : PASTE_RECIPES['ctrl-v'];
+        return _isTerminal(focusWin?.get_wm_class())
+            ? PASTE_RECIPES['ctrl-shift-v'] : PASTE_RECIPES['ctrl-v'];
     }
 
     _getVirtualKeyboard() {
@@ -389,12 +426,18 @@ export default class ClipmanExtension extends Extension {
         if (!metaWin.hide_from_window_list)
             return;
         metaWin.hide_from_window_list();
-        this._hiddenWindows.add(metaWin);
+        // GTK maps the popup as a new MetaWindow on every show: forget each
+        // one when it goes away, instead of holding it until disable().
+        if (!this._hiddenWindows.has(metaWin)) {
+            this._hiddenWindows.set(metaWin, metaWin.connect('unmanaged',
+                () => this._hiddenWindows.delete(metaWin)));
+        }
     }
 
     _showHiddenWindows() {
-        for (const win of this._hiddenWindows) {
+        for (const [win, handlerId] of this._hiddenWindows) {
             try {
+                win.disconnect(handlerId);
                 if (win.show_in_window_list)
                     win.show_in_window_list();
             } catch {

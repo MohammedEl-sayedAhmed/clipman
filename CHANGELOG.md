@@ -419,6 +419,32 @@ change what a reader would do:
 - Docs: `docs/dbus-api.md` lists all four methods and version 8,
   `docs/threat-model.md` covers the extension surface.
 
+### Fixed — paste and incognito in the GNOME Shell extension
+
+- In the default `auto` paste mode, picking a clip into the default GNOME
+  terminals typed Ctrl+V, so nothing was pasted. The terminal check
+  matched part of the app ID, so `org.gnome.Terminal` (Ubuntu 24.04),
+  `org.gnome.Ptyxis` (Ubuntu 26.04, Fedora) and `org.gnome.Console` were
+  missed, while `st` matched System Monitor, Steam and JetBrains IDEs,
+  which got Ctrl+Shift+V. Terminals are now matched by their whole app ID
+  or its last dotted part.
+- Incognito stopped pausing the extension after a screen unlock. The
+  extension is re-enabled on every unlock, and it claimed its bus name
+  before it knew who owned the daemon's name. So the daemon's `SetPaused`
+  push was refused as coming from a stranger, and never retried. The
+  extension now claims its name only once it knows the owner.
+- Starting in incognito logged a false "denied SetPaused" security
+  warning: the daemon pushed the pause before it owned its own bus name.
+  It now pushes only after registering.
+- The extension kept a reference to every popup window ever shown, until
+  it was disabled, and its record of refused callers had no size limit.
+  Both are bounded now.
+- `scripts/extension-smoke.sh` stops before sending any keystroke when
+  the installed extension is older than the access-controlled one, which
+  would have typed real Ctrl+V into the focused window.
+- `docs/dbus-api.md` and `ARCHITECTURE.md` described a `wtype` fallback
+  that the daemon no longer uses, and the wrong deduplication rule.
+
 ### Changed — Snap packaging (#237, #238)
 
 - The snap now uses the `gnome` extension: the GTK4/libadwaita runtime

@@ -147,8 +147,9 @@ can type keystrokes and move focus inside the compositor.
 
 All four methods accept calls only from the connection that owns
 `com.clipman.Daemon`; other callers get `AccessDenied`. The
-`SimulatePaste(s mode)` argument was added in extension v5; the daemon
-calls the current signature only (see
+`SimulatePaste(s mode)` argument was added in extension v5. The daemon
+calls it with the mode, retries once without it for an older extension,
+and shows a "Couldn't auto-paste" dialog when both fail (see
 [ADR 0005](docs/adr/0005-paste-mode-as-dbus-arg.md)).
 
 ## Trust boundaries

@@ -120,9 +120,9 @@ changes. `content_type` selects the dispatch path:
   `monitor.handle_new_image()`, which reads the image off
   `wl-clipboard` itself.
 
-Any other `content_type` is silently ignored. The method is
-idempotent at the storage layer (the monitor deduplicates against
-the last entry's fingerprint).
+Any other `content_type` is silently ignored. Storage is deduplicated
+by content hash across the whole history: sending a clip that is
+already stored moves it to the top instead of adding a copy.
 
 ```bash
 gdbus call --session --dest com.clipman.Daemon \
@@ -138,10 +138,13 @@ gdbus call --session --dest com.clipman.Daemon \
 | Object path      | `/org/gnome/Shell/Extensions/clipman`           |
 | Interface        | `org.gnome.Shell.Extensions.clipman`            |
 
-Note: the extension's `metadata.json` `version` integer (currently 8)
-is the **extension D-Bus contract version**, not the product SemVer.
-See [ADR 0005](adr/0005-paste-mode-as-dbus-arg.md) for the rationale
-behind bumping it on contract changes.
+Note: the extension's `metadata.json` `version` integer (currently 9)
+counts extension releases, not the product SemVer, and
+extensions.gnome.org assigns its own number on upload. The daemon never
+reads it: it calls the current methods and copes with an older
+extension (see SimulatePaste below, and SetPaused, whose failure is
+ignored). See [ADR 0005](adr/0005-paste-mode-as-dbus-arg.md) for the
+history of the paste contract.
 
 **Access control (v8+).** Every method below is accepted only from the
 connection that owns `com.clipman.Daemon`. Any other caller gets
@@ -163,12 +166,13 @@ strings the extension doesn't recognise fall back to `auto`
 (forward-compat: a newer daemon can ship a new mode without crashing
 older extensions).
 
-In **`auto`** mode the extension inspects the focused window's
-`wm_class` and emits Ctrl+Shift+V for known terminal emulators
-(gnome-terminal-server, tilix, kitty, alacritty, terminator, xterm,
-konsole, foot, wezterm, st, sakura, xfce4-terminal, mate-terminal,
-lxterminal, guake, tilda, cool-retro-term) and Ctrl+V everywhere
-else.
+In **`auto`** mode the extension reads the focused window's
+`wm_class` (the Wayland app ID) and emits Ctrl+Shift+V for known
+terminal emulators and Ctrl+V everywhere else. It matches the whole
+lower-cased ID or its last dotted part, never a substring: for example
+`org.gnome.Terminal`, `org.gnome.Ptyxis`, `org.gnome.Console`, `kitty`,
+`org.wezfurlong.wezterm`, `com.mitchellh.ghostty`. The full list is
+`TERMINAL_APP_IDS` in `extension/extension.js`.
 
 ```bash
 gdbus call --session --dest org.gnome.Shell.Extensions.clipman \
@@ -176,11 +180,11 @@ gdbus call --session --dest org.gnome.Shell.Extensions.clipman \
     --method org.gnome.Shell.Extensions.clipman.SimulatePaste 'ctrl-shift-v'
 ```
 
-The daemon calls the current signature only. If the installed extension
-is older than the daemon, update it from extensions.gnome.org; the
-popup still works but paste falls back to `wtype`, which does not work
-on GNOME Wayland. See [ADR 0005](adr/0005-paste-mode-as-dbus-arg.md)
-for the history of the `mode` argument.
+The daemon calls `SimulatePaste(mode)` first. If that fails, it retries
+`SimulatePaste()` without the argument, the signature from before
+[ADR 0005](adr/0005-paste-mode-as-dbus-arg.md). If both fail, the popup
+comes back with a "Couldn't auto-paste" dialog. It never falls back to
+`wtype`, which cannot inject keys on GNOME Wayland.
 
 ### MoveWindowToCursor
 
