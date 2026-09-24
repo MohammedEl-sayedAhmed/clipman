@@ -44,7 +44,7 @@ scripts/dev.sh check
 # 5. Commit the bump on a branch and open a release PR.
 git checkout -b release/1.0.5
 git add pyproject.toml clipman/_version.py snap/snapcraft.yaml \
-        flathub aur/PKGBUILD CITATION.cff data CHANGELOG.md
+        flathub aur/PKGBUILD aur/.SRCINFO CITATION.cff data CHANGELOG.md
 git commit -m "chore: bump to 1.0.5"
 git push -u origin release/1.0.5
 gh pr create --fill
@@ -61,13 +61,18 @@ gh api repos/MohammedEl-sayedAhmed/clipman/git/refs \
 Creating the tag fires `release.yml`. Watch the run in the Actions tab —
 each stage either annotates the failure or moves on:
 
-1. **pre-flight** — confirms `pyproject.toml` and `snap/snapcraft.yaml`
-   match the tag; extracts the matching `CHANGELOG.md` section.
+1. **pre-flight** — confirms every version carrier matches the tag
+   (`pyproject.toml`, `clipman/_version.py`, the snap, `aur/PKGBUILD`
+   and `aur/.SRCINFO`, `CITATION.cff`, the Flatpak manifest, both
+   metainfo files) and that `CHANGELOG.md` has a section for it, which
+   becomes the release notes.
 2. **tests** — Python 3.10 / 3.11 / 3.12 matrix.
-3. **build-pypi** — `python -m build`, uploads dist/ artifact.
+3. **build-pypi** — `python -m build`, then installs the wheel in a
+   clean venv and checks that `clipman --version` reports the tag and
+   `style.css` ships; only then uploads the dist/ artifact.
 4. **publish-pypi** — OIDC trusted publish.
 5. **build-snap** — `snapcore/action-build`, uploads .snap artifact.
-6. **publish-snap** — releases to the `stable` channel.
+6. **publish-snap** — releases to `stable`, `candidate` and `beta`.
 7. **bundle-extension** — `gnome-extensions pack` → versioned zip.
 8. **github-release** — creates the GH Release with all artifacts and
    the auto-extracted CHANGELOG section as the body. It runs only when

@@ -18,7 +18,7 @@ on `main`.
 | Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests scripts clipman.py`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`, `.githooks/`), plus `scripts/dev.sh hooks-test`, the local git hooks' own test suite. | Yes — `Python (ruff)`, `Shell (shellcheck)` and `Hooks (self-test)` |
 | Footprints | `footprints.yml` | `pull_request` to `main` (opened, synchronize, reopened, edited) | `scripts/check-footprints.sh`: blocks AI-tool attribution in the pull request's commits (trailers, messages, added lines), title and description, with the same checks as the local git hooks. A bot's description is skipped. | Yes — `Footprints` |
 | Refresh marketing numbers | `refresh-numbers.yml` | Daily cron (`0 6 * * *`), `workflow_dispatch`, `push` to `main` touching its own paths | Fetches PyPI and GNOME Extensions counts on the runner, rebuilds the self-hosted star-history SVGs and the downloads history, and commits them to the `numbers` branch with the built-in `GITHUB_TOKEN`. No pull request, no personal token; `main` is never touched. | No |
-| Release | `release.yml` | `push` of tag matching `v*.*.*`, `workflow_dispatch` | End-to-end release pipeline: pre-flight version checks, matrix tests, builds (PyPI, snap, .deb/.rpm, AppImage, extension bundle), and publishes to PyPI, Snap Store, AUR, and GitHub Releases. | No (tag-triggered only) |
+| Release | `release.yml` | `push` of tag matching `v*.*.*`, `workflow_dispatch` | End-to-end release pipeline: pre-flight version checks, matrix tests, builds (PyPI, snap, .deb/.rpm, extension bundle) with a wheel smoke test before the PyPI upload, and publishes to PyPI, Snap Store, AUR, and GitHub Releases. | No (tag-triggered only) |
 | Scorecard | `scorecard.yml` | `push` to `main`, weekly cron (`37 4 * * 1`), `branch_protection_rule` | OSSF Scorecard supply-chain analysis; uploads SARIF to the GitHub Security tab and publishes results. | No |
 | Secret scan | `secret-scan.yml` | `push` to `main`, `pull_request` to `main` | Runs `gitleaks` over full git history to catch committed credentials. | Yes — `gitleaks` |
 | Snap refresh | `snap-refresh.yml` | Weekly cron (`0 4 * * 1`), `workflow_dispatch`, `push`/`pull_request` to `main` touching snap-relevant paths | Rebuilds the snap to pick up Ubuntu archive security updates. The scheduled run publishes every channel: edge from `main`, and beta, candidate and stable from the latest release tag. See ADR 0012. | No |
@@ -40,7 +40,6 @@ flowchart TD
     BP[build-pypi]
     BS[build-snap]
     BD[build-distpkgs]
-    BA[build-appimage]
     BE[bundle-extension]
     PP[publish-pypi]
     PS[publish-snap]
@@ -56,8 +55,6 @@ flowchart TD
     PF --> BS
     PF --> BD
     PF --> BE
-    BP --> BA
-    PF --> BA
     BP --> PP
     PF --> PP
     BS --> PS
@@ -65,7 +62,6 @@ flowchart TD
     PP --> GR
     PS --> GR
     BD --> GR
-    BA --> GR
     BE --> GR
     PF --> GR
     GR --> PA
@@ -98,22 +94,19 @@ graph and step contents):
   publish step rather than failing.
 - **build-distpkgs** — fpm-based builder produces a `.deb` and a
   `.rpm` from a staged filesystem tree (reshaped in PR #29).
-- **build-appimage** — `python-appimage` pinned to `1.4.5` (PR #37)
-  bundles the wheel with a Python 3.12 runtime. The Ubuntu 24.04
-  runner installs `libfuse2t64` with a fallback to `libfuse2`
-  (PR #33). The build step is allowed to fail with a warning rather
-  than block the pipeline because Python+GTK packaging is brittle.
 - **bundle-extension** — `gnome-extensions pack` produces a
   versioned `clipman-extension-vX.Y.Z.zip` for the GNOME Extensions
   website upload (manual; EGO has no programmatic upload API).
 - **github-release** — runs only when every job before it succeeded
-  (PyPI, Snap, extension bundle, deb/rpm, AppImage), so a Release is
-  never marked Latest with a failed publish behind it.
+  (PyPI, Snap, extension bundle, deb/rpm), so a Release is never
+  marked Latest with a failed publish behind it.
   `softprops/action-gh-release` assembles the artifacts under
   `release-assets/` and creates the Release with the
   pre-flight-extracted CHANGELOG section as the body.
-  `fail_on_unmatched_files: false` lets the release ship without the
-  AppImage glob match if `build-appimage` skipped its upload.
+  `fail_on_unmatched_files: true`: every file comes from a job that
+  must succeed first, so a missing one means a broken glob. (The
+  AppImage job was removed: it never produced a working AppImage, and
+  hid its failure. #319 tracks bringing it back.)
 - **publish-aur** — clones `ssh://aur@aur.archlinux.org/clipman-clipboard.git`,
   copies the refreshed `aur/PKGBUILD` and `aur/.SRCINFO` produced by
   `scripts/update-aur.sh`, and pushes. Requires `AUR_SSH_PRIVATE_KEY`;
@@ -219,9 +212,9 @@ single-maintainer project — see
 
 Ranked playbook, cheapest first.
 
-1. **Read the failed step's log.** The CodeQL ratchet, the AppImage
-   build, and any third-party action that has shifted behaviour will
-   surface a useful annotation here.
+1. **Read the failed step's log.** The CodeQL ratchet, the release
+   wheel smoke test, and any third-party action that has shifted
+   behaviour will surface a useful annotation here.
 
    ```bash
    gh run view <run-id> --log-failed

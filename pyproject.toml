@@ -40,7 +40,9 @@ test = ["pytest==9.1.1", "PyGObject>=3.46,<3.59", "dbus-python>=1.3"]
 dev = ["clipman-clipboard[lint,test]"]
 
 [build-system]
-requires = ["setuptools>=68.0"]
+# 77 is the first release that accepts the PEP 639 license string below;
+# 68 to 76 fail a build without isolation (distro packaging, offline).
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]

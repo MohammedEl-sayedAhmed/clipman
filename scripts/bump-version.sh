@@ -59,9 +59,13 @@ if [ -d flathub ]; then
     sed -i -E "s|\"tag\":\s*\"v$old\"|\"tag\": \"v$new\"|g" flathub/*.json 2>/dev/null || true
 fi
 
-# AUR PKGBUILD
+# AUR PKGBUILD, and the .SRCINFO rendered from it. The release pre-flight
+# and tests/test_release_metadata.py check .SRCINFO against the version, so
+# it must move with the PKGBUILD. (The tarball sha256 in both is refreshed
+# by scripts/update-aur.sh once the tag exists.)
 if [ -f aur/PKGBUILD ]; then
     sed -i -E "s/^(pkgver=).*/\1$new/" aur/PKGBUILD
+    scripts/update-aur.sh --print-srcinfo > aur/.SRCINFO
 fi
 
 # CITATION.cff — project version + release date (cff-version is the CFF
