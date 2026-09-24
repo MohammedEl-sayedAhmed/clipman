@@ -195,8 +195,15 @@ GTK 4 + libadwaita, theming is layered:
 The repo ships opt-in local hooks under [`.githooks/`](.githooks/) that
 guard against AI-tool footprints and wrong-account commits. They are
 **not required** to contribute; CI does not run them.
-`scripts/dev-setup.sh` installs them when nothing else owns
-`core.hooksPath`. To install (or re-install) them by hand:
+`scripts/dev-setup.sh` installs them in every clone. In your clone they
+run in contributor mode: they check for AI-tool footprints and never
+question your name, email, fork, or co-authors.
+
+Using AI tools is fine, but this project keeps AI-tool attribution out of
+its history and pull requests: no co-author trailers for AI assistants,
+no "Generated with …" notes, no robot emoji. The `Footprints` check runs
+on every pull request (commits, title and description), so the hooks just
+tell you earlier. To install (or re-install) them by hand:
 
 ```sh
 scripts/install-hooks.sh

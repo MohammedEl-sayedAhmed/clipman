@@ -22,6 +22,7 @@ def main(path: str) -> int:
             str(i),
             t["category"],
             t["expected_outcome"],
+            t.get("expected_check", ""),
             encode(t["reason"]),
             encode(t["input"]),
         ]

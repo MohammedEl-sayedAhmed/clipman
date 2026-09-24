@@ -12,7 +12,9 @@ specific assistant.
   allowlist; never bypass it or act under any other account.
 - **No AI attribution anywhere**: no `Co-Authored-By:` lines for bots or
   assistants, no "Generated with …" trailers, no robot emojis in commits,
-  PRs, or issues. If one slips in, amend before pushing.
+  PRs, or issues. If one slips in, amend before pushing. The local hooks
+  and CI's `Footprints` check on every pull request enforce this for
+  every contributor.
 - Never reference private, client, or employer projects in code, comments,
   commits, PRs, or docs. Describe borrowed patterns generically.
 

@@ -1,0 +1,52 @@
+name: Footprints
+
+# The pull-request side of the no-AI-attribution rule (AGENTS.md): blocks
+# AI-tool attribution in a pull request's commits (trailers, messages,
+# added lines), title and description, for every contributor. It runs the
+# same checks as the local git hooks (.githooks/_lib.sh), so anyone who
+# installed the hooks sees a problem before pushing. Using AI tools is
+# fine; attributing them in the project's history is not.
+#
+# Runs on pull_request, never pull_request_target: a fork's run gets a
+# read-only token and no secrets. The title and description reach the
+# script through environment variables, never through ${{ }} inside run.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: footprints-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  scan:
+    name: Footprints
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The base and every commit of the pull request.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan commits, title and description
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_AUTHOR_TYPE: ${{ github.event.pull_request.user.type }}
+        run: scripts/check-footprints.sh "$BASE_SHA" "$HEAD_SHA"

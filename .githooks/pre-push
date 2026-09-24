@@ -12,37 +12,56 @@ remote_name="${1:-origin}"
 remote_url="${2:-$(git remote get-url --push "$remote_name" 2>/dev/null || true)}"
 
 failed=0
+commit_failed=0
+ident_failed=0
 
-# ----- Push URL check ------------------------------------------------------
-
-bad_urls=()
-owner=""
-while IFS= read -r url; do
-    [ -z "$url" ] && continue
-    # Match the URL's owner segment exactly where we can parse one, so a
-    # repo like "<owner>-mirror" under another account cannot pass on a
-    # substring. URLs with no host (local paths) keep the looser check.
-    if owner=$(push_url_owner "$url"); then
-        is_allowed_owner "$owner" || bad_urls+=("$url")
-    elif ! contains_allowed_identity "$url"; then
-        bad_urls+=("$url")
-    fi
-done < <(printf '%s\n' "$remote_url"; collect_push_urls)
-
-if [ "${#bad_urls[@]}" -gt 0 ]; then
-    hook_error "push URL points to an account outside the allowlist ($(allowed_list_for_message))"
-    for u in "${bad_urls[@]}"; do hook_detail "$u"; done
-    hook_detail "Reset: git remote set-url --push $remote_name git@github.com:MohammedEl-sayedAhmed/clipman.git"
-    failed=1
+# The account checks (push URL, gh login, commit authors) belong to the
+# maintainer's clone only; see is_maintainer_clone in _lib.sh. The trailer
+# and footprint checks run for everyone who installed the hooks.
+maintainer=0
+if is_maintainer_clone; then
+    maintainer=1
 fi
 
-# ----- gh active account warning ------------------------------------------
+# ----- Push URL check (maintainer's clone only) -----------------------------
 
-active=$(gh_active_login)
-if [ -n "$active" ] && ! contains_allowed_identity "$active"; then
-    hook_warn "gh-CLI active account is '$active' (outside the allowlist)"
-    hook_detail "ssh push is unaffected, but 'gh pr create / gh pr merge' would use this account."
-    hook_detail "Switch: gh auth switch -u MohammedEl-sayedAhmed"
+if [ "$maintainer" -eq 1 ]; then
+    bad_urls=()
+    owner=""
+    while IFS= read -r url; do
+        [ -z "$url" ] && continue
+        # Match the URL's owner segment exactly where we can parse one, so a
+        # repo like "<owner>-mirror" under another account cannot pass on a
+        # substring. URLs with no host (local paths) keep the looser check.
+        if owner=$(push_url_owner "$url"); then
+            is_allowed_owner "$owner" || bad_urls+=("$url")
+        elif ! contains_allowed_identity "$url"; then
+            bad_urls+=("$url")
+        fi
+    done < <({ printf '%s\n' "$remote_url"; collect_push_urls "$remote_name"; } | awk '!seen[$0]++')
+
+    if [ "${#bad_urls[@]}" -gt 0 ]; then
+        hook_error "push URL points to an account outside the allowlist ($(allowed_list_for_message))"
+        for u in "${bad_urls[@]}"; do hook_detail "$u"; done
+        hook_detail "Reset: git remote set-url --push $remote_name git@github.com:${HOOKS_ALLOW[0]}/clipman.git"
+        hint_not_maintainer
+        failed=1
+    fi
+fi
+
+# ----- gh active account (maintainer's clone only) --------------------------
+#
+# gh's active account is the one 'gh pr create' uses, and the one pushing
+# over https when gh is git's credential helper, so a foreign one is an
+# error, not a warning.
+
+if [ "$maintainer" -eq 1 ]; then
+    active=$(gh_active_login)
+    if [ -n "$active" ] && ! contains_allowed_identity "$active"; then
+        hook_error "gh-CLI active account is '$active' (outside the allowlist)"
+        hook_detail "Switch: gh auth switch -u ${HOOKS_ALLOW[0]}"
+        failed=1
+    fi
 fi
 
 # ----- Per-commit scan ----------------------------------------------------
@@ -53,79 +72,24 @@ scan_commit() {
     local sha="$1"
     local local_failed=0
 
-    # Author + committer identity
-    local ae ce an cn ident
-    ae=$(git log -1 --format='%ae' "$sha")
-    ce=$(git log -1 --format='%ce' "$sha")
-    an=$(git log -1 --format='%an' "$sha")
-    cn=$(git log -1 --format='%cn' "$sha")
-    for ident in "$ae" "$ce" "$an" "$cn"; do
-        if [ -n "$ident" ] && ! contains_allowed_identity "$ident"; then
-            hook_error "commit $sha attributed to an account outside the allowlist"
-            hook_detail "  $ident"
-            local_failed=1
-        fi
-    done
-
-    # Trailer-identity allowlist. Co-Authored-By / Signed-off-by /
-    # Reviewed-by / Tested-by trailers must carry an email from one of
-    # the safe identity classes (owner allowlist, GitHub privacy-alias
-    # noreplies, or GitHub's web-flow identity). Raw personal/work
-    # domain emails are rejected here — use the privacy-alias form
-    # instead. See is_safe_trailer_email in _lib.sh.
-    local tmp_msg
-    tmp_msg=$(mktemp)
-    git log -1 --format='%B' "$sha" > "$tmp_msg"
-    if ! scan_trailer_identities "$tmp_msg"; then
-        hook_error "commit $sha has a non-allowlisted trailer identity"
-        hook_detail "  $(git log -1 --format='%h %s' "$sha")"
-        local_failed=1
-    fi
-    rm -f "$tmp_msg"
-
-    # Footprint scan: message
-    local message
-    message=$(git log -1 --format='%B' "$sha")
-    if ! printf '%s' "$message" | scan_footprints; then
-        hook_error "commit $sha message contains a footprint"
-        hook_detail "  $(git log -1 --format='%h %s' "$sha")"
-        local_failed=1
-    fi
-
-    # Footprint scan: added content in non-allowlisted files (BYPASS-12)
-    # We compare each commit against its parent; for root commits, against
-    # an empty tree.
-    local parents parent diffrange added_files
-    parents=$(git log -1 --format='%P' "$sha")
-    if [ -z "$parents" ]; then
-        # Root commit
-        diffrange="4b825dc642cb6eb9a060e54bf8d69288fbee4904..$sha"
-    else
-        parent=${parents%% *}  # first parent only (merge commits)
-        diffrange="${parent}..${sha}"
-    fi
-
-    added_files=$(git diff --name-only --diff-filter=AM "$diffrange" 2>/dev/null || true)
-    if [ -n "$added_files" ]; then
-        local aggregated=""
-        while IFS= read -r path; do
-            [ -z "$path" ] && continue
-            if is_path_allowlisted "$path"; then continue; fi
-            local file_add
-            file_add=$(git diff --no-color --diff-filter=AM "$diffrange" -- "$path" 2>/dev/null \
-                       | awk '/^\+\+\+ /{next} /^\+/{print}')
-            if [ -n "$file_add" ]; then
-                aggregated="${aggregated}${file_add}"$'\n'
-            fi
-        done <<<"$added_files"
-
-        if [ -n "$aggregated" ]; then
-            if ! printf '%s' "$aggregated" | scan_footprints; then
-                hook_error "commit $sha diff contains a footprint"
-                hook_detail "  $(git log -1 --format='%h %s' "$sha")"
+    # Author + committer identity (maintainer's clone only). Each distinct
+    # value is reported once.
+    if [ "$maintainer" -eq 1 ]; then
+        local ident
+        while IFS= read -r ident; do
+            if [ -n "$ident" ] && ! contains_allowed_identity "$ident"; then
+                hook_error "commit $sha attributed to an account outside the allowlist"
+                hook_detail "  $ident"
                 local_failed=1
+                ident_failed=1
             fi
-        fi
+        done < <(git log -1 --format='%ae%n%ce%n%an%n%cn' "$sha" | awk '!seen[$0]++')
+    fi
+
+    # Trailers, message and added lines: the same checks CI runs on
+    # every pull request (scan_commit_content in _lib.sh).
+    if ! scan_commit_content "$sha"; then
+        local_failed=1
     fi
 
     return "$local_failed"
@@ -165,16 +129,27 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         [ -z "$sha" ] && continue
         if ! scan_commit "$sha"; then
             failed=1
+            commit_failed=1
         fi
     done <<<"$commits"
 done
 
+if [ "$ident_failed" -ne 0 ]; then
+    hint_not_maintainer
+fi
+
 if [ "$failed" -ne 0 ]; then
     hook_section "push aborted"
-    hook_detail "To fix: amend or interactive-rebase the offending commit(s)."
+    if [ "$commit_failed" -ne 0 ]; then
+        hook_detail "To fix: amend or interactive-rebase the offending commit(s)."
+    fi
     hook_detail "Bypass once (NOT recommended): git push --no-verify"
     exit 1
 fi
 
-hook_ok "push: identity + commits clean"
+if [ "$maintainer" -eq 1 ]; then
+    hook_ok "push: identity + commits clean"
+else
+    hook_ok "push: commits clean (account checks are off outside the maintainer's clone)"
+fi
 exit 0

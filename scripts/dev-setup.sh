@@ -96,7 +96,8 @@ else
     .venv/bin/python -m pip install -e ".[dev]"
 fi
 
-# 3. Git hooks
+# 3. Git hooks. Everyone gets the AI-footprint checks; install-hooks.sh
+# turns on the account checks only in the maintainer's own clone.
 step "Git hooks"
 hooks_path=$(git config --get core.hooksPath 2>/dev/null || true)
 if [ -z "$hooks_path" ]; then

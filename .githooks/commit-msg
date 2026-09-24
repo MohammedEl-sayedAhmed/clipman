@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # commit-msg hook: reject commits whose message contains AI/Claude
-# footprints or trailers citing an account outside the allowlist.
+# footprints, or trailers from an AI-assistant vendor domain or borrowing an
+# allowlisted handle. Runs the same way in every clone: outside
+# contributors' own trailers pass.
 
 # shellcheck source=.githooks/_lib.sh
 . "$(dirname -- "$(readlink -f -- "$0" 2>/dev/null || printf '%s' "$0")")/_lib.sh"
@@ -15,12 +17,10 @@ if ! scan_footprints "$msg_file"; then
     failed=1
 fi
 
-# Trailer-identity scan. Only safe identity classes are allowed in
-# Co-Authored-By / Signed-off-by / Reviewed-by / etc. trailers: the
-# owner allowlist, GitHub privacy-alias noreplies, and GitHub's
-# web-flow merge identity. Raw personal/work domain emails are blocked
-# at this layer — use the privacy-alias form of the email instead.
-# (See is_safe_trailer_email in _lib.sh for the exact policy.)
+# Trailer-identity scan. Co-Authored-By / Signed-off-by / Reviewed-by /
+# etc. trailers may not use an AI-assistant vendor domain or borrow an
+# allowlisted handle on an address that doesn't back it up. Every other
+# human passes. (See is_safe_trailer_email in _lib.sh for the exact policy.)
 if ! scan_trailer_identities "$msg_file"; then
     failed=1
 fi

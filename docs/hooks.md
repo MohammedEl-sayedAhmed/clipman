@@ -1,7 +1,8 @@
 # Local git hooks
 
 This repo ships **opt-in** local git hooks at [`.githooks/`](../.githooks/)
-that catch two specific classes of mistake before they leave your machine:
+that catch two specific classes of mistake before they leave the
+maintainer's machine:
 
 1. **Wrong-account commits/pushes** — the maintainer has multiple GitHub
    logins on one machine; the hooks refuse commits whose git identity
@@ -9,9 +10,12 @@ that catch two specific classes of mistake before they leave your machine:
 2. **AI-tool footprints** — Claude/Anthropic attributions, robot emojis,
    `Co-Authored-By: Claude`, "Generated with Claude Code", etc.
 
-These hooks are **local-only**. CI does not enforce them. External
-contributors do not need to install them. Skipping the install changes
-nothing about your ability to commit, review, or merge.
+`scripts/dev-setup.sh` installs them in every clone. The footprint checks
+(2) apply to everyone: this project keeps AI-tool attribution out of its
+history, and CI enforces the same rule on every pull request (see
+[Pull requests](#pull-requests)). The account checks (1) run only in the
+maintainer's own clone and never question a contributor's name, email,
+fork, or co-authors.
 
 ## Install
 
@@ -25,13 +29,50 @@ This sets `git config core.hooksPath .githooks` for the current clone
 only — no global side effects, no dependencies installed. Re-running is
 idempotent.
 
+## Maintainer mode
+
+The account checks (1) only make sense in the maintainer's clone, so the
+hooks run in one of two modes:
+
+- **Maintainer mode:** every check below.
+- **Contributor mode:** only the footprint and trailer checks. Your own
+  name, email, fork, and co-authors are never questioned.
+
+`install-hooks.sh` picks the mode from the clone's git identity: an
+identity on the allowlist means maintainer mode, any other identity
+contributor mode. Pass `--maintainer` or `--contributor` to choose, or
+change it later:
+
+```sh
+git config clipman.hooks.maintainer true    # or false
+```
+
+When the setting is missing (no git identity at install time, or a clone
+set up before the setting existed), a clone whose `origin`, as configured,
+belongs to an allowlisted account counts as the maintainer's.
+
+## Pull requests
+
+The `Footprints` workflow (`.github/workflows/footprints.yml`) runs
+`scripts/check-footprints.sh` on every pull request. It uses the same
+checks as the hooks (`scan_commit_content` in `.githooks/_lib.sh`) on each
+commit's trailers, message and added lines, and also scans the pull
+request's title and description. The description of a pull request
+opened by a bot is skipped, because Dependabot quotes upstream release
+notes. It never looks at who you are. So the rule holds even for someone
+who never installed the hooks or skipped them with `--no-verify`.
+
 ## What gets checked
 
 | Hook | When it runs | What it does |
 |---|---|---|
-| `commit-msg` | After you save the commit message | Scans the message for AI footprints (Claude/Anthropic/🤖); rejects trailers (`Co-Authored-By:`, `Signed-off-by:`, …) that cite an account not on the allowlist. |
-| `pre-commit` | Before the commit-msg editor opens | Compares your active git identity (config, env vars, `GIT_AUTHOR_IDENT`) against the allowlist. Scans the **added** lines in your staged diff for footprints. |
-| `pre-push` | Before commits leave the machine | Final defense: scans each commit being pushed (author/committer/Co-Authored-By/message). Rejects pushes whose remote URL points at a fork whose owner is not on the allowlist. Warns if your `gh` CLI active account is not on the allowlist. |
+| `commit-msg` | After you save the commit message | Scans the message for AI footprints (Claude/Anthropic/🤖). Rejects trailers (`Co-Authored-By:`, `Signed-off-by:`, …) from an AI-assistant vendor domain, or that borrow an allowlisted handle on an address that doesn't back it up. Everyone else's trailers pass. |
+| `pre-commit` | Before the commit-msg editor opens | Scans the **added** lines in your staged diff for footprints. In maintainer mode, also compares your active git identity (config, env vars, `GIT_AUTHOR_IDENT`) against the allowlist. |
+| `pre-push` | Before commits leave the machine | Scans each commit being pushed (trailers, message, added lines). In maintainer mode, also checks each commit's author and committer, refuses a push whose real destination belongs to an account outside the allowlist, and refuses when the `gh` CLI's active account is outside it. |
+
+The push check looks at the URL the push actually goes to, after any
+`insteadOf` / `pushInsteadOf` rewrite. Rewrite rules for other hosts (a
+work GitLab, say) never affect it.
 
 ## The allowlist
 
@@ -45,7 +86,9 @@ Override with an env var (one-off or via shell rc):
 export CLIPMAN_HOOKS_ALLOW="MohammedEl-sayedAhmed another-account"
 ```
 
-Match is case-insensitive substring against git identity strings, remote URLs, gh login names, and commit trailers. If the local identity doesn't contain any allowlisted name as a substring, the hook refuses the commit or push. External contributors don't install these hooks (per the opt-in note above), so they aren't affected.
+Git identities and gh logins match by case-insensitive substring. A push
+URL's owner segment must match exactly, so a repo named
+`MohammedEl-sayedAhmed-mirror` under another account does not pass.
 
 ## Bypass
 
@@ -74,14 +117,20 @@ automatically. No re-install needed.
 ## Testing the hooks
 
 ```sh
-.githooks/_test.sh             # corpus + identity and push-URL unit tests
+scripts/dev.sh hooks-test      # or: .githooks/_test.sh
 ```
 
-The corpus (`.githooks/_test_corpus.json`) was generated by a research
-workflow that enumerated real footprint patterns and adversarial edge
-cases. Every case runs through the real `commit-msg` hook, so both the
-footprint scanner and the trailer-identity check are covered. As of last
-commit: 51/51 pass.
+The corpus (`.githooks/_test_corpus.json`) lists real footprint patterns,
+adversarial edge cases, and outside contributors' commits. A case that is
+a commit message runs through the real `commit-msg` hook. A case that
+describes a clone (identity, `gh` login, URL rewrites, mode) runs through
+the real `pre-commit` and `pre-push` hooks in a throwaway repo, with a
+temporary HOME so your own git settings never affect the result. Every
+commit-message case also becomes a real commit for
+`scripts/check-footprints.sh`, which must reach the same verdict as
+`commit-msg`, so the local hooks and the pull-request check never drift
+apart. Unit tests for the identity and push-URL matching follow. CI runs
+the whole suite on every pull request.
 
 ## Known limitations
 
@@ -105,16 +154,17 @@ specific, plain-ASCII footprint (`Co-Authored-By: Claude
 <noreply@anthropic.com>`, `Generated with [Claude Code](...)`, 🤖) — the
 hooks catch that.
 
-## Why this is local-first
+## What runs where
 
-A CI guardrail running this scan on every PR would either:
+| Check | Local hooks | CI (every pull request) |
+|---|---|---|
+| AI-tool footprints: messages, trailers, added lines | Yes, every clone | Yes (`Footprints`) |
+| Footprints in the pull request title and description | — | Yes (`Footprints`) |
+| Git identity, push URL, gh account, commit authors | Maintainer's clone only | Never |
 
-- Block external contributors' PRs based on rules they didn't sign up
-  for (bad), or
-- Apply only to the maintainer's own commits (then it's redundant with
-  local hooks — and worse: footprints reach `main`'s history *before*
-  CI catches them).
-
-Local-first means the footprint never reaches `origin`. CI stays
-contributor-friendly: no maintainer-specific rules gate someone else's
-merge.
+The footprint rule is the project's own rule (AGENTS.md), so it applies
+to every contributor, and CI makes sure of it. The local hooks catch the
+same things earlier, before anything leaves the machine. The account
+checks exist only to stop the maintainer pushing from the wrong account,
+so they never gate anyone else's pull request. CI also runs the hooks'
+own test suite, which checks the hook code.
