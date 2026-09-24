@@ -82,3 +82,46 @@ jobs:
         run: |
           version=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
           PYTHON=python scripts/wheel-smoke.sh dist "$version"
+
+  e2e:
+    name: e2e (headless GNOME Shell)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The system python3, which is the one with the apt GTK bindings.
+      # gjs runs the Shell's D-Bus services (gnome-extensions needs one);
+      # gnome-shell itself only depends on the library. dconf stores the
+      # settings, as in a real session.
+      - name: Install GNOME Shell and Clipman's runtime packages
+        run: |
+          scripts/deps.sh --runtime --install --yes
+          sudo apt-get install -y --no-install-recommends \
+            gnome-shell gjs dbus-daemon libglib2.0-bin libgl1-mesa-dri \
+            dconf-service dconf-gsettings-backend
+
+      # Its own headless Shell, bus and home: install, log in again, copy,
+      # open the popup, uninstall. See tests/e2e/install_flow.sh.
+      - name: Install, log in again, copy, and uninstall
+        run: scripts/dev.sh e2e "$RUNNER_TEMP/e2e"
+
+      - name: Keep the logs of a failed run
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-logs
+          path: |
+            ${{ runner.temp }}/e2e/*.log
+            ${{ runner.temp }}/e2e/*.out
+          if-no-files-found: ignore

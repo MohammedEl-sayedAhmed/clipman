@@ -601,6 +601,18 @@ change what a reader would do:
   - `com.clipman.Clipman.metainfo.xml`, which the AUR package installs,
     failed validation: its developer id had capital letters;
   - two file names in `release.yml` were unquoted.
+- A new `e2e (headless GNOME Shell)` job runs Clipman the way a user
+  meets it, in a headless GNOME Shell 46 with its own bus and home:
+  - `install.sh` during a live session, then a new login;
+  - the extension must be on, and a copy must reach the history;
+  - `scripts/extension-smoke.sh` must pass;
+  - the open and the hidden popup must stay idle;
+  - `uninstall.sh`, without a terminal, must stop a daemon started by
+    hand.
+
+  Before, CI had no test of the extension or the installer, and the
+  bugs fixed in #307 and #328 reached users. Against the old code, the
+  job fails on each of them. `scripts/dev.sh e2e` runs it locally.
 
 ## [1.2.1] - 2026-08-22
 

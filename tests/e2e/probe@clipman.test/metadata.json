@@ -1,0 +1,7 @@
+{
+  "uuid": "probe@clipman.test",
+  "name": "Clipman end-to-end probe",
+  "description": "Test only. Turns on unsafe mode in the throwaway headless Shell of tests/e2e, so the tests can use org.gnome.Shell.Eval. Never install it in a real session.",
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
+  "version": 1
+}
