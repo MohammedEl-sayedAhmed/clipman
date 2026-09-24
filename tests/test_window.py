@@ -126,14 +126,14 @@ class _WidgetTestCase(unittest.TestCase):
         self.addCleanup(app.quit)
         return app
 
-    def _make_db(self):
+    def _make_db(self, prefix="clipman-test-"):
         # Use a temp dir so the test never touches the real DB.
         # Mirrors the pattern in test_database.py: patch the module-level
         # paths (do NOT mutate them — that leaks across tests) and register
         # an addCleanup for each patch + the tmpdir.
         from clipman import database
 
-        tmp = tempfile.mkdtemp(prefix="clipman-test-")
+        tmp = tempfile.mkdtemp(prefix=prefix)
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
         data_dir = Path(tmp) / "clipman"
         images_dir = data_dir / "images"
@@ -983,6 +983,104 @@ class TestWindowConstruction(_WidgetTestCase):
         dialog._on_delete_response(None, "delete")
         self.assertEqual(db.get_snippets(), [])
         self.assertIsNone(dialog._selected_id)
+
+    def _snippets_dialog_on(self, db, name):
+        """A snippets dialog with the snippet called ``name`` selected, the
+        way a click selects it."""
+        from clipman.snippets_dialog import SnippetsDialog
+
+        dialog = SnippetsDialog(db)
+        sid = next(s["id"] for s in db.get_snippets() if s["name"] == name)
+        dialog._listbox.select_row(dialog._find_row_by_id(sid))
+        self.assertEqual(dialog._selected_id, sid)
+        return dialog, sid
+
+    @staticmethod
+    def _content(dialog):
+        buf = dialog._textview.get_buffer()
+        return buf.get_text(buf.get_start_iter(), buf.get_end_iter(), True)
+
+    def test_saving_a_snippet_keeps_it_in_the_editor(self):
+        """UI-7: the list reload after Save removed the selected row, and
+        the resulting row-selected(None) emptied the editor."""
+        db = self._make_db()
+        db.add_snippet("Greeting", "Hello")
+        dialog, sid = self._snippets_dialog_on(db, "Greeting")
+        dialog._textview.get_buffer().set_text("Hello there, ${clipboard}!")
+
+        dialog._on_save_clicked(None)
+
+        self.assertEqual(db.get_snippets()[0]["content_text"],
+                         "Hello there, ${clipboard}!")
+        self.assertEqual(dialog._selected_id, sid)
+        self.assertEqual(dialog._name_row.get_text(), "Greeting")
+        self.assertEqual(self._content(dialog), "Hello there, ${clipboard}!")
+        self.assertEqual(dialog._title_label.get_text(), "Greeting")
+        self.assertIs(dialog._listbox.get_selected_row(),
+                      dialog._find_row_by_id(sid))
+
+    def test_search_keeps_unsaved_edits(self):
+        """UI-7: typing in the search box threw away the edit in progress."""
+        db = self._make_db()
+        db.add_snippet("Greeting", "Hello")
+        db.add_snippet("Address", "1 Main St")
+        dialog, sid = self._snippets_dialog_on(db, "Greeting")
+        dialog._textview.get_buffer().set_text("UNSAVED EDIT")
+
+        for query in ("Gree", "Addr", ""):
+            with self.subTest(query=query):
+                dialog._search.set_text(query)
+                dialog._reload_list()  # search-changed fires after a delay
+                self.assertEqual(dialog._selected_id, sid)
+                self.assertEqual(self._content(dialog), "UNSAVED EDIT")
+                self.assertTrue(dialog._save_btn.get_sensitive())
+        # Back in the full list, the snippet being edited is selected.
+        self.assertIs(dialog._listbox.get_selected_row(),
+                      dialog._find_row_by_id(sid))
+
+    @staticmethod
+    def _label_texts(widget):
+        """The text every label under ``widget`` shows. A label whose
+        markup does not parse shows nothing."""
+        from gi.repository import Gtk
+
+        texts = []
+        pending = [widget]
+        while pending:
+            widget = pending.pop()
+            if isinstance(widget, Gtk.Label):
+                texts.append(widget.get_text())
+            child = widget.get_first_child()
+            while child is not None:
+                pending.append(child)
+                child = child.get_next_sibling()
+        return texts
+
+    def test_snippet_names_with_markup_characters_show(self):
+        """UI-8: rows parsed names as Pango markup, so '&' or '<' made the
+        whole row blank."""
+        from clipman.snippets_dialog import SnippetsDialog
+
+        db = self._make_db()
+        db.add_snippet("Q&A <b>notes", '<div class="x">a & b</div>')
+        dialog = SnippetsDialog(db)
+        texts = self._label_texts(dialog._listbox.get_row_at_index(0))
+        self.assertIn("Q&A <b>notes", texts)
+        self.assertIn('<div class="x">a & b</div>', texts)
+
+    def test_database_path_with_markup_characters_shows(self):
+        from clipman import database
+        from clipman.preferences import ClipmanPreferences
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db(prefix="clipman R&D <test> ")
+        app = self._make_app("com.clipman.TestPathRow")
+        parent = ClipmanWindow(application=app, db=db, monitor=None)
+        prefs = ClipmanPreferences(db, parent, on_setting_changed=None)
+        # An Adw.Dialog parents its content only once presented, so look
+        # in the page itself.
+        storage = prefs._stack.get_child_by_name("storage")
+        self.assertIn(str(database.DB_PATH), self._label_texts(storage))
 
     def test_refresh_with_seeded_entries(self):
         """Three seeded entries -> three model items, newest first."""
