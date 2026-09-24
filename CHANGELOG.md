@@ -335,6 +335,37 @@ All notable changes to Clipman are documented in this file.
   hit end of input under `set -e`. It now keeps the data then, and says
   where it is.
 
+### Fixed — running without the GNOME Shell extension
+
+- Without the extension (before the first re-login, or when it is off),
+  the daemon started `wl-paste --watch` on GNOME. GNOME has no
+  data-control protocol, so the watcher exited at once, and after five
+  retries the popup said "Clipboard watcher stopped" with a restart
+  button that could not help. On GNOME the daemon no longer starts it.
+- The popup said "Clipman records via wl-paste" while nothing was
+  recorded. It now says that Clipman needs its extension to record and
+  paste, and to log out and back in after installing. The snap and
+  missing-wl-clipboard texts had the same wrong claims; they are fixed
+  too, and so is the design mockup.
+- The problem stays visible until it is solved. With an empty history
+  the status page explains it; with a history, a banner above the list
+  does (before, it showed only when the history was empty, and "watcher
+  stopped" was gone at the next refresh). The footer no longer says
+  "Recording" meanwhile. The popup also follows the extension at once
+  when it starts or stops (it used to cache the answer for a minute).
+- The journal now says why nothing is recorded, once, with the fix. In
+  #1 it showed only that the service started.
+- A paste that failed looked like a success: any `wtype` run counted,
+  even when it exited 1 because GNOME has no virtual-keyboard protocol.
+  Each tool must now exit 0, and when none does the popup comes back
+  with the "Couldn't auto-paste" dialog (the one about the extension
+  when that is what is missing).
+- The "Snap notes" button now opens the README's setup steps.
+- `scripts/dev.sh screenshot` can show these states (`--problem`), and
+  retries an empty first frame, so it works on Broadway too.
+- The end-to-end test checks the first login too: the daemon starts no
+  `wl-paste --watch` and logs why nothing is recorded.
+
 ### Fixed — git hooks
 
 - The trailer-identity check never ran. It read the output of

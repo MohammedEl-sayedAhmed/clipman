@@ -597,7 +597,7 @@
     <aside class="picker">
         <div class="picker-head">
             <span>Edge states</span>
-            <span class="count" id="count">15</span>
+            <span class="count" id="count">16</span>
         </div>
 
         <div class="picker-group">
@@ -622,6 +622,7 @@
         <div class="picker-group">
             <div class="group-label">Setup</div>
             <div class="picker-item" data-state="first-run"><span class="dot t-warn"></span>Extension not connected</div>
+            <div class="picker-item" data-state="not-recording"><span class="dot t-warn"></span>Not recording (with history)</div>
             <div class="picker-item" data-state="snap-required"><span class="dot t-warn"></span>Snap extension required</div>
             <div class="picker-item" data-state="shortcut-failed"><span class="dot t-warn"></span>Shortcut couldn't register</div>
         </div>
@@ -738,20 +739,35 @@ const STATES = {
         rows: 'short',
         footer: { left: '42 items', pill: 'paused', clear: true },
     },
+    // Nothing records copies (first-run, snap-required, clipboard-blocked,
+    // watcher-crashed): a status page while the history is empty, else the
+    // same message as a banner that stays until the problem is solved.
+    // No "Recording" pill in either case.
     'first-run': {
         mode: 'status',
         tone: 'warning', icon: I.puzzle,
         title: 'GNOME Shell extension isn’t connected',
-        body:  'Clipman is recording via wl-paste, but auto-paste on click needs the bundled GNOME extension enabled.',
+        body:  'Clipman needs its GNOME Shell extension to record copies and to paste. If you just installed Clipman, log out and back in. Otherwise, make sure the extension is turned on.',
         primary: { label: 'Open Extensions', tone: 'warning-cta' },
         secondary: { label: 'Install guide', tone: 'outline' },
-        footer: { left: '0 items', pill: 'recording' },
+        footer: { left: '0 items' },
+    },
+    'not-recording': {
+        mode: 'banner+rows',
+        banner: {
+            kind: 'warning', icon: I.puzzle,
+            title: 'GNOME Shell extension isn’t connected',
+            desc:  'Clipman needs its GNOME Shell extension to record copies and to paste. If you just installed Clipman, log out and back in. Otherwise, make sure the extension is turned on.',
+            primary: 'Open Extensions',
+        },
+        rows: 'short',
+        footer: { left: '42 items', clear: true },
     },
     'snap-required': {
         mode: 'status',
         tone: 'warning', icon: I.puzzle,
         title: 'GNOME extension required under snap',
-        body:  'Snap confinement blocks wl-paste, so Clipman needs the bundled GNOME extension to record anything.',
+        body:  'Clipman needs its GNOME Shell extension to record copies and to paste, and the snap can’t install it for you. Install it from GNOME Extensions, then log out and back in.',
         primary: { label: 'Open Extensions', tone: 'warning-cta' },
         secondary: { label: 'Snap notes', tone: 'outline' },
         footer: { left: '0 items' },
@@ -796,7 +812,7 @@ const STATES = {
         mode: 'status',
         tone: 'error', icon: I.error,
         title: 'Clipman can’t watch the clipboard',
-        body:  'Install wl-clipboard and use a Wayland session, or enable the GNOME extension. Until then, copies won’t be recorded.',
+        body:  'Clipman records copies here with wl-paste, from the wl-clipboard package, which isn’t installed. Until you install it, copies won’t be recorded.',
         primary: { label: 'Install wl-clipboard', tone: 'error-cta' },
         secondary: { label: 'Setup help', tone: 'outline' },
         footer: { left: '0 items' },
@@ -808,7 +824,7 @@ const STATES = {
         body:  'The wl-paste helper crashed too many times. Clipman stopped retrying. Restart the daemon to resume capturing clips.',
         primary: { label: 'Restart Clipman', tone: 'error-cta' },
         secondary: { label: 'View logs', tone: 'outline' },
-        footer: { left: '42 items · paused' },
+        footer: { left: '0 items' },
     },
     'db-corrupt': {
         mode: 'status',

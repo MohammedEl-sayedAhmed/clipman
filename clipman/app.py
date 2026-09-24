@@ -1,5 +1,6 @@
 import logging
 import os
+import shutil
 import signal
 import sqlite3
 import dbus
@@ -29,6 +30,29 @@ import clipman.shell_bridge as shell_bridge
 
 logger = logging.getLogger(__name__)
 
+# What the journal says when nothing records copies. The popup shows the
+# edge state with the same id.
+_PROBLEM_LOGS = {
+    "first-run": (
+        "The Clipman GNOME Shell extension is not running, so copies are "
+        "not recorded. After installing it, log out and back in. If it is "
+        "still off, run: gnome-extensions enable clipman@clipman.com"
+    ),
+    "extension-missing": (
+        "The Clipman GNOME Shell extension is not running, so copies are "
+        "not recorded. The snap cannot install it: get it from "
+        "https://extensions.gnome.org/extension/9407/ and log out and back in."
+    ),
+    "watcher-crashed": (
+        "wl-paste --watch failed too many times, so copies are not "
+        "recorded. Restart Clipman to try again."
+    ),
+    "clipboard-blocked": (
+        "wl-paste is not installed (package wl-clipboard), so copies are "
+        "not recorded."
+    ),
+}
+
 
 class ClipmanApp(Adw.Application):
     def __init__(self):
@@ -40,6 +64,9 @@ class ClipmanApp(Adw.Application):
         self.monitor = None
         self.window = None
         self.dbus_service = None
+        # Why nothing records copies (an edge state id), or None.
+        self._recording_problem = None
+        self._watcher_dead = False
 
     def do_activate(self):
         if self.window:
@@ -110,11 +137,12 @@ class ClipmanApp(Adw.Application):
         # NameExistsException doesn't leave us in a held-forever state.
         self.hold()
 
-        # Start wl-paste --watch fallback if GNOME Shell extension absent.
-        # Skip in snap: wl-paste cannot monitor the clipboard from within
-        # strict confinement; snap users rely on the GNOME Shell extension.
-        if not self._extension_on_bus() and not os.environ.get("SNAP"):
+        # Without the extension, record with wl-paste --watch where it can
+        # work. Either way, tell the popup if nothing records copies.
+        extension_on_bus = self._extension_on_bus()
+        if not extension_on_bus and self._watcher_can_record():
             self.monitor.start()
+        self._update_recording_problem(extension_on_bus)
 
         # Schedule the first update check 30s after startup (so we
         # don't slow login) and a daily recurring tick after that.
@@ -132,10 +160,47 @@ class ClipmanApp(Adw.Application):
     def _on_extension_owner_changed(self, owner):
         if owner and self.monitor is not None:
             shell_bridge.set_paused(self.monitor.incognito)
+        self._update_recording_problem(bool(owner))
 
     def _on_watcher_dead(self):
+        self._watcher_dead = True
+        self._update_recording_problem(self._extension_on_bus())
+
+    def _watcher_can_record(self):
+        """Whether the wl-paste --watch fallback can record here.
+
+        It needs the data-control protocol, which GNOME does not have, so
+        on GNOME it would exit at once and only the extension records. In
+        the snap, wl-paste cannot watch the host clipboard at all.
+        """
+        return not os.environ.get("SNAP") and not self._gnome_shell_on_bus()
+
+    def _recording_problem_for(self, extension_on_bus):
+        """Return the edge state that says why copies are not recorded.
+
+        None means something records them: the extension, or the
+        wl-paste watcher outside GNOME.
+        """
+        if extension_on_bus:
+            return None
+        if os.environ.get("SNAP"):
+            return "extension-missing"
+        if self._gnome_shell_on_bus():
+            return "first-run"
+        if self._watcher_dead:
+            return "watcher-crashed"
+        if shutil.which("wl-paste") is None:
+            return "clipboard-blocked"
+        return None
+
+    def _update_recording_problem(self, extension_on_bus):
+        """Work out the recording problem, log a new one, tell the popup."""
+        problem = self._recording_problem_for(extension_on_bus)
+        if problem != self._recording_problem and problem is not None:
+            logger.warning(_PROBLEM_LOGS[problem])
+        self._recording_problem = problem
         if self.window is not None:
-            GLib.idle_add(self.window.show_watcher_crashed)
+            self.window.set_recording_problem(problem)
 
     def _present_db_error(self):
         """Minimal window with the db-locked statuspage (no DB available)."""
@@ -208,6 +273,13 @@ class ClipmanApp(Adw.Application):
         try:
             bus = dbus.SessionBus()
             return bus.name_has_owner("org.gnome.Shell.Extensions.clipman")
+        except dbus.DBusException:
+            return False
+
+    def _gnome_shell_on_bus(self):
+        """Check if GNOME Shell runs this session (it owns org.gnome.Shell)."""
+        try:
+            return dbus.SessionBus().name_has_owner("org.gnome.Shell")
         except dbus.DBusException:
             return False
 

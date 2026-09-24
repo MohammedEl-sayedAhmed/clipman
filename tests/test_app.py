@@ -13,6 +13,7 @@ mirroring the rest of the test suite.
 
 from __future__ import annotations
 
+import os
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -168,12 +169,103 @@ class TestClipmanAppHelpers(unittest.TestCase):
         with patch("clipman.app.shell_bridge.set_paused") as set_paused:
             app._on_extension_owner_changed(":1.77")
         set_paused.assert_called_once_with(True)
+        app.window.set_recording_problem.assert_called_once_with(None)
 
     def test_extension_vanishing_pushes_nothing(self):
         app = self._make_app()
-        with patch("clipman.app.shell_bridge.set_paused") as set_paused:
+        with patch("clipman.app.shell_bridge.set_paused") as set_paused, \
+             patch.object(app, "_gnome_shell_on_bus", return_value=True), \
+             self.assertLogs("clipman.app", "WARNING"):
             app._on_extension_owner_changed("")
         set_paused.assert_not_called()
+        # The popup says at once that nothing records copies now.
+        app.window.set_recording_problem.assert_called_once_with("first-run")
+
+    # -- what records copies ---------------------------------------------
+
+    def _session(self, app, gnome=False, snap=False, wl_paste=True):
+        """Patch the facts ``_recording_problem_for`` reads."""
+        patches = [
+            patch.object(app, "_gnome_shell_on_bus", return_value=gnome),
+            patch("clipman.app.shutil.which",
+                  return_value="/usr/bin/wl-paste" if wl_paste else None),
+            patch.dict(os.environ, {"SNAP": "/snap/clipman/x1"}),
+        ]
+        for patcher in patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        if not snap:
+            # patch.dict restores the variable when the test ends.
+            os.environ.pop("SNAP")
+
+    def test_recording_problem_for_each_session(self):
+        cases = [
+            # (extension, gnome, snap, wl_paste, watcher_dead) -> problem
+            ((True, True, False, True, False), None),
+            ((True, True, True, True, False), None),
+            ((False, True, False, True, False), "first-run"),
+            ((False, True, True, True, False), "extension-missing"),
+            # On GNOME the watcher can't record, so a dead one is not
+            # the problem: the missing extension is.
+            ((False, True, False, True, True), "first-run"),
+            ((False, False, False, True, True), "watcher-crashed"),
+            ((False, False, False, False, False), "clipboard-blocked"),
+            ((False, False, False, True, False), None),
+        ]
+        for (extension, gnome, snap, wl_paste, dead), problem in cases:
+            with self.subTest(extension=extension, gnome=gnome, snap=snap,
+                              wl_paste=wl_paste, watcher_dead=dead):
+                app = self._make_app()
+                self._session(app, gnome=gnome, snap=snap, wl_paste=wl_paste)
+                app._watcher_dead = dead
+                self.assertEqual(app._recording_problem_for(extension),
+                                 problem)
+
+    def test_the_watcher_starts_only_outside_gnome_and_snap(self):
+        for gnome, snap, can_record in ((True, False, False),
+                                        (False, True, False),
+                                        (False, False, True)):
+            with self.subTest(gnome=gnome, snap=snap):
+                app = self._make_app()
+                self._session(app, gnome=gnome, snap=snap)
+                self.assertEqual(app._watcher_can_record(), can_record)
+
+    def test_a_new_problem_is_logged_once(self):
+        """The journal says why nothing is recorded (issue #1 saw only
+        "Started clipman.service"), once per new problem, and the popup
+        is told every time."""
+        app = self._make_app()
+        self._session(app, gnome=True)
+        with self.assertLogs("clipman.app", "WARNING") as logs:
+            app._update_recording_problem(False)
+            app._update_recording_problem(False)
+        self.assertEqual(len(logs.records), 1)
+        self.assertIn("gnome-extensions enable clipman@clipman.com",
+                      logs.output[0])
+        self.assertEqual(app.window.set_recording_problem.call_count, 2)
+
+        with self.assertNoLogs("clipman.app", "WARNING"):
+            app._update_recording_problem(True)
+        app.window.set_recording_problem.assert_called_with(None)
+
+    def test_dead_watcher_is_reported_outside_gnome(self):
+        app = self._make_app()
+        self._session(app)
+        with patch.object(app, "_extension_on_bus", return_value=False), \
+             self.assertLogs("clipman.app", "WARNING"):
+            app._on_watcher_dead()
+        app.window.set_recording_problem.assert_called_once_with(
+            "watcher-crashed"
+        )
+
+    def test_dead_watcher_is_not_blamed_on_gnome(self):
+        """A watcher started before the Shell owned its name dies on GNOME;
+        the popup must not say "restart" when the extension is running."""
+        app = self._make_app()
+        self._session(app, gnome=True)
+        with patch.object(app, "_extension_on_bus", return_value=True):
+            app._on_watcher_dead()
+        app.window.set_recording_problem.assert_called_once_with(None)
 
 
 if __name__ == "__main__":

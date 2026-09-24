@@ -64,13 +64,22 @@ popup placement (see [IPC contract](#ipc-contract) below).
 
 ### Fallback path
 
-When the extension's D-Bus name is missing, the daemon's
+When the extension's D-Bus name is missing outside GNOME, the daemon's
 `clipman/clipboard_monitor.py` spawns `wl-paste --watch` as a
 subprocess and reads new clipboard contents through `wl-paste`. That
-needs the data-control protocol, which GNOME does not offer, so on
-GNOME the watcher exits at once and the extension is required. It
-would work on KDE and wlroots compositors, which are not supported yet
+needs the data-control protocol, which KDE and wlroots compositors
+offer; they are not supported yet
 ([#318](https://github.com/MohammedEl-sayedAhmed/clipman/issues/318)).
+GNOME does not offer it, so when GNOME Shell owns `org.gnome.Shell` the
+daemon does not start the watcher: only the extension can record there.
+
+Whenever nothing records copies, `clipman/app.py` works out why and
+tells the popup, which shows the matching edge state (`first-run`,
+`extension-missing`, `watcher-crashed` or `clipboard-blocked`) until the
+problem is solved: as the status page when the history is empty,
+otherwise as a banner above the list. The journal gets one warning with
+the fix. The daemon follows the extension's bus name, so the popup
+updates as soon as the extension starts or stops.
 
 Under snap confinement the daemon skips the watcher. Snap users rely on
 the GNOME Shell extension running in their host session and talking to

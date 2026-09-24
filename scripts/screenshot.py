@@ -52,6 +52,10 @@ def _capture(window, out_path, attempts_left, app):
         snapshot = Gtk.Snapshot.new()
         paintable.snapshot(snapshot, iw, ih)
         node = snapshot.to_node()
+        if node is None and attempts_left > 0:
+            # The first frames can be empty (Broadway, a slow display).
+            GLib.timeout_add(120, _capture, window, out_path, attempts_left - 1, app)
+            return False
         if node is None:
             print("CAPTURE_FAIL: empty render node", file=sys.stderr)
             app.quit()
@@ -75,6 +79,11 @@ def main():
                     help="persisted theme setting for the shot")
     ap.add_argument("--incognito", action="store_true",
                     help="start with recording paused (privacy-state shots)")
+    ap.add_argument("--problem",
+                    choices=["first-run", "extension-missing",
+                             "watcher-crashed", "clipboard-blocked"],
+                    help="show why nothing records copies, as app.py "
+                         "reports it (a banner, or the page with --empty)")
     args = ap.parse_args()
 
     tmp = tempfile.mkdtemp(prefix="clipman-shot-")
@@ -103,6 +112,8 @@ def main():
     def on_activate(app):
         app.hold()
         window = ClipmanWindow(application=app, db=db, monitor=None)
+        if args.problem:
+            window.set_recording_problem(args.problem)
         window.refresh()
         if args.incognito:
             # app.py applies incognito_on_launch at startup; the harness
