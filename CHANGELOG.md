@@ -283,6 +283,18 @@ All notable changes to Clipman are documented in this file.
 - ruff also lints `scripts/` and the root `clipman.py`. Two jobs moved
   from `ubuntu-latest` to the pinned `ubuntu-24.04`. Issue templates use
   the `type:bug` and `type:feature` labels that `labels.yml` defines.
+- The release logic moved out of the workflow files into scripts that
+  the test suite runs:
+  - `scripts/snap-plan.sh` decides what the snap refresh builds and
+    where it publishes. Ten scenario tests cover it, including a store
+    that is ahead of the latest release and a failed release lookup.
+  - `scripts/release-preflight.sh` is the version check. The tests run
+    it on a freshly bumped copy, so a release PR that would fail the
+    pre-flight fails CI first.
+  - `scripts/wheel-smoke.sh` is now shared by the pull-request
+    `package` check and the release. The release step piped `tar` into
+    `grep -q`, which can fail under `pipefail`; the script lists to a
+    file first.
 
 ### Fixed — install and uninstall scripts
 

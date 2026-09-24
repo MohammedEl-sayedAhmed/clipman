@@ -80,12 +80,5 @@ jobs:
 
       - name: Install the wheel into a clean venv and run the entry point
         run: |
-          python -m venv /tmp/smoke
-          /tmp/smoke/bin/pip install --no-deps dist/*.whl
-          tar tzf dist/*.tar.gz > /tmp/sdist-files.txt
-          grep -q 'clipman/style.css' /tmp/sdist-files.txt
-          # Leave the checkout so the installed package, not the source tree, is imported.
-          cd /tmp
-          /tmp/smoke/bin/clipman --version
-          /tmp/smoke/bin/python -m clipman --version
-          /tmp/smoke/bin/python -c "from importlib.resources import files; assert files('clipman').joinpath('style.css').is_file()"
+          version=$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)
+          PYTHON=python scripts/wheel-smoke.sh dist "$version"

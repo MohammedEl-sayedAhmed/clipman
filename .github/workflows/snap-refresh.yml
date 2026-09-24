@@ -42,6 +42,9 @@ on:
       - 'launcher.sh'
       - 'clipman.py'
       - 'pyproject.toml'
+      # The workflow and its plan: a change gets a build-only run first.
+      - '.github/workflows/snap-refresh.yml'
+      - 'scripts/snap-plan.sh'
   pull_request:
     types: [opened, synchronize, reopened]
     branches: [main]
@@ -52,6 +55,9 @@ on:
       - 'launcher.sh'
       - 'clipman.py'
       - 'pyproject.toml'
+      # The workflow and its plan: a change gets a build-only run first.
+      - '.github/workflows/snap-refresh.yml'
+      - 'scripts/snap-plan.sh'
 
 permissions: {}
 
@@ -77,69 +83,19 @@ jobs:
         with:
           egress-policy: audit
 
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The logic lives in a script so tests/test_snap_plan.py can run it.
       - name: Decide what to build and where it publishes
         id: plan
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT: ${{ github.event_name }}
           CHANNEL: ${{ inputs.channel }}
-        run: |
-          latest_tag() {
-            # Never fall back to main: an empty ref would publish main to stable.
-            local tag
-            tag=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" -q .tag_name) || tag=""
-            case "$tag" in
-              v[0-9]*.[0-9]*.[0-9]*) printf '%s\n' "$tag" ;;
-              *) echo "::error::could not resolve the latest release tag (got '${tag}')" >&2; return 1 ;;
-            esac
-          }
-          # True when the store's stable channel already holds a version
-          # newer than $1. That happens when a release got as far as the
-          # store but not the GitHub Release: rebuilding the older tag
-          # would roll stable users back.
-          store_is_ahead() {
-            local store
-            store=$(curl -fsS -H 'Snap-Device-Series: 16' \
-              'https://api.snapcraft.io/v2/snaps/info/clipman?fields=version' \
-              | jq -r '.["channel-map"][]
-                        | select(.channel.name == "stable" and .channel.architecture == "amd64")
-                        | .version' | head -n 1) || store=""
-            [ -n "$store" ] && [ "$store" != "${1#v}" ] &&
-              [ "$(printf '%s\n%s\n' "$store" "${1#v}" | sort -V | tail -n 1)" = "$store" ]
-          }
-          case "$EVENT" in
-            schedule)
-              tag="$(latest_tag)" || exit 1
-              if store_is_ahead "$tag"; then
-                echo "::warning::the store's stable is newer than the latest GitHub Release ($tag): a release is half-finished. Rebuilding edge only, so stable is not rolled back."
-                matrix='[{"ref": "main", "channels": "edge", "slug": "edge"}]'
-              else
-                matrix=$(jq -nc --arg tag "$tag" '[
-                  {ref: "main", channels: "edge",                    slug: "edge"},
-                  {ref: $tag,   channels: "beta,candidate,stable",   slug: "stable"}
-                ]')
-              fi
-              ;;
-            workflow_dispatch)
-              if [ "$CHANNEL" = "edge" ]; then
-                ref="main"
-              else
-                ref="$(latest_tag)" || exit 1
-                if store_is_ahead "$ref"; then
-                  echo "::error::the store's stable is newer than the latest GitHub Release ($ref): finish that release first, or this would roll $CHANNEL back."
-                  exit 1
-                fi
-              fi
-              matrix=$(jq -nc --arg ref "$ref" --arg ch "$CHANNEL" \
-                '[{ref: $ref, channels: $ch, slug: $ch}]')
-              ;;
-            *)
-              # push / pull_request: build-only smoke of the triggering ref.
-              matrix='[{"ref": "", "channels": "", "slug": "ci"}]'
-              ;;
-          esac
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "Planned: $matrix"
+        run: scripts/snap-plan.sh
 
   build:
     name: Build snap (${{ matrix.slug }})
