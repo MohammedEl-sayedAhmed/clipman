@@ -323,7 +323,7 @@ template variables (`${date}`, `${time}`, `${clipboard}`) included.
 ## How It Works
 
 1. A **GNOME Shell extension** detects clipboard changes natively via `Meta.Selection`'s `owner-changed` signal — no polling and no screen flicker
-2. The extension reads the content using a **MIME type fallback chain** (`text/plain;charset=utf-8` → `UTF8_STRING` → `text/plain` → `STRING`) and sends it to the daemon over **D-Bus**
+2. The extension reads the content using a **MIME type fallback chain** (`text/plain;charset=utf-8` → `UTF8_STRING` → `text/plain` → `STRING`) and sends it to the daemon over **D-Bus**. It reads at most 10 MB, the daemon's limit, and gives up on an app that does not send its data within 5 seconds
 3. The daemon stores entries in an **SQLite database** (WAL mode) at `~/.local/share/clipman/`
 4. Duplicates are detected via **SHA256 hashing** — copying the same content updates the timestamp and bumps it to the top
 5. Pressing **Super+V** sends a **D-Bus toggle** to the daemon, which shows the popup window near the cursor

@@ -386,6 +386,27 @@ All notable changes to Clipman are documented in this file.
   tries five times in a minute, then stops; before, with `RestartSec=3`,
   systemd's default limit could never trip.
 
+### Fixed — big and stuck copies in the Shell extension
+
+- The extension read the whole clipboard into GNOME Shell before its
+  10 MB check, so a big copy made the compositor allocate about five
+  times the clip and stall. A 50 MB copy raised the Shell's peak memory
+  by 270 MB; now it is about 25 MB. The extension reads in chunks, stops
+  one chunk past the daemon's limit (counted in UTF-8 bytes, as the
+  daemon does) and drops the clip.
+- A read from an app that owns the clipboard but never sends its data
+  never ended, and kept a pipe open in the Shell for each copy until
+  the app quit. A read now ends at the next copy, at pause or disable,
+  or after 5 seconds, and closes its pipe at once (not when the garbage
+  collector gets to it).
+- Nothing is read while no daemon runs or incognito is on, and an image
+  is announced to the daemon only when the clipboard offers one.
+- The end-to-end test copies 1 MB (it must arrive whole) and 50 MB (the
+  Shell's peak memory must grow by less than 100 MB), and runs an app
+  that takes the clipboard 20 times without sending anything (at most
+  one extra pipe may stay open, the one GNOME's own clipboard manager
+  keeps). The old extension fails the last two.
+
 ### Fixed — git hooks
 
 - The trailer-identity check never ran. It read the output of

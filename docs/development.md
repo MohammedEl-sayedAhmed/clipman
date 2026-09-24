@@ -106,13 +106,22 @@ scripts/dev.sh e2e
 ```
 
 This starts a headless GNOME Shell with its own session bus, display and
-home, so it never touches your desktop. In it, `tests/e2e/install_flow.sh`
-runs `install.sh` while the Shell is running, logs in again, checks that
-the extension is on and a copy reaches the history, opens and hides the
-popup (checking that it does not spin a CPU core), runs
-`scripts/extension-smoke.sh`, and finally `uninstall.sh`. It needs
-`gnome-shell`, the runtime packages and `wl-clipboard`. CI runs it on
-GNOME Shell 46.
+home, so it never touches your desktop. In it, `tests/e2e/install_flow.sh`:
+
+1. runs `install.sh` while the Shell is running, then starts the daemon,
+   which must not run `wl-paste --watch` and must log why nothing is
+   recorded (the extension starts only at the next login);
+2. logs in again and checks that the extension is on and a copy reaches
+   the history;
+3. runs `scripts/extension-smoke.sh`;
+4. checks that a 1 MB copy arrives whole, and that a 50 MB copy and an
+   app that owns the clipboard but never sends its data cost the Shell
+   little memory and no lasting pipes;
+5. opens and hides the popup, checking that it does not spin a CPU core;
+6. runs `uninstall.sh`.
+
+It needs `gnome-shell`, the runtime packages and `wl-clipboard`. CI runs
+it on GNOME Shell 46.
 
 ## Lint
 

@@ -1,4 +1,3 @@
-import St from 'gi://St';
 import Meta from 'gi://Meta';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
@@ -13,8 +12,22 @@ const CLIPMAN_WM_CLASS = 'com.clipman.Clipman';
 const DAEMON_BUS_NAME = 'com.clipman.Daemon';
 const DAEMON_OBJECT_PATH = '/com/clipman/Daemon';
 
-// Same limit as the daemon's MAX_TEXT_SIZE; it drops longer clips anyway.
-const MAX_TEXT_LENGTH = 10 * 1024 * 1024;
+// Same limit as the daemon's MAX_TEXT_SIZE, in UTF-8 bytes: it drops
+// longer clips anyway, so reading more only costs the Shell memory.
+const MAX_TEXT_BYTES = 10 * 1024 * 1024;
+
+// An app that owns the clipboard but never sends its data would hold the
+// read, and a pipe, open until it quits.
+const READ_TIMEOUT_MS = 5000;
+const READ_CHUNK_BYTES = 64 * 1024;
+
+// Text types, most wanted first. Some X11 apps offer only the last two.
+const TEXT_MIME_TYPES = [
+    'text/plain;charset=utf-8',
+    'UTF8_STRING',
+    'text/plain',
+    'STRING',
+];
 
 const OWN_BUS_NAME = 'org.gnome.Shell.Extensions.clipman';
 const OWN_OBJECT_PATH = '/org/gnome/Shell/Extensions/clipman';
@@ -93,6 +106,8 @@ export default class ClipmanExtension extends Extension {
         this._deniedSenders = new Set();
         this._virtualKeyboard = null;
         this._clipboardTimeout = null;
+        this._readCancellable = null;
+        this._readTimeoutId = null;
 
         this._selection = global.display.get_selection();
         this._ownerChangedId = this._selection.connect(
@@ -139,6 +154,7 @@ export default class ClipmanExtension extends Extension {
             GLib.source_remove(this._clipboardTimeout);
             this._clipboardTimeout = null;
         }
+        this._cancelRead();
         if (this._ownerChangedId) {
             this._selection.disconnect(this._ownerChangedId);
             this._ownerChangedId = null;
@@ -333,6 +349,8 @@ export default class ClipmanExtension extends Extension {
             GLib.source_remove(this._clipboardTimeout);
             this._clipboardTimeout = null;
         }
+        if (this._paused)
+            this._cancelRead();
         invocation.return_value(null);
     }
 
@@ -449,73 +467,133 @@ export default class ClipmanExtension extends Extension {
 
     // ---- Clipboard capture -------------------------------------------
 
-    _onOwnerChanged(_selection, selectionType, _selectionSource) {
+    _onOwnerChanged(_selection, selectionType, selectionSource) {
         if (selectionType !== Meta.SelectionType.SELECTION_CLIPBOARD)
             return;
-        if (this._paused)
-            return;
 
-        // Wait 150 ms for the new owner to make the content available.
-        // Rapid copies cancel the previous read.
+        // A new copy replaces the one still waiting or being read.
         if (this._clipboardTimeout) {
             GLib.source_remove(this._clipboardTimeout);
             this._clipboardTimeout = null;
         }
+        this._cancelRead();
+        // Nobody would receive the clip.
+        if (this._paused || this._daemonOwner === null)
+            return;
 
+        // Wait 150 ms for the new owner to make the content available.
         this._clipboardTimeout = GLib.timeout_add(
             GLib.PRIORITY_DEFAULT, 150, () => {
                 this._clipboardTimeout = null;
-                this._getClipboardText().then(text => {
-                    if (this._destroyed || this._paused)
-                        return;
-                    if (text)
-                        this._sendToDaemon('text', text);
-                    else
-                        this._sendToDaemon('image', '');
-                }).catch(() => {});
+                this._readClipboard(selectionSource);
                 return GLib.SOURCE_REMOVE;
             }
         );
     }
 
-    _getClipboardText() {
-        const clipboard = St.Clipboard.get_default();
-        const mimeTypes = [
-            'text/plain;charset=utf-8',
-            'UTF8_STRING',
-            'text/plain',
-            'STRING',
-        ];
+    _readClipboard(source) {
+        if (!source)
+            return;
+        const offered = source.get_mimetypes();
+        const textTypes = TEXT_MIME_TYPES.filter(t => offered.includes(t));
+        if (textTypes.length > 0)
+            this._readText(source, textTypes);
+        else if (offered.some(t => t.startsWith('image/')))
+            this._sendToDaemon('image', '');
+    }
 
-        const tryType = (index) => {
-            if (index >= mimeTypes.length)
-                return Promise.resolve(null);
-
-            return new Promise(resolve => {
-                clipboard.get_content(
-                    St.ClipboardType.CLIPBOARD,
-                    mimeTypes[index],
-                    (_cb, bytes) => {
-                        if (bytes && bytes.get_size() > 0) {
-                            let data = bytes.get_data();
-                            // Some X11 apps include a trailing null byte.
-                            if (data.length > 0 && data[data.length - 1] === 0)
-                                data = data.slice(0, -1);
-                            resolve(new TextDecoder().decode(data));
-                        } else {
-                            resolve(null);
-                        }
-                    }
-                );
-            }).then(text => text || tryType(index + 1));
+    // Read the first offered text type that has content, then send it.
+    _readText(source, textTypes) {
+        const cancellable = new Gio.Cancellable();
+        this._readCancellable = cancellable;
+        this._readTimeoutId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT, READ_TIMEOUT_MS, () => {
+                this._readTimeoutId = null;
+                this._readCancellable = null;
+                cancellable.cancel();
+                return GLib.SOURCE_REMOVE;
+            }
+        );
+        const done = data => {
+            if (cancellable.is_cancelled() || this._destroyed)
+                return;
+            this._endRead();
+            if (data === null || this._paused)
+                return;
+            if (data.length === 0) {
+                if (textTypes.length > 1)
+                    this._readText(source, textTypes.slice(1));
+                return;
+            }
+            // Some X11 apps include a trailing null byte.
+            if (data[data.length - 1] === 0)
+                data = data.subarray(0, -1);
+            const text = new TextDecoder().decode(data);
+            if (text)
+                this._sendToDaemon('text', text);
         };
+        source.read_async(textTypes[0], cancellable, (src, result) => {
+            let stream;
+            try {
+                stream = src.read_finish(result);
+            } catch (e) {
+                console.debug(`clipman: clipboard read failed: ${e.message}`);
+                done(null);
+                return;
+            }
+            this._readChunks(stream, cancellable,
+                Gio.MemoryOutputStream.new_resizable(), done);
+        });
+    }
 
-        return tryType(0);
+    // Read the stream in chunks into `into`, then call `done` with the
+    // data: null when the read fails, is cancelled or passes the limit (the
+    // daemon would drop the clip), so the Shell never holds more than
+    // that. The stream is closed at once either way; its pipe must not
+    // wait for the garbage collector.
+    _readChunks(stream, cancellable, into, done) {
+        stream.read_bytes_async(READ_CHUNK_BYTES, GLib.PRIORITY_DEFAULT,
+            cancellable, (src, result) => {
+                let bytes = null;
+                try {
+                    bytes = src.read_bytes_finish(result);
+                } catch (e) {
+                    console.debug(`clipman: clipboard read failed: ${e.message}`);
+                }
+                const size = bytes ? bytes.get_size() : 0;
+                if (bytes !== null && size > 0 &&
+                    into.get_data_size() + size <= MAX_TEXT_BYTES) {
+                    into.write_bytes(bytes, null);
+                    this._readChunks(src, cancellable, into, done);
+                    return;
+                }
+                try {
+                    src.close(null);
+                } catch (e) {
+                    console.debug(`clipman: closing the read failed: ${e.message}`);
+                }
+                into.close(null);
+                done(bytes === null || size > 0
+                    ? null : into.steal_as_bytes().get_data() ?? new Uint8Array());
+            });
+    }
+
+    // Stop the read in progress, if any: its callback then does nothing.
+    _cancelRead() {
+        const cancellable = this._readCancellable;
+        this._endRead();
+        cancellable?.cancel();
+    }
+
+    _endRead() {
+        if (this._readTimeoutId) {
+            GLib.source_remove(this._readTimeoutId);
+            this._readTimeoutId = null;
+        }
+        this._readCancellable = null;
     }
 
     _sendToDaemon(contentType, content) {
-        if (content.length > MAX_TEXT_LENGTH)
-            return;
         Gio.DBus.session.call(
             DAEMON_BUS_NAME,
             DAEMON_OBJECT_PATH,
