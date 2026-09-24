@@ -14,6 +14,7 @@ mirroring the rest of the test suite.
 from __future__ import annotations
 
 import os
+import sqlite3
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -266,6 +267,180 @@ class TestClipmanAppHelpers(unittest.TestCase):
         with patch.object(app, "_extension_on_bus", return_value=True):
             app._on_watcher_dead()
         app.window.set_recording_problem.assert_called_once_with(None)
+
+
+@unittest.skipUnless(_HAS_GTK, "GTK 4 + libadwaita not available")
+class TestStartUp(unittest.TestCase):
+    """What start-up does when something fails, and the database-error
+    screen (audit findings CORE-4, PKG-11 and UI-18)."""
+
+    def _make_app(self):
+        from clipman.app import ClipmanApp
+
+        app = ClipmanApp()
+        self.addCleanup(app.quit)
+        return app
+
+    def _activate(self, app, **fakes):
+        """Run do_activate with every collaborator faked; ``fakes`` maps a
+        patch target to the keyword arguments of its mock. Return quit."""
+        db = MagicMock(name="db")
+        db.get_setting.return_value = "false"
+        targets = {
+            "clipman.app.ClipboardDB": {"return_value": db},
+            "clipman.app.ClipboardMonitor": {},
+            "clipman.app.ClipmanWindow": {},
+            "clipman.app.ClipmanDBusService": {},
+            "clipman.app.shell_bridge.set_paused": {},
+            "clipman.app.dbus.SessionBus": {},
+            "clipman.app.GLib.timeout_add_seconds": {},
+            "clipman.app.GLib.unix_signal_add": {},
+        }
+        targets.update(fakes)
+        for target, kwargs in targets.items():
+            patcher = patch(target, **kwargs)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        with patch.object(app, "hold"), \
+             patch.object(app, "quit") as quit_, \
+             patch.object(app, "_extension_on_bus", return_value=True):
+            app.do_activate()
+        return quit_
+
+    def test_unreadable_database_shows_the_error_screen(self):
+        """"file is not a database" is a DatabaseError; only its subclass
+        OperationalError was caught, so the daemon died with a traceback."""
+        for exc in (sqlite3.DatabaseError("file is not a database"),
+                    sqlite3.OperationalError("database is locked"),
+                    PermissionError(13, "Permission denied")):
+            with self.subTest(exc=exc):
+                app = self._make_app()
+                with patch.object(app, "_present_db_error") as present, \
+                     self.assertLogs("clipman.app", "ERROR"):
+                    self._activate(app, **{
+                        "clipman.app.ClipboardDB": {"side_effect": exc},
+                    })
+                present.assert_called_once_with()
+                self.assertEqual(app.exit_status, 0)
+
+    def test_failed_start_exits_non_zero(self):
+        """GLib swallowed this exception and the daemon exited 0, so
+        systemd's Restart=on-failure never tried again."""
+        app = self._make_app()
+        error = RuntimeError("Gtk couldn't be initialized")
+        with self.assertLogs("clipman.app", "ERROR") as logs:
+            quit_ = self._activate(app, **{
+                "clipman.app.ClipmanWindow": {"side_effect": error},
+            })
+        self.assertIn("Clipman could not start", logs.output[0])
+        quit_.assert_called_once_with()
+        self.assertEqual(app.exit_status, 1)
+
+    def test_unreachable_bus_exits_non_zero(self):
+        from clipman import app as app_module
+
+        app = self._make_app()
+        error = app_module.dbus.exceptions.DBusException("no bus")
+        with self.assertLogs("clipman.app", "ERROR"):
+            quit_ = self._activate(app, **{
+                "clipman.app.ClipmanDBusService": {"side_effect": error},
+            })
+        quit_.assert_called_once_with()
+        self.assertEqual(app.exit_status, 1)
+
+    def test_second_daemon_exits_zero(self):
+        """Another daemon owns the name: nothing failed, and a non-zero
+        status would make systemd start this one again and again."""
+        from clipman import app as app_module
+
+        app = self._make_app()
+        error = app_module.dbus.exceptions.NameExistsException(
+            "com.clipman.Daemon"
+        )
+        with self.assertLogs("clipman.app", "WARNING"):
+            quit_ = self._activate(app, **{
+                "clipman.app.ClipmanDBusService": {"side_effect": error},
+            })
+        quit_.assert_called_once_with()
+        self.assertEqual(app.exit_status, 0)
+
+    def test_database_that_opens_closes_the_error_window(self):
+        app = self._make_app()
+        error_window = MagicMock(name="error window")
+        app._db_error_window = error_window
+        self._activate(app)
+        error_window.destroy.assert_called_once_with()
+        self.assertIsNone(app._db_error_window)
+        self.assertEqual(app.exit_status, 0)
+
+    def test_second_activation_brings_back_the_same_error_window(self):
+        app = self._make_app()
+        error_window = MagicMock(name="error window")
+        app._db_error_window = error_window
+        app._present_db_error()
+        error_window.present.assert_called_once_with()
+        self.assertIs(app._db_error_window, error_window)
+
+    def test_restore_button_opens_the_picker_instead_of_quitting(self):
+        """UI-18: "Restore from backup" used to quit the app."""
+        for action in ("open-restore", "rechoose-restore"):
+            with self.subTest(action=action):
+                app = self._make_app()
+                with patch.object(app, "_pick_backup") as pick, \
+                     patch.object(app, "quit") as quit_:
+                    app._on_db_error_action(action)
+                pick.assert_called_once_with()
+                quit_.assert_not_called()
+
+    def test_closing_the_restore_failed_dialog_does_nothing(self):
+        app = self._make_app()
+        with patch.object(app, "_pick_backup") as pick, \
+             patch.object(app, "quit") as quit_:
+            app._on_db_error_action("close-dialog")
+        pick.assert_not_called()
+        quit_.assert_not_called()
+
+    def _picked(self, path):
+        picked = MagicMock(name="file")
+        picked.get_path.return_value = path
+        dialog = MagicMock(name="dialog")
+        dialog.open_finish.return_value = picked
+        return dialog
+
+    def test_picked_backup_is_restored_then_clipman_starts(self):
+        app = self._make_app()
+        app.window = MagicMock(name="window")
+        with patch("clipman.database.restore_backup_file") as restore, \
+             patch.object(app, "do_activate") as activate:
+            app._on_backup_picked(self._picked("/backups/clipman.db"), None)
+        restore.assert_called_once_with("/backups/clipman.db")
+        activate.assert_called_once_with()
+        # The user sees the history they just got back.
+        app.window.toggle.assert_called_once_with()
+
+    def test_unusable_backup_keeps_the_error_screen(self):
+        app = self._make_app()
+        error = ValueError("Invalid backup: missing 'entries' table")
+        with patch("clipman.database.restore_backup_file",
+                   side_effect=error), \
+             patch.object(app, "do_activate") as activate, \
+             patch.object(app, "_show_restore_failed") as failed, \
+             self.assertLogs("clipman.app", "WARNING"):
+            app._on_backup_picked(self._picked("/tmp/notes.db"), None)
+        failed.assert_called_once_with()
+        activate.assert_not_called()
+
+    def test_dismissed_picker_changes_nothing(self):
+        from gi.repository import GLib
+
+        app = self._make_app()
+        dialog = MagicMock(name="dialog")
+        dialog.open_finish.side_effect = GLib.Error("Dismissed by user")
+        with patch("clipman.database.restore_backup_file") as restore, \
+             patch.object(app, "do_activate") as activate:
+            app._on_backup_picked(dialog, None)
+        restore.assert_not_called()
+        activate.assert_not_called()
 
 
 if __name__ == "__main__":

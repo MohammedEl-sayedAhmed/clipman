@@ -71,25 +71,75 @@ class TestDBusMainLoopInit(unittest.TestCase):
         expected = (b"not running", b"missing system dependencies")
         self.assertTrue(any(m in output for m in expected), output[-500:])
 
+    @staticmethod
+    def _fake_wl_clipboard(tmp):
+        """A bin folder whose wl-paste and wl-copy pass the dependency
+        check, so the daemon start runs."""
+        bin_dir = Path(tmp) / "bin"
+        bin_dir.mkdir()
+        for tool in ("wl-paste", "wl-copy"):
+            stub = bin_dir / tool
+            stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+            stub.chmod(0o700)
+        return bin_dir
+
     def test_toggle_daemon_start_stays_in_the_scratch_home(self):
         """The daemon start behind 'toggle' must not open the real database.
 
-        A fake wl-paste passes the dependency check, so the daemon start
-        runs and creates clipman.db. It must land in the run's own HOME.
+        The daemon start runs and creates clipman.db. It must land in the
+        run's own HOME.
         """
         with tempfile.TemporaryDirectory() as tmp:
-            bin_dir = Path(tmp) / "bin"
-            bin_dir.mkdir()
-            for tool in ("wl-paste", "wl-copy"):
-                stub = bin_dir / tool
-                stub.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
-                stub.chmod(0o700)
+            bin_dir = self._fake_wl_clipboard(tmp)
             home = Path(tmp) / "home"
             home.mkdir()
             result = _run("clipman.py", "toggle", home=home, path_first=bin_dir)
             output = result.stdout + result.stderr
             self.assertIn(b"Starting it now", output, output[-500:])
             self.assertTrue((home / ".local/share/clipman/clipman.db").exists())
+
+    def test_daemon_that_cannot_start_exits_non_zero(self):
+        """With no display GTK cannot start. The daemon used to exit 0
+        then, so systemd's Restart=on-failure never tried again."""
+        with tempfile.TemporaryDirectory() as tmp:
+            bin_dir = self._fake_wl_clipboard(tmp)
+            for args in (("clipman.py",), ("-m", "clipman")):
+                with self.subTest(args=args):
+                    result = _run(*args, path_first=bin_dir)
+                    self.assertNotEqual(result.returncode, 0,
+                                        result.stderr[-500:])
+                    self.assertIn(b"Clipman could not start", result.stderr)
+
+
+class TestExitStatus(unittest.TestCase):
+    """The daemon's exit status reaches the process exit status."""
+
+    def _start_daemon(self, run_status, exit_status):
+        class FakeApp:
+            def __init__(self):
+                self.exit_status = exit_status
+
+            def run(self, _argv):
+                return run_status
+
+        fake = SimpleNamespace(ClipmanApp=FakeApp)
+        with patch.dict(sys.modules, {"clipman.app": fake}):
+            return cli._start_daemon()
+
+    def test_failed_start_up_is_returned(self):
+        self.assertEqual(self._start_daemon(0, 1), 1)
+
+    def test_run_status_wins(self):
+        self.assertEqual(self._start_daemon(2, 0), 2)
+
+    def test_clean_exit_is_zero(self):
+        self.assertEqual(self._start_daemon(0, 0), 0)
+
+    def test_launchers_exit_with_it(self):
+        for launcher in ("clipman.py", "clipman/__main__.py"):
+            with self.subTest(launcher=launcher):
+                source = (ROOT / launcher).read_text(encoding="utf-8")
+                self.assertIn("sys.exit(main())", source)
 
 
 class TestDependencyCheck(unittest.TestCase):

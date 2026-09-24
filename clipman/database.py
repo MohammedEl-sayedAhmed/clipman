@@ -185,11 +185,43 @@ def _replace_live_db(tmp):
     _remove_sidecars(tmp)
 
 
+def _set_aside_damaged():
+    """Rename the live database to ``clipman.db.<time>.damaged``, and its
+    write-ahead log with it when possible, so replacing the database
+    never destroys the only copy of an unreadable history."""
+    if not DB_PATH.exists():
+        return
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    aside = DB_PATH.with_name(f"{DB_PATH.name}.{stamp}.damaged")
+    n = 1
+    while aside.exists():
+        n += 1
+        aside = DB_PATH.with_name(f"{DB_PATH.name}.{stamp}-{n}.damaged")
+    os.replace(DB_PATH, aside)
+    wal = Path(f"{DB_PATH}-wal")
+    if wal.exists():
+        try:
+            os.replace(wal, Path(f"{aside}-wal"))
+        except OSError:
+            logger.warning("Could not keep %s", wal, exc_info=True)
+
+
 def restore_backup_file(path):
     """Replace the history on disk with the backup at ``path``, with no
     connection open (the database-error screen, where the live file may
-    not even open). Raises ValueError when the backup is unusable."""
-    _replace_live_db(_prepare_restore(path))
+    not even open). The old file is kept as ``clipman.db.<time>.damaged``.
+
+    Raises ValueError when the backup is unusable, and OSError when the
+    old file cannot be moved aside; the history on disk is then as it was.
+    """
+    tmp = _prepare_restore(path)
+    try:
+        _set_aside_damaged()
+    except OSError:
+        _remove_file(tmp)
+        _remove_sidecars(tmp)
+        raise
+    _replace_live_db(tmp)
 
 
 def _reap_orphan_images(conn):

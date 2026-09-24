@@ -366,6 +366,26 @@ All notable changes to Clipman are documented in this file.
 - The end-to-end test checks the first login too: the daemon starts no
   `wl-paste --watch` and logs why nothing is recorded.
 
+### Fixed — a damaged database and failed start-ups
+
+- A damaged `clipman.db` ("file is not a database") killed the daemon
+  with a traceback, because only one kind of database error was caught.
+  It now opens the "Can't open the clipboard database" screen, as a
+  locked or unreadable file (a permission error, say) does.
+- "Restore from backup" on that screen quit the app. It now asks for a
+  backup (starting in the data folder, where the safety copies are),
+  checks it, keeps the damaged file as `clipman.db.<time>.damaged`, puts
+  the backup in its place, and starts Clipman with the restored history.
+  An unusable backup gets the "Restore failed" dialog and changes
+  nothing. Pressing Super+V while the screen is open brings the same
+  window back instead of opening another one.
+- A start-up that failed (no display, no session bus) exited with
+  status 0, so systemd's `Restart=on-failure` never tried again. It now
+  exits 1. Another daemon already running is not a failure and still
+  exits 0, and closing the database screen exits 0 too. The service
+  tries five times in a minute, then stops; before, with `RestartSec=3`,
+  systemd's default limit could never trip.
+
 ### Fixed — git hooks
 
 - The trailer-identity check never ran. It read the output of

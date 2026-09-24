@@ -17,6 +17,11 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
+#: clipman/app.py:275 clipman/edge_states.py:212 clipman/preferences.py:771
+#: clipman/preferences.py:822
+msgid "Restore from backup"
+msgstr ""
+
 #: clipman/edge_states.py:81
 msgid "Populated history"
 msgstr ""
@@ -176,11 +181,6 @@ msgstr ""
 
 #: clipman/edge_states.py:211
 msgid "Reveal database folder"
-msgstr ""
-
-#: clipman/edge_states.py:212 clipman/preferences.py:771
-#: clipman/preferences.py:822
-msgid "Restore from backup"
 msgstr ""
 
 #: clipman/edge_states.py:219

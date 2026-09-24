@@ -142,6 +142,9 @@ class TestLauncherQuoting(unittest.TestCase):
         unit = self.fill("clipman.service")
         result = verify(unit)
         self.assertEqual(result.returncode, 0, result.stderr)
+        # A misspelled key only warns, and systemd ignores it.
+        self.assertNotIn("Unknown key", result.stderr)
+        self.assertNotIn("Unknown section", result.stderr)
         # The old substitution: the unquoted path, split at the space.
         template = (ROOT / "data" / "clipman.service").read_text(encoding="utf-8")
         old = self.tmp / "old.service"

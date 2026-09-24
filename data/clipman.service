@@ -2,6 +2,10 @@
 Description=Clipman Clipboard Manager
 After=graphical-session.target
 PartOf=graphical-session.target
+# A start-up that fails every time is tried five times, then left failed.
+# The default limit (five starts in 10 s) never trips with RestartSec=3.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
