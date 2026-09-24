@@ -421,7 +421,7 @@ body.capture .stage{width:100vw; height:100vh; max-width:none; border-radius:0; 
     content.classList.add('q'); rowGit.classList.add('match');
     groups.forEach(g=>{ if(g.dataset.grp!=='today') g.classList.add('dim'); });
     footCount.textContent='1 result';
-    cap('Fuzzy search','Find any clip in a heartbeat.');
+    cap('Search','Find any clip in a heartbeat.');
     if(!await ok(me,1200))return;
 
     // 4 — PASTE: push onto the match, pointer arrives, click, confirm

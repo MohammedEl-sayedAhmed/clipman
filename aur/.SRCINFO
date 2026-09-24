@@ -1,5 +1,5 @@
 pkgbase = clipman-clipboard
-	pkgdesc = A clipboard history manager for Wayland (GNOME, KDE, Sway, Hyprland, etc.)
+	pkgdesc = A clipboard history manager for GNOME on Wayland
 	pkgver = 1.2.1
 	pkgrel = 1
 	url = https://mohammedel-sayedahmed.github.io/clipman/

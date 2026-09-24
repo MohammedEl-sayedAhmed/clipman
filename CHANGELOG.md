@@ -499,6 +499,28 @@ change what a reader would do:
 - `pyproject.toml` gained per-version classifiers so the tested range
   is visible on PyPI. `requires-python` stays open at the top end, so a
   newer interpreter is still allowed to install.
+- The README (also the PyPI page), both metainfo files, the snap, AUR,
+  PyPI and citation descriptions, `llms*.txt`, the website and the
+  threat model now describe only what the app does:
+  - Features the GTK 4 port dropped are gone from the lists: inline
+    edit, expand, one-click link open and the image hover preview
+    (#310–#312). So are KDE, Sway and Hyprland support (#318), search
+    over images and "fuzzy" search (#315, #317), accent presets (#316),
+    and passwords or the clipboard being cleared (#313, #314). The
+    README lists them under "Planned", with their issues.
+  - Package installs were told to run `install.sh` from a git checkout,
+    which set up the checkout instead of the package, and the PyPI
+    steps used `pip install` (refused on Ubuntu 24.04+) and shortcut
+    commands that wiped the user's other shortcuts. A new "Finish the
+    setup" section gives tested steps for each package (#323 tracks a
+    single command), and PyPI uses pipx.
+  - The README's logo and links are absolute, so they work on PyPI (11
+    were broken there).
+  - libadwaita 1.5 is the stated floor, as the code needs, and the
+    start-up check now enforces it (it accepted 1.4).
+  - The GitHub Sponsors links led nowhere (there is no Sponsors
+    listing) and are gone. The About page's PayPal link pointed at an
+    unrelated profile; it now opens the maintainer's page.
 
 ### Added — two superseding ADRs
 

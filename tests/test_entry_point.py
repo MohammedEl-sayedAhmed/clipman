@@ -6,7 +6,10 @@ import tempfile
 import unittest
 from importlib import import_module, resources
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
+from clipman import cli
 from clipman._version import __version__
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -103,6 +106,34 @@ class TestDependencyCheck(unittest.TestCase):
     def test_covers_wl_clipboard(self):
         self.assertIn("wl-paste", CLI_SOURCE)
         self.assertIn("wl-clipboard", CLI_SOURCE)
+
+
+class TestLibadwaitaPreflight(unittest.TestCase):
+    """The start-up check refuses a libadwaita the app cannot run on.
+
+    Preferences and the snippets editor subclass Adw.Dialog at import
+    time, and Adw.AlertDialog is used too; both arrived in 1.5.
+    """
+
+    def _preflight(self, minor):
+        try:
+            import gi.repository
+        except ImportError as exc:
+            raise unittest.SkipTest("PyGObject is not installed") from exc
+        fake = SimpleNamespace(MAJOR_VERSION=1, MINOR_VERSION=minor, MICRO_VERSION=0)
+        with patch("gi.require_version"), \
+                patch.object(gi.repository, "Adw", fake, create=True), \
+                patch.dict(sys.modules, {"gi.repository.Adw": fake}):
+            cli._preflight_libadwaita()
+
+    def test_refuses_libadwaita_1_4(self):
+        with self.assertRaises(SystemExit), patch("sys.stderr") as stderr:
+            self._preflight(4)
+        written = "".join(call.args[0] for call in stderr.write.call_args_list)
+        self.assertIn(">= 1.5", written)
+
+    def test_accepts_libadwaita_1_5(self):
+        self._preflight(5)
 
 
 class TestEntryPoints(unittest.TestCase):

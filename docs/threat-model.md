@@ -39,21 +39,37 @@ should still be reported through the private channel in
 
 ## Mitigations in place
 
-- **Incognito mode** — pauses recording entirely (toggle from the
-  popup status bar).
-- **Sensitive-data detection** — regex heuristics for passwords,
-  tokens, npm tokens, private keys, connection strings, SSH keys.
-  Detected entries auto-clear from clipboard 30 seconds after copy.
-- **Restrictive on-disk permissions** — data dir `0o700`, image
-  files `0o600`. Standard `umask` regressions can't relax these
+- **Incognito mode** — pauses recording entirely (the eye button in
+  the popup's header bar, or Preferences → Privacy).
+- **Sensitive-data detection** — matches known secret shapes: vendor
+  API tokens (npm, GitHub, AWS and others), private keys, JSON Web
+  Tokens, URLs with a password inside (connection strings), labelled
+  values such as `PASSWORD=…`, Authorization headers, Luhn-valid card
+  numbers and TOTP seeds. Public keys are not flagged. Detected
+  entries are masked and removed from the history after a
+  configurable delay (default 30 seconds). Not covered: a bare
+  password with no label is stored as an ordinary clip
+  ([#313](https://github.com/MohammedEl-sayedAhmed/clipman/issues/313)),
+  and the system clipboard itself is not cleared
+  ([#314](https://github.com/MohammedEl-sayedAhmed/clipman/issues/314)).
+- **Restrictive on-disk permissions** — data dir `0o700`, database
+  and image files `0o600`. Standard `umask` regressions can't relax these
   because clipman explicitly `chmod`s the paths.
 - **Path-traversal validation** on every image path before file
   I/O (`_safe_image_path` resolves and confirms containment under
   `IMAGES_DIR`).
-- **Backup-import hardening** — schema integrity check, SQLite-URI
-  injection rejected via URL-encoded `file:` URIs, triggers and
-  views rejected, image magic-byte validation (PNG, JPEG, GIF, BMP,
-  WebP).
+- **Backup-import hardening** — a backup is checked in a private copy
+  before it can replace the history: `PRAGMA integrity_check`, the
+  required columns, no triggers, views or virtual tables, and
+  `trusted_schema=OFF`, because the file is untrusted. Image paths are
+  sanitised, SQLite-URI injection is rejected via URL-encoded `file:`
+  URIs, and the live database is replaced by a single rename only
+  after every check passes.
+- **Image signature check** — when an image is copied, it is stored
+  only if it starts with a PNG, JPEG, GIF, BMP or WebP signature. The
+  BMP and WebP checks look only at the first bytes (`BM`, `RIFF`), so
+  they are loose, and a restored backup's images are not checked
+  ([#335](https://github.com/MohammedEl-sayedAhmed/clipman/issues/335)).
 - **Parameterised SQL** throughout — no string concatenation into
   queries.
 - **No `shell=True`** — every subprocess invocation uses an argument
