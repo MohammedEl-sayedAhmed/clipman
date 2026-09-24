@@ -59,7 +59,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install shellcheck
+      - name: Install the lint packages
         timeout-minutes: 4
         run: scripts/deps.sh --lint --install --yes
 
@@ -87,3 +87,41 @@ jobs:
       # hooks stay local-only (docs/hooks.md).
       - name: Run the hooks' test suite
         run: scripts/dev.sh hooks-test
+
+  validate:
+    name: Validate (workflows, metainfo, desktop entry)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the lint packages
+        timeout-minutes: 4
+        run: scripts/deps.sh --lint --install --yes
+
+      # Ubuntu 24.04 does not package actionlint: use the release binary,
+      # pinned by its checksum from the release's checksums file.
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: "1.7.12"
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/$archive"
+          echo "$ACTIONLINT_SHA256  $RUNNER_TEMP/$archive" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Validate
+        run: scripts/dev.sh validate

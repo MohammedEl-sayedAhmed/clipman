@@ -374,7 +374,7 @@ jobs:
         env:
           VERSION: ${{ needs.pre-flight.outputs.version }}
         run: |
-          fpm -s dir -t deb -p clipman_${VERSION}_all.deb \
+          fpm -s dir -t deb -p "clipman_${VERSION}_all.deb" \
             --name clipman-clipboard \
             --version "$VERSION" \
             --architecture all \
@@ -395,7 +395,7 @@ jobs:
         env:
           VERSION: ${{ needs.pre-flight.outputs.version }}
         run: |
-          fpm -s dir -t rpm -p clipman-${VERSION}-1.noarch.rpm \
+          fpm -s dir -t rpm -p "clipman-${VERSION}-1.noarch.rpm" \
             --name clipman-clipboard \
             --version "$VERSION" \
             --architecture noarch \

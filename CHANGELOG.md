@@ -593,6 +593,14 @@ change what a reader would do:
   the counters, the star chart and the downloads history to a separate
   `numbers` branch with the built-in token. The website and the README
   read them from there, and `NUMBERS_TOKEN` is no longer used.
+- A new `Validate` lint job runs actionlint on the workflows (with
+  shellcheck on every `run:` block), `appstreamcli validate` on both
+  metainfo files, and `desktop-file-validate` on the desktop entry.
+  `scripts/dev.sh validate` runs the same checks. It found two problems,
+  both fixed here:
+  - `com.clipman.Clipman.metainfo.xml`, which the AUR package installs,
+    failed validation: its developer id had capital letters;
+  - two file names in `release.yml` were unquoted.
 
 ## [1.2.1] - 2026-08-22
 

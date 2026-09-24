@@ -5,7 +5,7 @@
   <summary>Clipboard history manager for Wayland (GNOME, KDE, Sway, Hyprland)</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
-  <developer id="com.github.MohammedEl-sayedAhmed">
+  <developer id="io.github.mohammedel-sayedahmed">
     <name>Mohammed El-sayed Ahmed</name>
   </developer>
 
