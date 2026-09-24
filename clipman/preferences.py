@@ -48,7 +48,7 @@ from gettext import gettext as _
 import clipman.keybindings as keybindings
 import clipman.updates as updates
 from clipman._version import __version__
-from clipman.database import DB_PATH
+from clipman import database
 
 logger = logging.getLogger(__name__)
 
@@ -736,7 +736,7 @@ class ClipmanPreferences(Adw.Dialog):
 
         path_row = Adw.ActionRow()
         path_row.set_title(_("Database location"))
-        path_row.set_subtitle(str(DB_PATH))
+        path_row.set_subtitle(str(database.DB_PATH))
         cap_group.add(path_row)
 
         stats_row = Adw.ActionRow()
@@ -786,7 +786,7 @@ class ClipmanPreferences(Adw.Dialog):
         except Exception:
             count = 0
         try:
-            size = os.path.getsize(DB_PATH)
+            size = os.path.getsize(database.DB_PATH)
         except OSError:
             size = 0
         size_kb = size / 1024.0
@@ -831,20 +831,19 @@ class ClipmanPreferences(Adw.Dialog):
     def _confirm_restore(self, source_path):
         """Show a destructive AlertDialog before overwriting the DB.
 
-        Restore is irreversible: the running connection is closed,
-        ``DB_PATH`` is replaced, and any unbacked-up history is lost.
-        We snapshot the current DB to a sibling ``.bak`` file (using
-        the same ``export_backup`` code path the user invokes manually)
-        so a botched restore can still be rolled back from disk.
+        Restore replaces the whole history. The current history is saved
+        first as a new safety copy next to the live database, never over
+        an older one, so a restore can itself be undone by restoring
+        that copy.
         """
         dialog = Adw.AlertDialog.new(
             _("Restore from backup?"),
             _(
                 "This replaces your entire clipboard history with the "
-                "contents of:\n\n{path}\n\nA safety copy of the current "
-                "database will be written next to it as a .bak file. "
-                "This action cannot be undone from inside Clipman."
-            ).format(path=source_path),
+                "contents of:\n\n{path}\n\nYour current history is saved "
+                "first as a safety copy in {folder}. The three newest "
+                "safety copies are kept."
+            ).format(path=source_path, folder=database.DB_PATH.parent),
         )
         dialog.add_response("cancel", _("Cancel"))
         dialog.add_response("restore", _("Restore"))
@@ -859,21 +858,23 @@ class ClipmanPreferences(Adw.Dialog):
     def _on_restore_confirmed(self, _dialog, response, source_path):
         if response != "restore":
             return
-        # Snapshot current DB to a sibling .bak before overwriting.
-        # If the snapshot itself fails (e.g. disk full) we abort the
-        # restore — the user is better off keeping their current
-        # history than losing it to a half-written copy.
-        backup_path = str(DB_PATH) + ".bak"
+        # Save the current history first, under a new name, so no earlier
+        # safety copy (possibly the very file being restored) is
+        # overwritten. If that fails (a full disk, say) the restore is
+        # abandoned: keeping the current history beats losing it.
         try:
-            self.db.export_backup(backup_path)
+            self.db.write_safety_copy()
         except Exception as exc:
             self._emit_event("restore_failed", str(exc))
             return
         try:
             self.db.import_backup(source_path)
-            self._emit_event("restore_succeeded", source_path)
         except Exception as exc:
             self._emit_event("restore_failed", str(exc))
+            return
+        finally:
+            database.prune_safety_copies(spare=source_path)
+        self._emit_event("restore_succeeded", source_path)
 
     # ------------------------------------------------------------------
     # Pane 5: Updates
