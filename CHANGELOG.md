@@ -295,6 +295,33 @@ All notable changes to Clipman are documented in this file.
   window had no name or icon in the dash and in Alt+Tab. It now installs
   `com.clipman.Clipman.desktop` (with the install path filled in) into
   `~/.local/share/applications`; `uninstall.sh` removes it.
+- A fresh `install.sh` never turned the extension on (#1). While the
+  Shell runs, `gnome-extensions enable` refuses an extension that the
+  Shell did not find at login, and the error was hidden. So the extension
+  stayed off after the next login too, and nothing was recorded. When the
+  Shell refuses, the installer now writes `enabled-extensions` (and takes
+  the extension out of `disabled-extensions`), so it starts at the next
+  login. It also warns when extensions are turned off in GNOME, or when
+  the extension does not list the running Shell version.
+- Running `install.sh` again reset a shortcut the user had changed back
+  to Super+V. It now keeps it, and frees Super+V from the message tray
+  only when Clipman uses Super+V.
+- A checkout path with a space, `&` or `|` broke the service, the desktop
+  entry and the shortcut, or stopped the install at `sed`, and the
+  installer still reported success. The path is now quoted for each file.
+  A path that systemd or a desktop entry cannot hold (quotes, a
+  backslash, `$`, `%`, a backtick or a control character) stops the
+  install with a clear message, before any of Clipman's files or
+  settings are written.
+- On a desktop without GNOME, `install.sh` stopped at the first GNOME
+  setting, before the service step. It now skips the GNOME steps, says
+  so, and still installs the service.
+- `uninstall.sh` left a daemon started by hand running, and it kept
+  writing into the files that had just been removed. It now asks the
+  daemon to quit over D-Bus.
+- `uninstall.sh` failed without a terminal: the question about the data
+  hit end of input under `set -e`. It now keeps the data then, and says
+  where it is.
 
 ### Fixed — git hooks
 
