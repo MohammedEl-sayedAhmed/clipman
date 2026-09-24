@@ -718,13 +718,15 @@ change what a reader would do:
   The apt step is capped at four minutes; apt retries with a 30 s fetch
   timeout so a stalled mirror fails inside the cap. The last red run on
   `main` was an apt stall that consumed the whole job budget.
-- The daily numbers refresh no longer opens a pull request. It used a
+- The daily stats refresh no longer opens a pull request. It used a
   personal access token to open and auto-merge one PR a day under the
   maintainer's name, which moved `main` every day, put every open pull
   request behind, and would stall when the token expired. It now commits
   the counters, the star chart and the downloads history to a separate
-  `numbers` branch with the built-in token. The website and the README
-  read them from there, and `NUMBERS_TOKEN` is no longer used.
+  `stats` branch with the built-in token (the workflow is
+  `refresh-stats.yml`; both were called "numbers" at first). The website
+  and the README read them from there, and `NUMBERS_TOKEN` is no longer
+  used.
 - A new `Validate` lint job runs actionlint on the workflows (with
   shellcheck on every `run:` block), `appstreamcli validate` on both
   metainfo files, and `desktop-file-validate` on the desktop entry.

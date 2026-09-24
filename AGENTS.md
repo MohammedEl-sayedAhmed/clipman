@@ -144,21 +144,21 @@ specific assistant.
 
 ## Bots & automation
 
-- `refresh-numbers.yml` (daily 06:00 UTC + on push to its own paths)
+- `refresh-stats.yml` (daily 06:00 UTC + on push to its own paths)
   refreshes marketing counters, the self-hosted star-history SVGs, and the
-  downloads history, and commits them straight to the `numbers` branch
+  downloads history, and commits them straight to the `stats` branch
   with the built-in `GITHUB_TOKEN`. There is no PR, no personal token and
   nothing for the maintainer to do; `main` never gets a bot commit. Its
   outputs are **deterministic on unchanged inputs** — keep them that way,
   or the branch gets a junk commit every day.
 - The website (`docs/index.html`) and the README read the data from
-  `raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/numbers/…`.
+  `raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/stats/…`.
   Never commit the data to `main` again. If the branch is deleted, the
   next run recreates it from the last copies `main` carried.
 - Numbers can legitimately *decrease* (PyPI mirrors, deleted stars);
   don't treat a small dip as a bug.
 - The star chart is self-hosted (`scripts/refresh_stats.py` →
-  `star-history-*.svg` on the `numbers` branch) because star-history.com's
+  `star-history-*.svg` on the `stats` branch) because star-history.com's
   public embed rate-limits (503) behind GitHub's camo proxy. Don't
   reintroduce the external embed.
 

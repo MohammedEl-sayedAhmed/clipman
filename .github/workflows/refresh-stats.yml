@@ -1,8 +1,8 @@
-name: Refresh marketing numbers
+name: Refresh project stats
 
 # Fetches PyPI (via pypistats) and GNOME Extensions counts server-side
 # once a day, rebuilds the self-hosted star chart and downloads history,
-# and commits the results to the `numbers` branch.
+# and commits the results to the `stats` branch.
 #
 # Why this exists: the marketing page (docs/index.html) renders live
 # counts under "By the numbers". The GitHub-derived ones (stars, forks,
@@ -19,7 +19,7 @@ name: Refresh marketing numbers
 # auto-merge PR opened with the maintainer's personal token. That put a
 # bot PR under the maintainer's name every day, moved main daily (so
 # every open PR fell behind under strict branch protection), and would
-# stall whenever the token expired. The `numbers` branch has no
+# stall whenever the token expired. The `stats` branch has no
 # protection and no required checks, so the built-in token commits to
 # it directly: no PR, no personal token, and main only changes when
 # people change it. Pushes made with the built-in token start no
@@ -27,7 +27,8 @@ name: Refresh marketing numbers
 #
 # Readers: docs/index.html (numbers.json) and README.md (the star-history
 # SVGs and the downloads history), all through
-# raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/numbers/.
+# raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/stats/.
+# (Until 2026-09 the branch was called `numbers`.)
 
 on:
   schedule:
@@ -40,7 +41,7 @@ on:
   push:
     branches: [main]
     paths:
-      - '.github/workflows/refresh-numbers.yml'
+      - '.github/workflows/refresh-stats.yml'
       - 'scripts/refresh_stats.py'
 
 # Default-deny at the workflow level; the single job below is granted
@@ -48,19 +49,19 @@ on:
 permissions: {}
 
 concurrency:
-  group: refresh-numbers
+  group: refresh-stats
   cancel-in-progress: false
 
 jobs:
   refresh:
-    # A fork has no use for a numbers branch of its own.
+    # A fork has no use for a stats branch of its own.
     if: github.repository == 'MohammedEl-sayedAhmed/clipman'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
-      contents: write       # commit to the numbers branch
+      contents: write       # commit to the stats branch
     env:
-      DATA_DIR: numbers-data
+      DATA_DIR: stats-data
     steps:
       - uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
@@ -69,32 +70,32 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
-          # Full history, so a first run can seed the numbers branch from
+          # Full history, so a first run can seed the stats branch from
           # the last copies main carried. The persisted credentials are
-          # the built-in token, which pushes the numbers branch below.
+          # the built-in token, which pushes the stats branch below.
           fetch-depth: 0
 
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.12'
 
-      - name: Check out the numbers branch
+      - name: Check out the stats branch
         run: |
           # ls-remote exits 2 only when the branch is missing, so a
           # network failure stops the job instead of starting over.
-          if git ls-remote --exit-code --heads origin numbers >/dev/null; then
-            git fetch --depth=1 origin +refs/heads/numbers:refs/remotes/origin/numbers
-            git worktree add -B numbers "$DATA_DIR" refs/remotes/origin/numbers
+          if git ls-remote --exit-code --heads origin stats >/dev/null; then
+            git fetch --depth=1 origin +refs/heads/stats:refs/remotes/origin/stats
+            git worktree add -B stats "$DATA_DIR" refs/remotes/origin/stats
           else
             status=$?
             if [ "$status" -ne 2 ]; then
-              echo "::error::cannot read the numbers branch (git ls-remote exited $status)"
+              echo "::error::cannot read the stats branch (git ls-remote exited $status)"
               exit "$status"
             fi
             # First run, or the branch was deleted: start it empty and
             # seed each file with the last copy main carried, so the
             # downloads history is never lost.
-            git worktree add --orphan -b numbers "$DATA_DIR"
+            git worktree add --orphan -b stats "$DATA_DIR"
             seed() {
               local rev
               if git cat-file -e "HEAD:$1" 2>/dev/null; then
@@ -108,19 +109,19 @@ jobs:
             seed docs/assets/star-history-dark.svg star-history-dark.svg
             seed docs/assets/star-history-light.svg star-history-light.svg
           fi
-          if [ ! -f "$DATA_DIR/README.md" ]; then
-            # shellcheck disable=SC2016  # Markdown backticks, not substitutions
-            printf '%s\n' \
-              '# numbers' \
-              '' \
-              'Data written once a day by `.github/workflows/refresh-numbers.yml`.' \
-              'Nothing here is edited by hand; the next run would overwrite it.' \
-              '' \
-              '- `numbers.json`: PyPI and GNOME Extensions counters for the website.' \
-              '- `stats_history.json`: stars and release downloads, one point per change.' \
-              '- `star-history-dark.svg`, `star-history-light.svg`: the README star chart.' \
-              > "$DATA_DIR/README.md"
-          fi
+          # Rewritten on every run, so it follows renames; its text is
+          # fixed, so it adds no commit of its own.
+          # shellcheck disable=SC2016  # Markdown backticks, not substitutions
+          printf '%s\n' \
+            '# stats' \
+            '' \
+            'Data written once a day by `.github/workflows/refresh-stats.yml`.' \
+            'Nothing here is edited by hand; the next run would overwrite it.' \
+            '' \
+            '- `numbers.json`: PyPI and GNOME Extensions counters for the website.' \
+            '- `stats_history.json`: stars and release downloads, one point per change.' \
+            '- `star-history-dark.svg`, `star-history-light.svg`: the README star chart.' \
+            > "$DATA_DIR/README.md"
 
       - name: Fetch upstream counters
         run: |
@@ -130,9 +131,9 @@ jobs:
           NUMBERS_PATH = os.path.join(os.environ["DATA_DIR"], "numbers.json")
           GNOME_EXTENSION_ID = 9407
           PYPI_PACKAGE = "clipman-clipboard"
-          UA = "clipman-marketing-numbers/1.0 (+https://github.com/MohammedEl-sayedAhmed/clipman)"
-          COMMENT = ("Refreshed daily by .github/workflows/refresh-numbers.yml onto the "
-                     "numbers branch. docs/index.html reads it from raw.githubusercontent.com, "
+          UA = "clipman-stats/1.0 (+https://github.com/MohammedEl-sayedAhmed/clipman)"
+          COMMENT = ("Refreshed daily by .github/workflows/refresh-stats.yml onto the "
+                     "stats branch. docs/index.html reads it from raw.githubusercontent.com, "
                      "because the browser cannot read PyPI stats or extensions.gnome.org "
                      "directly (no CORS).")
 
@@ -206,7 +207,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/refresh_stats.py --out "$DATA_DIR"
 
-      - name: Commit to the numbers branch if anything changed
+      - name: Commit to the stats branch if anything changed
         env:
           GH_COMMIT_AUTHOR: github-actions[bot]
           GH_COMMIT_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
@@ -214,9 +215,9 @@ jobs:
           cd "$DATA_DIR"
           git add -A
           if git diff --cached --quiet; then
-            echo "Numbers unchanged; nothing to commit."
+            echo "Stats unchanged; nothing to commit."
             exit 0
           fi
           git -c user.name="$GH_COMMIT_AUTHOR" -c user.email="$GH_COMMIT_EMAIL" \
-            commit -q -m "chore(numbers): refresh marketing counters"
-          git push origin numbers
+            commit -q -m "chore(stats): refresh project stats"
+          git push origin stats
