@@ -1523,19 +1523,20 @@ footer.site .legal .mono { font-size: 0.78rem; }
             } catch (_) { /* leave placeholder */ }
         })();
 
-        // 4 + 5) Same-origin JSON refreshed daily by the
-        // refresh-numbers.yml workflow. We can't read the GNOME
-        // Extensions API or PyPI download stats directly from the
-        // browser — the first sends no Access-Control-Allow-Origin
-        // header at all, the second requires an authenticated key on
-        // its v2 API — so a scheduled GitHub Action does the fetch
-        // server-side and commits the numbers into _data/numbers.json.
+        // 4 + 5) JSON refreshed daily by the refresh-numbers.yml
+        // workflow. We can't read the GNOME Extensions API or PyPI
+        // download stats directly from the browser — the first sends no
+        // Access-Control-Allow-Origin header at all, the second requires
+        // an authenticated key on its v2 API — so a scheduled GitHub
+        // Action does the fetch server-side and commits numbers.json to
+        // the repo's `numbers` branch. raw.githubusercontent.com serves
+        // it with Access-Control-Allow-Origin: *.
         (async () => {
             try {
-                // Cache-bust on the day so a fresh deploy after the
-                // nightly refresh isn't served the stale CDN copy.
+                // Cache-bust on the day so the page isn't served a
+                // stale CDN copy after the nightly refresh.
                 const day = new Date().toISOString().slice(0, 10);
-                const r = await fetch('_data/numbers.json?d=' + day);
+                const r = await fetch('https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/numbers/numbers.json?d=' + day);
                 if (!r.ok) return;
                 const j = await r.json();
                 const gnome = j && j.gnome && j.gnome.downloads;
