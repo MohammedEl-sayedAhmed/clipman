@@ -1,3 +1,5 @@
+import contextlib
+import io
 import os
 import re
 import subprocess
@@ -111,18 +113,27 @@ class TestDBusMainLoopInit(unittest.TestCase):
                     self.assertIn(b"Clipman could not start", result.stderr)
 
 
+def _fake_app_module(run_status=0, exit_status=0, runs=None):
+    """A stand-in for clipman.app whose ClipmanApp only records its runs:
+    ``runs`` gets the app's show_on_start flag for each one."""
+    class FakeApp:
+        def __init__(self):
+            self.exit_status = exit_status
+            self.show_on_start = False
+
+        def run(self, _argv):
+            if runs is not None:
+                runs.append(self.show_on_start)
+            return run_status
+
+    return SimpleNamespace(ClipmanApp=FakeApp)
+
+
 class TestExitStatus(unittest.TestCase):
     """The daemon's exit status reaches the process exit status."""
 
     def _start_daemon(self, run_status, exit_status):
-        class FakeApp:
-            def __init__(self):
-                self.exit_status = exit_status
-
-            def run(self, _argv):
-                return run_status
-
-        fake = SimpleNamespace(ClipmanApp=FakeApp)
+        fake = _fake_app_module(run_status, exit_status)
         with patch.dict(sys.modules, {"clipman.app": fake}):
             return cli._start_daemon()
 
@@ -142,20 +153,136 @@ class TestExitStatus(unittest.TestCase):
                 self.assertIn("sys.exit(main())", source)
 
 
+class TestToggle(unittest.TestCase):
+    """`clipman toggle` shows the popup even when no daemon runs yet."""
+
+    def test_no_daemon_starts_one_that_shows_the_popup(self):
+        """CORE-13: the first toggle started the daemon but showed
+        nothing, so the shortcut had to be pressed again."""
+        import dbus
+
+        runs = []
+        error = dbus.exceptions.DBusException("no daemon")
+        with patch("dbus.SessionBus", side_effect=error), \
+             patch.dict(sys.modules, {"clipman.app": _fake_app_module(runs=runs)}), \
+             contextlib.redirect_stdout(io.StringIO()):
+            status = cli._toggle()
+        self.assertEqual(status, 0)
+        self.assertEqual(runs, [True])
+
+    def test_plain_start_keeps_the_popup_hidden(self):
+        runs = []
+        with patch.dict(sys.modules, {"clipman.app": _fake_app_module(runs=runs)}):
+            cli._start_daemon()
+        self.assertEqual(runs, [False])
+
+
 class TestDependencyCheck(unittest.TestCase):
-    """The entry point names the system packages it needs."""
+    """The entry point names what is missing and how to install it
+    (audit finding CORE-12)."""
 
-    def test_covers_gi(self):
-        self.assertIn('import_module("gi")', CLI_SOURCE)
-        self.assertIn("python3-gi", CLI_SOURCE)
+    # The program each package manager is found by.
+    PROGRAMS = {"apt": "apt-get", "dnf": "dnf", "pacman": "pacman"}
 
-    def test_covers_dbus(self):
-        self.assertIn('import_module("dbus")', CLI_SOURCE)
-        self.assertIn("python3-dbus", CLI_SOURCE)
+    def _check(self, missing=(), manager="apt", isolated=False):
+        """Run the check with ``missing`` pieces ("gi", "dbus",
+        "wl-clipboard") taken away. Return what it wrote to stderr when
+        it exited, or None when it passed."""
+        present = self.PROGRAMS.get(manager)
 
-    def test_covers_wl_clipboard(self):
-        self.assertIn("wl-paste", CLI_SOURCE)
-        self.assertIn("wl-clipboard", CLI_SOURCE)
+        def which(program):
+            if program == "wl-paste":
+                return None if "wl-clipboard" in missing else "/usr/bin/wl-paste"
+            return f"/usr/bin/{program}" if program == present else None
+
+        # None in sys.modules makes an import raise ImportError.
+        blocked = {name: None for name in ("gi", "dbus") if name in missing}
+        stderr = io.StringIO()
+        with patch.dict(sys.modules, blocked), \
+             patch("clipman.cli.shutil.which", side_effect=which), \
+             patch("clipman.cli._isolated_venv", return_value=isolated), \
+             contextlib.redirect_stderr(stderr):
+            try:
+                cli._check_dependencies()
+            except SystemExit as exc:
+                self.assertEqual(exc.code, 1)
+                return stderr.getvalue()
+        return None
+
+    def test_passes_when_nothing_is_missing(self):
+        self.assertIsNone(self._check())
+
+    def test_names_each_missing_piece(self):
+        written = self._check(missing=("gi", "dbus", "wl-clipboard"))
+        self.assertIn("Error: missing system dependencies: PyGObject, "
+                      "GTK 4 and libadwaita, dbus-python, wl-clipboard",
+                      written)
+
+    def test_install_command_fits_the_package_manager(self):
+        """The hint was always apt, even on Fedora or Arch."""
+        installs = {
+            "apt": ("sudo apt install",
+                    "python3-gi gir1.2-gtk-4.0 gir1.2-adw-1 python3-dbus"),
+            "dnf": ("sudo dnf install",
+                    "python3-gobject gtk4 libadwaita python3-dbus"),
+            "pacman": ("sudo pacman -S",
+                       "python-gobject gtk4 libadwaita python-dbus"),
+        }
+        for manager, (command, packages) in installs.items():
+            with self.subTest(manager=manager):
+                written = self._check(("gi", "dbus", "wl-clipboard"), manager)
+                self.assertIn(f"  {command} {packages} wl-clipboard\n", written)
+
+    def test_names_only_what_is_missing(self):
+        written = self._check(missing=("wl-clipboard",))
+        self.assertIn("  sudo apt install wl-clipboard\n", written)
+        self.assertNotIn("python3-gi", written)
+
+    def test_unknown_package_manager_gets_a_general_hint(self):
+        written = self._check(missing=("dbus",), manager=None)
+        self.assertIn("Install them with your package manager.", written)
+        self.assertNotIn("sudo", written)
+
+    def test_isolated_venv_gets_the_pipx_hint(self):
+        """PyGObject and dbus-python come from the system, so a venv that
+        cannot see it misses them even when they are installed."""
+        pipx = "pipx install --system-site-packages clipman-clipboard"
+        written = self._check(missing=("gi",), isolated=True)
+        self.assertIn(pipx, written)
+        self.assertIn("sudo apt install python3-gi", written)
+        # wl-clipboard alone is not a venv problem.
+        written = self._check(missing=("wl-clipboard",), isolated=True)
+        self.assertNotIn(pipx, written)
+
+
+class TestIsolatedVenv(unittest.TestCase):
+    """Whether this Python environment can see the system's packages."""
+
+    def _isolated(self, cfg):
+        """Run the check in a fake venv whose pyvenv.cfg holds ``cfg``
+        (None: no such file)."""
+        with tempfile.TemporaryDirectory() as prefix:
+            if cfg is not None:
+                Path(prefix, "pyvenv.cfg").write_text(cfg, encoding="utf-8")
+            with patch.object(sys, "prefix", prefix), \
+                 patch.object(sys, "base_prefix", "/usr"):
+                return cli._isolated_venv()
+
+    def test_venv_without_system_packages(self):
+        self.assertTrue(self._isolated("include-system-site-packages = false\n"))
+
+    def test_venv_with_system_packages(self):
+        self.assertFalse(self._isolated("home = /usr/bin\n"
+                                        "include-system-site-packages = true\n"))
+
+    def test_setting_left_out_means_system_packages(self):
+        # Python's site module defaults it to true.
+        self.assertFalse(self._isolated("home = /usr/bin\n"))
+        self.assertFalse(self._isolated(None))
+
+    def test_no_venv(self):
+        with patch.object(sys, "base_prefix", sys.prefix):
+            self.assertFalse(cli._isolated_venv())
 
 
 class TestLibadwaitaPreflight(unittest.TestCase):
@@ -184,6 +311,26 @@ class TestLibadwaitaPreflight(unittest.TestCase):
 
     def test_accepts_libadwaita_1_5(self):
         self._preflight(5)
+
+    def test_missing_gtk_or_libadwaita_gets_a_readable_error(self):
+        """CORE-12: without the typelib, require_version raised a
+        ValueError, and the user saw a traceback."""
+        try:
+            import gi
+        except ImportError as exc:
+            raise unittest.SkipTest("PyGObject is not installed") from exc
+        stderr = io.StringIO()
+        error = ValueError("Namespace Adw not available")
+        with patch.object(gi, "require_version", side_effect=error), \
+             patch("clipman.cli._package_manager", return_value="dnf"), \
+             contextlib.redirect_stderr(stderr), \
+             self.assertRaises(SystemExit) as caught:
+            cli._preflight_libadwaita()
+        self.assertEqual(caught.exception.code, 1)
+        written = stderr.getvalue()
+        self.assertIn("missing system dependencies: GTK 4 and libadwaita",
+                      written)
+        self.assertIn("  sudo dnf install gtk4 libadwaita\n", written)
 
 
 class TestEntryPoints(unittest.TestCase):

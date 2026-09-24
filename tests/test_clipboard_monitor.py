@@ -76,12 +76,10 @@ class TestClipboardMonitor(unittest.TestCase):
         self.mock_db.add_entry.assert_not_called()
         self.assertFalse(self.monitor._self_copy)
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_detects_new_image(self, mock_run):
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_detects_new_image(self, mock_read):
         image_data = b"\x89PNG\r\n\x1a\nfake_image"
-        mock_run.return_value = FakeCompletedProcess(
-            returncode=0, stdout=image_data
-        )
+        mock_read.return_value = image_data
 
         self.monitor.handle_new_image()
 
@@ -89,12 +87,10 @@ class TestClipboardMonitor(unittest.TestCase):
             "image", image_data=image_data
         )
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_allows_duplicate_image(self, mock_run):
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_allows_duplicate_image(self, mock_read):
         image_data = b"\x89PNG\r\n\x1a\nfake_image"
-        mock_run.return_value = FakeCompletedProcess(
-            returncode=0, stdout=image_data
-        )
+        mock_read.return_value = image_data
 
         self.monitor.handle_new_image()
         self.monitor._last_event_time = 0  # reset rate limiter
@@ -102,29 +98,30 @@ class TestClipboardMonitor(unittest.TestCase):
 
         self.assertEqual(self.mock_db.add_entry.call_count, 2)
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_skips_oversized_image(self, mock_run):
-        big_image = b"\x89" * (10 * 1024 * 1024 + 1)
-        mock_run.return_value = FakeCompletedProcess(
-            returncode=0, stdout=big_image
+    @patch("clipman.clipboard_monitor._read_limited", return_value=None)
+    def test_image_read_is_capped(self, mock_read):
+        """The read stops past MAX_IMAGE_SIZE (TestReadLimited checks
+        how), and an image over it is not stored."""
+        from clipman.clipboard_monitor import MAX_IMAGE_SIZE
+
+        self.monitor.handle_new_image()
+
+        mock_read.assert_called_once_with(
+            ["wl-paste", "--type", "image/png"], MAX_IMAGE_SIZE, timeout=5
         )
+        self.mock_db.add_entry.assert_not_called()
+
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_handles_wl_paste_error(self, mock_read):
+        mock_read.return_value = None
 
         self.monitor.handle_new_image()
 
         self.mock_db.add_entry.assert_not_called()
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_handles_wl_paste_error(self, mock_run):
-        mock_run.return_value = FakeCompletedProcess(returncode=1, stdout=b"")
-
-        self.monitor.handle_new_image()
-
-        self.mock_db.add_entry.assert_not_called()
-
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_handles_wl_paste_timeout(self, mock_run):
-        import subprocess
-        mock_run.side_effect = subprocess.TimeoutExpired(cmd="wl-paste", timeout=5)
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_handles_wl_paste_timeout(self, mock_read):
+        mock_read.return_value = None  # wl-paste timed out
 
         # Should not raise
         self.monitor.handle_new_image()
@@ -134,11 +131,9 @@ class TestClipboardMonitor(unittest.TestCase):
         self.monitor.handle_new_text("trigger callback")
         self.assertTrue(self.new_entry_called)
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_callback_fires_on_new_image(self, mock_run):
-        mock_run.return_value = FakeCompletedProcess(
-            returncode=0, stdout=b"\x89PNGdata"
-        )
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_callback_fires_on_new_image(self, mock_read):
+        mock_read.return_value = b"\x89PNGdata"
         self.monitor.handle_new_image()
         self.assertTrue(self.new_entry_called)
 
@@ -175,11 +170,9 @@ class TestClipboardMonitor(unittest.TestCase):
         self.mock_db.add_entry.assert_not_called()
         self.assertFalse(self.new_entry_called)
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_incognito_skips_image(self, mock_run):
-        mock_run.return_value = FakeCompletedProcess(
-            returncode=0, stdout=b"\x89PNGdata"
-        )
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_incognito_skips_image(self, mock_read):
+        mock_read.return_value = b"\x89PNGdata"
         self.monitor.set_incognito(True)
         self.monitor.handle_new_image()
 
@@ -377,11 +370,9 @@ class TestClipboardMonitor(unittest.TestCase):
             "text", content_text="second", sensitive=False
         )
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_rate_limited_drops_fast_image_events(self, mock_run):
-        mock_run.return_value = FakeCompletedProcess(
-            returncode=0, stdout=b"\x89PNGdata"
-        )
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_rate_limited_drops_fast_image_events(self, mock_read):
+        mock_read.return_value = b"\x89PNGdata"
         self.monitor.handle_new_image()
         # Don't reset — second call should be dropped
         self.monitor.handle_new_image()
@@ -421,11 +412,9 @@ class TestClipboardMonitor(unittest.TestCase):
         self.mock_db.add_entry.assert_called_once()
         self.assertFalse(self.monitor._self_copy)
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_self_copy_auto_resets_after_image(self, mock_run):
-        mock_run.return_value = FakeCompletedProcess(
-            returncode=0, stdout=b"\x89PNGdata"
-        )
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_self_copy_auto_resets_after_image(self, mock_read):
+        mock_read.return_value = b"\x89PNGdata"
         self.monitor.set_self_copy(True)
         self.monitor.handle_new_image()
         self.assertFalse(self.monitor._self_copy)
@@ -440,18 +429,16 @@ class TestClipboardMonitor(unittest.TestCase):
         monitor.handle_new_text("no callback")
         self.mock_db.add_entry.assert_called()
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_handles_wl_paste_oserror(self, mock_run):
-        mock_run.side_effect = OSError("wl-paste not found")
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_handles_wl_paste_oserror(self, mock_read):
+        mock_read.return_value = None  # wl-paste could not start
         # Should not raise
         self.monitor.handle_new_image()
         self.mock_db.add_entry.assert_not_called()
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_handles_empty_wl_paste_stdout(self, mock_run):
-        mock_run.return_value = FakeCompletedProcess(
-            returncode=0, stdout=b""
-        )
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_handles_empty_wl_paste_stdout(self, mock_read):
+        mock_read.return_value = b""
         self.monitor.handle_new_image()
         self.mock_db.add_entry.assert_not_called()
 
@@ -464,11 +451,11 @@ class TestClipboardMonitor(unittest.TestCase):
         # Whitespace-only is not empty, should be recorded
         self.mock_db.add_entry.assert_called_once()
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_image_right_after_text_is_recorded(self, mock_run):
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_image_right_after_text_is_recorded(self, mock_read):
         """An image copied right after a text is a different clip."""
         image_data = b"\x89PNG\r\n\x1a\nimage_after_text"
-        mock_run.return_value = FakeCompletedProcess(returncode=0, stdout=image_data)
+        mock_read.return_value = image_data
 
         self.monitor.handle_new_text("some text")
         self.monitor.handle_new_image()
@@ -476,11 +463,11 @@ class TestClipboardMonitor(unittest.TestCase):
         self.assertEqual(self.mock_db.add_entry.call_count, 2)
         self.mock_db.add_entry.assert_called_with("image", image_data=image_data)
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_text_right_after_image_is_recorded(self, mock_run):
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_text_right_after_image_is_recorded(self, mock_read):
         """A text copied right after an image is a different clip."""
         image_data = b"\x89PNG\r\n\x1a\nimage_before_text"
-        mock_run.return_value = FakeCompletedProcess(returncode=0, stdout=image_data)
+        mock_read.return_value = image_data
 
         self.monitor.handle_new_image()
         self.monitor.handle_new_text("text after image")
@@ -490,11 +477,11 @@ class TestClipboardMonitor(unittest.TestCase):
             "text", content_text="text after image", sensitive=False
         )
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_rate_limiter_allows_both_after_interval(self, mock_run):
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_rate_limiter_allows_both_after_interval(self, mock_read):
         """Both text and image are accepted if separated by MIN_EVENT_INTERVAL."""
         image_data = b"\x89PNG\r\n\x1a\nimage_after_interval"
-        mock_run.return_value = FakeCompletedProcess(returncode=0, stdout=image_data)
+        mock_read.return_value = image_data
 
         self.monitor.handle_new_text("first")
         self.monitor._last_event_time = 0  # simulate time passing
@@ -538,12 +525,10 @@ class TestDebounce(unittest.TestCase):
             self.monitor.handle_new_text(f"burst-{i}")
         self.assertEqual(self.mock_db.add_entry.call_count, 5)
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_burst_image_events_only_first_recorded(self, mock_run):
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_burst_image_events_only_first_recorded(self, mock_read):
         """A burst of image events with no delay records only the first."""
-        mock_run.return_value = FakeCompletedProcess(
-            returncode=0, stdout=b"\x89PNGdata"
-        )
+        mock_read.return_value = b"\x89PNGdata"
         for _ in range(5):
             self.monitor.handle_new_image()
         self.assertEqual(self.mock_db.add_entry.call_count, 1)
@@ -551,10 +536,8 @@ class TestDebounce(unittest.TestCase):
     def test_burst_of_mixed_clips_is_all_recorded(self):
         """Text, image, text with no delay: three different clips."""
         self.monitor.handle_new_text("text-first")
-        with patch("clipman.clipboard_monitor.subprocess.run") as mock_run:
-            mock_run.return_value = FakeCompletedProcess(
-                returncode=0, stdout=b"\x89PNGdata"
-            )
+        with patch("clipman.clipboard_monitor._read_limited") as mock_read:
+            mock_read.return_value = b"\x89PNGdata"
             self.monitor.handle_new_image()
         self.monitor.handle_new_text("text-third")
         self.assertEqual(self.mock_db.add_entry.call_count, 3)
@@ -589,12 +572,10 @@ class TestDebounce(unittest.TestCase):
         self.monitor.handle_new_text("very first")
         self.assertEqual(self.mock_db.add_entry.call_count, 1)
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_image_after_text_accepted_after_interval(self, mock_run):
+    @patch("clipman.clipboard_monitor._read_limited")
+    def test_image_after_text_accepted_after_interval(self, mock_read):
         """Image event accepted after text when interval has elapsed."""
-        mock_run.return_value = FakeCompletedProcess(
-            returncode=0, stdout=b"\x89PNGdata"
-        )
+        mock_read.return_value = b"\x89PNGdata"
         self.monitor.handle_new_text("text")
         self.monitor._last_event_time = time.monotonic() - 0.2
         self.monitor.handle_new_image()
@@ -1025,9 +1006,9 @@ class TestIncognitoHookAndImageThread(unittest.TestCase):
         self.monitor.set_incognito(True)
         self.assertTrue(self.monitor.incognito)
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_image_read_runs_in_background_then_stores_on_main_loop(self, mock_run):
-        mock_run.return_value = MagicMock(returncode=0, stdout=b"\x89PNG\r\n\x1a\nxx")
+    @patch("clipman.clipboard_monitor._read_limited",
+           return_value=b"\x89PNG\r\n\x1a\nxx")
+    def test_image_read_runs_in_background_then_stores_on_main_loop(self, _read):
         background, main_loop = [], []
         self.monitor._run_in_background = background.append
         self.monitor._run_on_main_loop = lambda fn, *args: main_loop.append((fn, args))
@@ -1044,13 +1025,57 @@ class TestIncognitoHookAndImageThread(unittest.TestCase):
             "image", image_data=b"\x89PNG\r\n\x1a\nxx"
         )
 
-    @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_failed_image_read_stores_nothing(self, mock_run):
-        mock_run.side_effect = subprocess.TimeoutExpired("wl-paste", 5)
+    @patch("clipman.clipboard_monitor._read_limited", return_value=None)
+    def test_failed_image_read_stores_nothing(self, _read):
         self.monitor._run_in_background = lambda fn: fn()
         self.monitor._run_on_main_loop = lambda fn, *args: fn(*args)
         self.monitor.handle_new_image()
         self.mock_db.add_entry.assert_not_called()
+
+
+class TestReadLimited(unittest.TestCase):
+    """The bounded read behind image copies (audit finding CORE-14).
+
+    Before, the whole clipboard image went into memory and only then was
+    its size checked. These run real processes."""
+
+    def _read(self, script, limit=1000, timeout=5):
+        import sys
+
+        from clipman.clipboard_monitor import _read_limited
+
+        return _read_limited([sys.executable, "-c", script], limit, timeout)
+
+    def test_returns_output_up_to_the_limit(self):
+        self.assertEqual(
+            self._read("import sys; sys.stdout.buffer.write(b'x' * 1000)"),
+            b"x" * 1000,
+        )
+
+    def test_stops_a_command_past_the_limit(self):
+        start = time.monotonic()
+        endless = ("import sys\n"
+                   "while True:\n"
+                   "    sys.stdout.buffer.write(b'x' * 65536)\n")
+        self.assertIsNone(self._read(endless))
+        self.assertLess(time.monotonic() - start, 4)
+
+    def test_stops_a_command_that_hangs(self):
+        start = time.monotonic()
+        self.assertIsNone(self._read("import time; time.sleep(30)",
+                                     timeout=0.5))
+        self.assertLess(time.monotonic() - start, 4)
+
+    def test_failed_or_empty_output_is_nothing(self):
+        self.assertIsNone(
+            self._read("import sys; sys.stdout.buffer.write(b'x'); sys.exit(1)")
+        )
+        self.assertIsNone(self._read("pass"))
+
+    def test_missing_command_is_nothing(self):
+        from clipman.clipboard_monitor import _read_limited
+
+        self.assertIsNone(_read_limited(["clipman-no-such-command"], 10, 1))
 
 
 if __name__ == "__main__":

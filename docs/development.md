@@ -110,7 +110,9 @@ home, so it never touches your desktop. In it, `tests/e2e/install_flow.sh`:
 
 1. runs `install.sh` while the Shell is running, then starts the daemon,
    which must not run `wl-paste --watch` and must log why nothing is
-   recorded (the extension starts only at the next login);
+   recorded (the extension starts only at the next login). Then, with no
+   daemon running, the first `clipman toggle` must start one and open
+   the popup, and the next must close it;
 2. logs in again and checks that the extension is on and a copy reaches
    the history;
 3. runs `scripts/extension-smoke.sh`;

@@ -364,6 +364,20 @@ class TestStartUp(unittest.TestCase):
         quit_.assert_called_once_with()
         self.assertEqual(app.exit_status, 0)
 
+    def test_toggle_that_started_the_daemon_shows_the_popup(self):
+        """CORE-13: the first `clipman toggle` started the daemon but
+        showed nothing, so the shortcut had to be pressed again."""
+        app = self._make_app()
+        app.show_on_start = True
+        self._activate(app)
+        app.window.toggle.assert_called_once_with()
+        self.assertFalse(app.show_on_start)
+
+    def test_plain_start_keeps_the_popup_hidden(self):
+        app = self._make_app()
+        self._activate(app)
+        app.window.toggle.assert_not_called()
+
     def test_database_that_opens_closes_the_error_window(self):
         app = self._make_app()
         error_window = MagicMock(name="error window")
@@ -416,7 +430,7 @@ class TestStartUp(unittest.TestCase):
         restore.assert_called_once_with("/backups/clipman.db")
         activate.assert_called_once_with()
         # The user sees the history they just got back.
-        app.window.toggle.assert_called_once_with()
+        self.assertTrue(app.show_on_start)
 
     def test_unusable_backup_keeps_the_error_screen(self):
         app = self._make_app()

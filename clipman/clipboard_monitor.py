@@ -275,23 +275,46 @@ class ClipboardMonitor:
 
     def _read_image(self):
         """Read the image with wl-paste, then store it."""
-        try:
-            result = subprocess.run(
-                ["wl-paste", "--type", "image/png"],
-                capture_output=True, timeout=5
-            )
-        except (subprocess.SubprocessError, OSError):
-            logger.debug("wl-paste image read failed", exc_info=True)
-            return
-        if result.returncode == 0 and result.stdout:
-            if len(result.stdout) <= MAX_IMAGE_SIZE:
-                self._run_on_main_loop(self._store_image, result.stdout)
+        data = _read_limited(["wl-paste", "--type", "image/png"],
+                             MAX_IMAGE_SIZE, timeout=5)
+        if data:
+            self._run_on_main_loop(self._store_image, data)
 
     def _store_image(self, data):
         self.db.add_entry("image", image_data=data)
         if self.on_new_entry:
             self.on_new_entry()
         return False
+
+
+def _read_limited(cmd, limit, timeout):
+    """Run ``cmd`` and return its output, or None when it fails, is
+    empty, or is longer than ``limit`` bytes.
+
+    Reads at most ``limit`` + 1 bytes and then stops the command, so a
+    huge clipboard image costs that much memory, not its whole size.
+    The command is killed after ``timeout`` seconds.
+    """
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL)
+    except OSError:
+        logger.debug("%s could not start", cmd[0], exc_info=True)
+        return None
+    # The timer kills a command that hangs, before or after its output.
+    timer = threading.Timer(timeout, proc.kill)
+    timer.start()
+    try:
+        data = proc.stdout.read(limit + 1)
+        if len(data) > limit:
+            proc.kill()
+        proc.wait()
+    finally:
+        timer.cancel()
+        proc.stdout.close()
+    if proc.returncode != 0 or not data or len(data) > limit:
+        return None
+    return data
 
 
 def _run_in_thread(fn):

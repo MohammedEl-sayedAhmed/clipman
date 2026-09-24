@@ -1,21 +1,27 @@
+import http.client
 import json
 import os
 import threading
+import time
 import unittest
 import urllib.error
 from unittest.mock import MagicMock, patch
 
 from clipman import updates
 
+_URL = "https://github.com/MohammedEl-sayedAhmed/clipman/releases/tag/v1.0.5"
+
 
 class _FakeResponse:
     """Tiny stand-in for the object urlopen returns as a context manager."""
 
-    def __init__(self, payload: dict | bytes):
+    def __init__(self, payload):
+        # Bytes are sent as they are; anything else as JSON.
         if isinstance(payload, (bytes, bytearray)):
             self._body = bytes(payload)
         else:
             self._body = json.dumps(payload).encode("utf-8")
+        self._pos = 0
 
     def __enter__(self):
         return self
@@ -23,8 +29,29 @@ class _FakeResponse:
     def __exit__(self, *exc):
         return False
 
-    def read(self):
-        return self._body
+    def read(self, size=-1):
+        end = len(self._body) if size < 0 else self._pos + size
+        chunk = self._body[self._pos:end]
+        self._pos += len(chunk)
+        return chunk
+
+
+class _SlowResponse(_FakeResponse):
+    """A server that sends one byte at a time, each after ``delay``."""
+
+    def __init__(self, payload, delay):
+        super().__init__(payload)
+        self._delay = delay
+
+    def read(self, size=-1):
+        body = bytearray()
+        while self._pos < len(self._body) and size != 0:
+            time.sleep(self._delay)
+            body += self._body[self._pos:self._pos + 1]
+            self._pos += 1
+            if size > 0:
+                break
+        return bytes(body)
 
 
 def _fake_db(initial: dict | None = None):
@@ -113,16 +140,16 @@ class TestCheckForUpdate(unittest.TestCase):
     def test_newer_detected(self):
         with patch("clipman.updates.urllib.request.urlopen",
                    return_value=_FakeResponse({"tag_name": "v1.0.5",
-                                               "html_url": "u"})):
+                                               "html_url": _URL})):
             is_newer, latest, url = updates.check_for_update("1.0.4")
         self.assertTrue(is_newer)
         self.assertEqual(latest, "1.0.5")
-        self.assertEqual(url, "u")
+        self.assertEqual(url, _URL)
 
     def test_same_version_not_newer(self):
         with patch("clipman.updates.urllib.request.urlopen",
                    return_value=_FakeResponse({"tag_name": "v1.0.4",
-                                               "html_url": "u"})):
+                                               "html_url": _URL})):
             is_newer, latest, _ = updates.check_for_update("1.0.4")
         self.assertFalse(is_newer)
         self.assertEqual(latest, "1.0.4")
@@ -131,7 +158,7 @@ class TestCheckForUpdate(unittest.TestCase):
         # Could happen if a release is yanked or pre-release.
         with patch("clipman.updates.urllib.request.urlopen",
                    return_value=_FakeResponse({"tag_name": "v1.0.3",
-                                               "html_url": "u"})):
+                                               "html_url": _URL})):
             is_newer, latest, _ = updates.check_for_update("1.0.4")
         self.assertFalse(is_newer)
         self.assertEqual(latest, "1.0.3")
@@ -156,18 +183,83 @@ class TestCheckForUpdate(unittest.TestCase):
 
     def test_missing_tag_field(self):
         with patch("clipman.updates.urllib.request.urlopen",
-                   return_value=_FakeResponse({"html_url": "u"})):
+                   return_value=_FakeResponse({"html_url": _URL})):
             is_newer, latest, url = updates.check_for_update("1.0.4")
         self.assertFalse(is_newer)
         self.assertIsNone(latest)
-        self.assertEqual(url, "u")
+        self.assertEqual(url, _URL)
+
+    def test_answer_that_is_not_an_object_swallowed(self):
+        """CORE-11: a JSON list raised AttributeError in the thread."""
+        for payload in ([1, 2], "v1.0.5", 7, None):
+            with self.subTest(payload=payload), \
+                 patch("clipman.updates.urllib.request.urlopen",
+                       return_value=_FakeResponse(payload)):
+                result = updates.check_for_update("1.0.4")
+            self.assertEqual(result, (False, None, None))
+
+    def test_tag_that_is_not_a_string_ignored(self):
+        with patch("clipman.updates.urllib.request.urlopen",
+                   return_value=_FakeResponse({"tag_name": 105,
+                                               "html_url": _URL})):
+            result = updates.check_for_update("1.0.4")
+        self.assertEqual(result, (False, None, _URL))
+
+    def test_url_that_is_not_https_dropped(self):
+        for url in ("javascript:alert(1)", "http://example.com/", 7, ""):
+            with self.subTest(url=url), \
+                 patch("clipman.updates.urllib.request.urlopen",
+                       return_value=_FakeResponse({"tag_name": "v1.0.5",
+                                                   "html_url": url})):
+                result = updates.check_for_update("1.0.4")
+            self.assertEqual(result, (True, "1.0.5", None))
+
+    def test_cut_short_answer_swallowed(self):
+        """CORE-11: IncompleteRead is not an OSError, so it escaped."""
+        response = _FakeResponse(b"{")
+        response.read = MagicMock(side_effect=http.client.IncompleteRead(b"{"))
+        with patch("clipman.updates.urllib.request.urlopen",
+                   return_value=response):
+            result = updates.check_for_update("1.0.4")
+        self.assertEqual(result, (False, None, None))
+
+    def test_deeply_nested_answer_swallowed(self):
+        body = b"[" * 100_000 + b"]" * 100_000
+        with patch("clipman.updates.urllib.request.urlopen",
+                   return_value=_FakeResponse(body)):
+            result = updates.check_for_update("1.0.4")
+        self.assertEqual(result, (False, None, None))
+
+    def test_oversized_answer_refused(self):
+        payload = {"tag_name": "v1.0.5", "html_url": _URL,
+                   "body": "x" * updates.MAX_RESPONSE_BYTES}
+        response = _FakeResponse(payload)
+        with patch("clipman.updates.urllib.request.urlopen",
+                   return_value=response):
+            result = updates.check_for_update("1.0.4")
+        self.assertEqual(result, (False, None, None))
+        # It stopped reading soon after the limit.
+        self.assertLess(response._pos, updates.MAX_RESPONSE_BYTES + 32 * 1024)
+
+    def test_slow_answer_stops_at_the_deadline(self):
+        """CORE-11: the timeout applied to each read, so a server that
+        sent a byte now and then could hold the check for ever."""
+        body = b" " * 60 + json.dumps({"tag_name": "v1.0.5"}).encode()
+        started = time.monotonic()
+        with patch.object(updates, "HTTP_TIMEOUT_SECONDS", 0.2), \
+             patch("clipman.updates.urllib.request.urlopen",
+                   return_value=_SlowResponse(body, delay=0.05)):
+            result = updates.check_for_update("1.0.4")
+        self.assertEqual(result, (False, None, None))
+        # Sending it all would take about 4 seconds.
+        self.assertLess(time.monotonic() - started, 2)
 
     def test_user_agent_includes_clipman_version(self):
         captured = {}
 
         def _spy(req, timeout=None):
             captured["ua"] = req.headers.get("User-agent")
-            return _FakeResponse({"tag_name": "v1.0.4", "html_url": "u"})
+            return _FakeResponse({"tag_name": "v1.0.4", "html_url": _URL})
 
         with patch("clipman.updates.urllib.request.urlopen", side_effect=_spy):
             updates.check_for_update("1.0.4")
@@ -294,7 +386,7 @@ class TestCheckAsync(unittest.TestCase):
         with patch.dict("sys.modules", {"gi.repository": None}), \
              patch("clipman.updates.urllib.request.urlopen",
                    return_value=_FakeResponse({"tag_name": "v1.0.5",
-                                               "html_url": "u"})):
+                                               "html_url": _URL})):
             thread = updates.check_async(db, callback=_cb)
             thread.join(timeout=5)
             cb_event.wait(timeout=2)
@@ -310,7 +402,7 @@ class TestCheckAsync(unittest.TestCase):
 
         def _slow_urlopen(*_a, **_kw):
             seen_last.append(db._store.get(updates.SETTING_LAST_CHECK))
-            return _FakeResponse({"tag_name": "v1.0.4", "html_url": "u"})
+            return _FakeResponse({"tag_name": "v1.0.4", "html_url": _URL})
 
         with patch("clipman.updates.urllib.request.urlopen",
                    side_effect=_slow_urlopen):
@@ -331,7 +423,7 @@ class TestCheckAsync(unittest.TestCase):
         with patch.dict("sys.modules", {"gi.repository": fake_glib}), \
              patch("clipman.updates.urllib.request.urlopen",
                    return_value=_FakeResponse({"tag_name": "v9.9.9",
-                                               "html_url": "u"})):
+                                               "html_url": _URL})):
             thread = updates.check_async(db, callback=None)
             thread.join(timeout=5)
 
