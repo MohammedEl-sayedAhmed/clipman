@@ -18,7 +18,7 @@ Like Windows `Win+V` — but for Linux.
 [![GNOME](https://img.shields.io/badge/GNOME-46--51-4A86CF?logo=gnome&logoColor=white)](https://gnome.org)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/MohammedEl-sayedAhmed/clipman/badge)](https://scorecard.dev/viewer/?uri=github.com/MohammedEl-sayedAhmed/clipman)
 [![Wayland](https://img.shields.io/badge/Wayland-native-yellow)](https://wayland.freedesktop.org)
-[![Python](https://img.shields.io/badge/Python-3.10--3.12-3776AB?logo=python&logoColor=white)](https://python.org)
+[![Python](https://img.shields.io/badge/Python-3.10--3.14-3776AB?logo=python&logoColor=white)](https://python.org)
 [![PyPI](https://img.shields.io/pypi/v/clipman-clipboard?label=PyPI&logo=pypi&logoColor=white)](https://pypi.org/project/clipman-clipboard/)
 [![PyPI Downloads](https://img.shields.io/pepy/dt/clipman-clipboard?label=PyPI%20Downloads&logo=pypi&logoColor=white)](https://pepy.tech/project/clipman-clipboard)
 [![GNOME Extensions](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fextensions.gnome.org%2Fextension-info%2F%3Fpk%3D9407&query=%24.downloads&label=EGO%20Downloads&logo=gnome&logoColor=white&color=4A86CF)](https://extensions.gnome.org/extension/9407/clipman-clipboard-monitor/)
@@ -135,7 +135,7 @@ These are wanted but not built yet. Each issue says what "done" means, and help 
 ## Requirements
 
 - Ubuntu 24.04+ with GNOME 46–51 and Wayland
-- Python 3.10–3.12 (newer versions are not blocked, but CI does not test them)
+- Python 3.10–3.14 (newer versions are not blocked, but CI does not test them)
 - GTK 4 + libadwaita 1.5+
 
 > Dependencies are installed automatically by the install script.

@@ -661,6 +661,10 @@ change what a reader would do:
   Before, CI had no test of the extension or the installer, and the
   bugs fixed in #307 and #328 reached users. Against the old code, the
   job fails on each of them. `scripts/dev.sh e2e` runs it locally.
+- CI now tests Python 3.13 and 3.14 as well, and the support window
+  says 3.10 to 3.14. The Ubuntu releases that ship GNOME 49 and 50
+  (25.10 and 26.04) have only Python 3.13 and 3.14, so the supported
+  GNOME versions ran on a Python that CI never tested.
 
 ## [1.2.1] - 2026-08-22
 

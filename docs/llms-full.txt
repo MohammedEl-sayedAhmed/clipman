@@ -13,7 +13,7 @@ Clipman is a clipboard history manager for GNOME desktops running Wayland. Unlik
 
 ## Architecture
 
-Clipman is written in Python 3.10–3.12 and built on GTK 4 + libadwaita 1.5+. The repository ships two halves: a long-lived daemon (the `clipman/` Python package, entry point `clipman.py`) that watches clipboard selections, persists them in SQLite, and renders the popup UI on demand; and a GNOME Shell extension (`extension/extension.js`) that runs inside the compositor's gjs process and forwards `owner-changed` clipboard events to the daemon over D-Bus.
+Clipman is written in Python 3.10–3.14 and built on GTK 4 + libadwaita 1.5+. The repository ships two halves: a long-lived daemon (the `clipman/` Python package, entry point `clipman.py`) that watches clipboard selections, persists them in SQLite, and renders the popup UI on demand; and a GNOME Shell extension (`extension/extension.js`) that runs inside the compositor's gjs process and forwards `owner-changed` clipboard events to the daemon over D-Bus.
 
 The daemon's UI layer is libadwaita-first:
 

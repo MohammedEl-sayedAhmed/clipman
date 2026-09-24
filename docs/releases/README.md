@@ -32,7 +32,7 @@ flowchart TD
 
     Tag["push tag v*.*.*"]:::trigger
     PF["pre-flight<br/>tag/version sanity<br/>+ extract CHANGELOG section"]:::gate
-    Tests["tests<br/>Python 3.10 / 3.11 / 3.12"]:::gate
+    Tests["tests<br/>Python 3.10 to 3.14"]:::gate
 
     BPyPI["build-pypi<br/>wheel + sdist"]:::build
     BSnap["build-snap"]:::build
