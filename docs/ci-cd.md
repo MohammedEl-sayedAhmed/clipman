@@ -22,7 +22,7 @@ on `main`.
 | Scorecard | `scorecard.yml` | `push` to `main`, weekly cron (`37 4 * * 1`), `branch_protection_rule` | OSSF Scorecard supply-chain analysis; uploads SARIF to the GitHub Security tab and publishes results. | No |
 | Secret scan | `secret-scan.yml` | `push` to `main`, `pull_request` to `main` | Runs `gitleaks` over full git history to catch committed credentials. | Yes — `gitleaks` |
 | Snap refresh | `snap-refresh.yml` | Weekly cron (`0 4 * * 1`), `workflow_dispatch`, `push`/`pull_request` to `main` touching snap-relevant paths | Rebuilds the snap to pick up Ubuntu archive security updates. The scheduled run publishes every channel: edge from `main`, and beta, candidate and stable from the latest release tag, unless the store is already ahead of that tag. `scripts/snap-plan.sh` makes that plan, and `tests/test_snap_plan.py` checks it. See ADR 0012. | No |
-| Tests | `test.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh test` (pytest under `xvfb-run` with `CLIPMAN_REQUIRE_GTK4=1`) across the Python 3.10 / 3.11 / 3.12 matrix on `ubuntu-24.04`; system packages come from `scripts/deps.sh`. `package (wheel smoke)` builds the wheel and runs it from a clean venv. `e2e (headless GNOME Shell)` runs `scripts/dev.sh e2e` in GNOME Shell 46: `install.sh` during a live session, a new login, a copy, the popup, and `uninstall.sh`. | `test (3.10)`, `test (3.11)` and `test (3.12)` are; `package` and `e2e` are not yet |
+| Tests | `test.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh test` (pytest under `xvfb-run` with `CLIPMAN_REQUIRE_GTK4=1`) across the Python 3.10 to 3.14 matrix on `ubuntu-24.04`; system packages come from `scripts/deps.sh`. `package (wheel smoke)` builds the wheel and runs it from a clean venv. `e2e (headless GNOME Shell)` runs `scripts/dev.sh e2e` in GNOME Shell 46: `install.sh` during a live session, a new login, a copy, the popup, and `uninstall.sh`. | `test (3.10)`, `test (3.11)` and `test (3.12)` are; `test (3.13)`, `test (3.14)`, `package` and `e2e` are not yet |
 
 The required context `review` is the job in `dependency-review.yml`.
 
@@ -35,7 +35,7 @@ gate the parallel publish jobs.
 ```mermaid
 flowchart TD
     PF[pre-flight]
-    T[tests<br/>Python 3.10 / 3.11 / 3.12]
+    T[tests<br/>Python 3.10 to 3.14]
     BP[build-pypi]
     BS[build-snap]
     BD[build-distpkgs]
@@ -80,7 +80,7 @@ graph and step contents):
   `scripts/release-preflight.sh`; the test suite runs it on a freshly
   bumped copy too, so a release PR that would fail it fails CI first.
 - **tests** — fan-out matrix on `ubuntu-24.04` for Python 3.10, 3.11,
-  and 3.12. `fail-fast: true` so a regression in one interpreter
+  3.12, 3.13 and 3.14. `fail-fast: true` so a regression in one interpreter
   short-circuits the whole pipeline.
 - **build-pypi** — `python -m build` produces sdist + wheel. Then
   `scripts/wheel-smoke.sh` installs the wheel in a clean venv and checks

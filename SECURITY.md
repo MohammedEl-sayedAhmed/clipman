@@ -11,7 +11,7 @@
 
 Security fixes target the documented support window:
 
-- Python 3.10–3.12
+- Python 3.10–3.14
 - GNOME Shell 45–51 through the bundled extension; the app baseline is
   Ubuntu 24.04+ with GNOME 46
 - Wayland sessions. Clipman is Wayland-native and X11 is not supported

@@ -34,7 +34,7 @@ The SemVer 2.0.0 policy in ADR 0010 stands unchanged, including its
 MINOR and PATCH triggers, the settings-key migration rule and the
 no-public-Python-API caveat. Its factual premises are restated here.
 
-**Support window.** Python 3.10 to 3.12, GNOME Shell 45 to 51 through
+**Support window.** Python 3.10 to 3.14, GNOME Shell 45 to 51 through
 the bundled extension, app baseline Ubuntu 24.04+ with GNOME 46,
 Wayland only. `requires-python` stays open at the top end so a newer
 interpreter is not refused at install time; the classifiers name the

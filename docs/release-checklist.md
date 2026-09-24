@@ -66,7 +66,7 @@ each stage either annotates the failure or moves on:
    and `aur/.SRCINFO`, `CITATION.cff`, the Flatpak manifest, both
    metainfo files) and that `CHANGELOG.md` has a section for it, which
    becomes the release notes.
-2. **tests** — Python 3.10 / 3.11 / 3.12 matrix.
+2. **tests** — Python 3.10 to 3.14 matrix.
 3. **build-pypi** — `python -m build`, then installs the wheel in a
    clean venv and checks that `clipman --version` reports the tag and
    `style.css` ships; only then uploads the dist/ artifact.

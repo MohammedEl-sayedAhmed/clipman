@@ -90,7 +90,7 @@ screen. If you started a private display yourself (Xephyr, say), set
 
 The full suite hits the actual SQLite layer, mocks
 clipboard subprocesses, and exercises the keybinding parser. The CI
-matrix covers Python 3.10–3.12 on `ubuntu-24.04`.
+matrix covers Python 3.10–3.14 on `ubuntu-24.04`.
 
 Targeted runs (pytest syntax):
 

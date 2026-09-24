@@ -4,7 +4,7 @@ version = "1.2.1"
 description = "A clipboard history manager for GNOME on Wayland, built with GTK 4 and libadwaita"
 readme = "README.md"
 license = "Apache-2.0"
-# Left open at the top end on purpose: CI tests 3.10 through 3.12, and the
+# Left open at the top end on purpose: CI tests 3.10 through 3.14, and the
 # classifiers below say so, but nothing in the code blocks a newer runtime.
 requires-python = ">=3.10"
 authors = [
@@ -20,6 +20,8 @@ classifiers = [
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Desktop Environment :: Gnome",
 ]
 

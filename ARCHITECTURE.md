@@ -17,7 +17,7 @@ cannot run there (see [Fallback path](#fallback-path)).
 
 The daemon (`clipman.py` plus the `clipman/` package) is a single
 `Adw.Application` running on one GLib main loop. Python 3.10 through
-3.12 are supported, with dbus-python and PyGObject providing the
+3.14 are supported, with dbus-python and PyGObject providing the
 runtime bindings against GTK 4 and libadwaita 1.5+. All clipboard
 ingest, database I/O, and GTK signal handling happen on the main
 thread; SQLite access is intentionally serialized through the loop
