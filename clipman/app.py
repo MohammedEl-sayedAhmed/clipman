@@ -72,6 +72,8 @@ class ClipmanApp(Adw.Application):
         # start-up failed, so systemd's Restart=on-failure tries again.
         self.exit_status = 0
         self._db_error_window = None
+        # Set by `clipman toggle` when it had to start the daemon.
+        self.show_on_start = False
 
     def do_activate(self):
         if self.window:
@@ -181,6 +183,10 @@ class ClipmanApp(Adw.Application):
         # Handle SIGINT/SIGTERM gracefully
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, self._shutdown)
         GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, self._shutdown)
+
+        if self.show_on_start:
+            self.show_on_start = False
+            self.window.toggle()
 
     def _on_extension_owner_changed(self, owner):
         if owner and self.monitor is not None:
@@ -295,9 +301,9 @@ class ClipmanApp(Adw.Application):
             self._show_restore_failed()
             return
         logger.info("Restored the history from %s", path)
+        # Start as usual, and show the history that came back.
+        self.show_on_start = True
         self.do_activate()
-        if self.window is not None:
-            self.window.toggle()
 
     def _show_restore_failed(self):
         from clipman.edge_states import render_edge_state

@@ -5,7 +5,9 @@
 #   login 1  run install.sh while the Shell is running (#1: the extension
 #            was never enabled); until the next login nothing can record
 #            copies, and the daemon says so instead of starting
-#            wl-paste --watch, which GNOME cannot run
+#            wl-paste --watch, which GNOME cannot run; the first
+#            `clipman toggle` (the shortcut) starts the daemon and opens
+#            the popup, and the next one closes it
 #   login 2  the extension is on, the daemon starts, a copy is recorded,
 #            scripts/extension-smoke.sh passes, a huge copy and an app
 #            that never sends its data cost the Shell little, the open
@@ -137,6 +139,7 @@ login1() {
         *) fail "enabled-extensions is $enabled" ;;
     esac
     without_extension
+    first_toggle
 }
 
 # The Shell loads a new extension only at login, so the daemon runs
@@ -170,6 +173,27 @@ without_extension() {
         pass "the log says why copies are not recorded"
     else
         fail "the log does not say why copies are not recorded" "$WORK/daemon1.log"
+    fi
+    kill "$daemon" 2>/dev/null
+    wait "$daemon" 2>/dev/null
+}
+
+# With no daemon running, the shortcut's `clipman toggle` starts one. The
+# same press must open the popup; it used to need a second press.
+first_toggle() {
+    GDK_BACKEND=wayland python3 "$repo/clipman.py" toggle \
+        > "$WORK/toggle.log" 2>&1 &
+    local daemon=$!
+    if ! wait_for 20 popup_shown; then
+        fail "the first clipman toggle did not open the popup" "$WORK/toggle.log"
+    else
+        pass "the first clipman toggle starts the daemon and opens the popup"
+        if GDK_BACKEND=wayland python3 "$repo/clipman.py" toggle \
+                > "$WORK/toggle2.log" 2>&1 && wait_for 10 popup_hidden; then
+            pass "the next clipman toggle closes it"
+        else
+            fail "the next clipman toggle did not close the popup" "$WORK/toggle2.log"
+        fi
     fi
     kill "$daemon" 2>/dev/null
     wait "$daemon" 2>/dev/null

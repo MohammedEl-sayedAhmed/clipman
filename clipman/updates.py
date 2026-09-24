@@ -18,7 +18,9 @@ Design notes:
 
 from __future__ import annotations
 
+import http.client
 import json
+import logging
 import os
 import re
 import threading
@@ -40,7 +42,11 @@ RELEASES_URL = (
     "https://api.github.com/repos/MohammedEl-sayedAhmed/clipman/releases/latest"
 )
 HTTP_TIMEOUT_SECONDS = 5
+# The release JSON is a few kilobytes; anything much larger is not it.
+MAX_RESPONSE_BYTES = 1024 * 1024
 CHECK_INTERVAL_SECONDS = 24 * 60 * 60  # 24h
+
+logger = logging.getLogger(__name__)
 
 # DB settings keys this module owns.
 SETTING_ENABLED = "check_for_updates"
@@ -108,9 +114,14 @@ def _is_newer(candidate: str, current: str) -> bool:
 
 
 def _http_get(url: str = RELEASES_URL) -> dict | None:
-    """Issue the anonymous GET. Returns the parsed JSON, or ``None``
-    on any network/parse error (the daemon never fails because of an
-    update check)."""
+    """Issue the anonymous GET. Returns the parsed JSON object, or
+    ``None`` on any network or parse error (the daemon never fails
+    because of an update check).
+
+    The socket timeout applies to each read, so a server that sends a
+    byte every few seconds could hold one read loop forever; the body
+    is read in chunks against one deadline for the whole request.
+    """
     request = urllib.request.Request(
         url,
         headers={
@@ -118,14 +129,27 @@ def _http_get(url: str = RELEASES_URL) -> dict | None:
             "Accept": "application/vnd.github+json",
         },
     )
+    deadline = time.monotonic() + HTTP_TIMEOUT_SECONDS
     try:
         with urllib.request.urlopen(  # noqa: S310 — fixed https URL above
             request, timeout=HTTP_TIMEOUT_SECONDS,
         ) as response:
-            body = response.read().decode("utf-8", errors="replace")
-        return json.loads(body)
-    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
+            body = bytearray()
+            while True:
+                if time.monotonic() > deadline:
+                    raise TimeoutError("the update check took too long")
+                chunk = response.read(16384)
+                if not chunk:
+                    break
+                body += chunk
+                if len(body) > MAX_RESPONSE_BYTES:
+                    raise ValueError("the update check answer is too large")
+        payload = json.loads(body.decode("utf-8", errors="replace"))
+    except (urllib.error.URLError, http.client.HTTPException, TimeoutError,
+            ValueError, OSError, RecursionError) as exc:
+        logger.debug("update check failed: %s", exc)
         return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _safe_tag(raw: str | None) -> str | None:
@@ -138,7 +162,7 @@ def _safe_tag(raw: str | None) -> str | None:
     gate is the single chokepoint for both persistence paths
     (``check_async`` and ``dismiss``).
     """
-    if not raw:
+    if not raw or not isinstance(raw, str):
         return None
     candidate = raw.strip().lstrip("v")
     if not candidate:
@@ -158,7 +182,9 @@ def check_for_update(current_version: str = __version__) -> tuple[bool, str | No
     if not payload:
         return (False, None, None)
     tag = _safe_tag(payload.get("tag_name"))
-    url = payload.get("html_url") or None
+    url = payload.get("html_url")
+    if not isinstance(url, str) or not url.startswith("https://"):
+        url = None
     if not tag:
         return (False, None, url)
     return (_is_newer(tag, current_version), tag, url)

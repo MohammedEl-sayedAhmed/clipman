@@ -472,6 +472,30 @@ All notable changes to Clipman are documented in this file.
   they can check these names; like before, nothing talks to the
   session's accessibility bus.
 
+### Fixed — the first toggle, missing packages, the update check and images
+
+- With no daemon running, the first `clipman toggle` (what the Super+V
+  shortcut runs) started one but showed nothing, so the shortcut had
+  to be pressed again. The same press now opens the popup. The
+  end-to-end test checks this in a headless GNOME Shell.
+- When PyGObject was installed but GTK 4 or libadwaita was not, the
+  missing-package message ended in a traceback. The message also always
+  gave an apt command. It now names what is missing and gives the apt,
+  dnf or pacman command for the system, on stderr. In a Python
+  environment that cannot see the system's packages (a venv or pipx
+  made without `--system-site-packages`), it also says how to install
+  Clipman so that it can.
+- The update check could fail outside its error handling. An answer
+  that was not a JSON object, a tag that was not text, an answer cut
+  short or one nested too deeply raised an error in its thread. Its
+  5-second timeout applied to each read, so a server that sent a byte
+  now and then could hold it for ever. The whole answer now has one
+  deadline and a 1 MB limit, and a release link that is not https is
+  ignored.
+- A copied image was read into memory whole before its size was
+  checked, so a huge one cost its whole size. The read now stops just
+  past the 10 MB image limit.
+
 ### Fixed — git hooks
 
 - The trailer-identity check never ran. It read the output of

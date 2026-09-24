@@ -2,6 +2,7 @@
 
 import argparse
 import importlib
+import os
 import shutil
 import sys
 
@@ -12,31 +13,120 @@ from clipman._version import __version__
 _MIN_ADW_MINOR = 5
 
 
+# What each missing piece is called by each package manager: the
+# runtime lists in scripts/deps.sh.
+_PACKAGES = {
+    "apt": {
+        "gi": ["python3-gi"],
+        "gtk": ["gir1.2-gtk-4.0", "gir1.2-adw-1"],
+        "dbus": ["python3-dbus"],
+        "wl-clipboard": ["wl-clipboard"],
+    },
+    "dnf": {
+        "gi": ["python3-gobject"],
+        "gtk": ["gtk4", "libadwaita"],
+        "dbus": ["python3-dbus"],
+        "wl-clipboard": ["wl-clipboard"],
+    },
+    "pacman": {
+        "gi": ["python-gobject"],
+        "gtk": ["gtk4", "libadwaita"],
+        "dbus": ["python-dbus"],
+        "wl-clipboard": ["wl-clipboard"],
+    },
+}
+_INSTALL = {
+    "apt": ("apt-get", "sudo apt install"),
+    "dnf": ("dnf", "sudo dnf install"),
+    "pacman": ("pacman", "sudo pacman -S"),
+}
+_NAMES = {
+    "gi": "PyGObject",
+    "gtk": "GTK 4 and libadwaita",
+    "dbus": "dbus-python",
+    "wl-clipboard": "wl-clipboard",
+}
+
+
+def _package_manager():
+    """Return "apt", "dnf" or "pacman", whichever this system has."""
+    for manager, (program, _command) in _INSTALL.items():
+        if shutil.which(program):
+            return manager
+    return None
+
+
+def _isolated_venv():
+    """True in a virtual environment that cannot see the system's Python
+    packages. PyGObject and dbus-python come from the system, so there
+    they are missing even when installed."""
+    if sys.prefix == sys.base_prefix:
+        return False
+    try:
+        with open(os.path.join(sys.prefix, "pyvenv.cfg"), encoding="utf-8") as cfg:
+            for line in cfg:
+                key, _sep, value = line.partition("=")
+                if key.strip().lower() == "include-system-site-packages":
+                    return value.strip().lower() != "true"
+    except OSError:
+        return False
+    # Without the setting, Python's site module includes them.
+    return False
+
+
+def _fail_missing(missing):
+    """Name what is missing and how to install it, then exit.
+
+    ``missing`` holds keys of ``_NAMES``.
+    """
+    print("Error: missing system dependencies: "
+          + ", ".join(_NAMES[m] for m in missing), file=sys.stderr)
+    manager = _package_manager()
+    if manager is None:
+        print("Install them with your package manager.", file=sys.stderr)
+    else:
+        packages = [p for m in missing for p in _PACKAGES[manager][m]]
+        print("Install them with:", file=sys.stderr)
+        print(f"  {_INSTALL[manager][1]} {' '.join(packages)}", file=sys.stderr)
+    if _isolated_venv() and {"gi", "dbus"} & set(missing):
+        print("This Python environment cannot see the system's Python "
+              "packages, so it cannot use PyGObject or dbus-python even "
+              "once they are installed. Install Clipman with:",
+              file=sys.stderr)
+        print("  pipx install --system-site-packages clipman-clipboard",
+              file=sys.stderr)
+    sys.exit(1)
+
+
 def _check_dependencies():
     """Exit with an install hint when a system dependency is missing."""
     missing = []
     try:
         importlib.import_module("gi")
     except ImportError:
-        missing.append("python3-gi gir1.2-gtk-4.0 gir1.2-adw-1")
+        missing += ["gi", "gtk"]
     try:
         importlib.import_module("dbus")
     except ImportError:
-        missing.append("python3-dbus")
+        missing.append("dbus")
     if shutil.which("wl-paste") is None:
         missing.append("wl-clipboard")
     if missing:
-        print("Error: missing system dependencies: " + ", ".join(missing))
-        print("Install them with:")
-        print(f"  sudo apt install {' '.join(missing)}")
-        sys.exit(1)
+        _fail_missing(missing)
 
 
 def _preflight_libadwaita():
-    """Exit with a readable error on a libadwaita older than 1.5."""
+    """Exit with a readable error when GTK 4 or libadwaita is missing, or
+    libadwaita is older than 1.5."""
     import gi
-    gi.require_version("Adw", "1")
-    from gi.repository import Adw
+    try:
+        gi.require_version("Gtk", "4.0")
+        gi.require_version("Adw", "1")
+        from gi.repository import Adw
+    except (ValueError, ImportError):
+        # PyGObject is there, but not the GTK 4 or libadwaita typelib.
+        _fail_missing(["gtk"])
+        return
     minor = getattr(Adw, "MINOR_VERSION", 0)
     if minor < _MIN_ADW_MINOR:
         major = getattr(Adw, "MAJOR_VERSION", 1)
@@ -64,18 +154,21 @@ def _toggle():
         dbus.Interface(proxy, "com.clipman.Daemon").Toggle()
     except dbus.exceptions.DBusException:
         print("Clipman daemon is not running. Starting it now...")
-        return _start_daemon()
+        # The same press of the shortcut should open the popup too.
+        return _start_daemon(show=True)
     return 0
 
 
-def _start_daemon():
-    """Run the daemon until it quits; return its exit status.
+def _start_daemon(show=False):
+    """Run the daemon until it quits; return its exit status. With
+    ``show``, it opens the popup once it has started.
 
     A failed start-up ends with a non-zero status, so systemd's
     Restart=on-failure tries again.
     """
     from clipman.app import ClipmanApp
     app = ClipmanApp()
+    app.show_on_start = show
     status = app.run([])
     return status or app.exit_status
 
