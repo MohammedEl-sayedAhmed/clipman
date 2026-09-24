@@ -458,6 +458,20 @@ All notable changes to Clipman are documented in this file.
 - The "/" hint inside the search box covered the clear button and long
   queries. It shows only while the box is empty.
 
+### Fixed — accessible names for screen readers
+
+- A screen reader found the search box, the four filter tabs (All,
+  Text, Images, Snippets), every clip row, the six Preferences pages and
+  the two colour buttons without a name, so it could not tell them
+  apart. Each now has one. A clip row reads its title and its meta line
+  ("Pinned · …" for a pinned clip), and a sensitive clip reads only
+  "Sensitive clip", never its text.
+- A row that last showed a sensitive clip kept its masked look when the
+  list reused it for a snippet.
+- The tests now run with GTK's in-process accessibility backend, so
+  they can check these names; like before, nothing talks to the
+  session's accessibility bus.
+
 ### Fixed — git hooks
 
 - The trailer-identity check never ran. It read the output of
