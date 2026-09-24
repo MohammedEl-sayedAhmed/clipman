@@ -1,6 +1,8 @@
 #!/bin/bash
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+HELPER="$SCRIPT_DIR/scripts/install_helper.py"
 AUTOSTART_DIR="$HOME/.config/autostart"
 DATA_DIR="$HOME/.local/share/clipman"
 EXTENSION_UUID="clipman@clipman.com"
@@ -18,10 +20,22 @@ systemctl --user disable clipman.service 2>/dev/null || true
 rm -f "$SYSTEMD_DIR/clipman.service"
 systemctl --user daemon-reload 2>/dev/null || true
 echo "  Service removed."
+# A daemon started by hand (python3 clipman.py &) outlives the service. It
+# kept the bus name and wrote into the files removed below. Ask it to quit.
+if gdbus call --session --timeout 5 --dest com.clipman.Daemon \
+    --object-path /com/clipman/Daemon --method com.clipman.Daemon.Quit >/dev/null 2>&1; then
+    echo "  Running daemon stopped."
+fi
 
 # Step 2: Remove GNOME Shell extension
 echo "[2/6] Removing GNOME Shell clipboard extension..."
-gnome-extensions disable "$EXTENSION_UUID" 2>/dev/null || true
+# The Shell refuses to disable an extension it has not loaded, for example
+# one installed since the last login. Take it out of the setting instead.
+if ! gnome-extensions disable "$EXTENSION_UUID" 2>/dev/null; then
+    list=$(gsettings get org.gnome.shell enabled-extensions 2>/dev/null) &&
+        list=$(python3 "$HELPER" strv-remove "$list" "$EXTENSION_UUID" 2>/dev/null) &&
+        gsettings set org.gnome.shell enabled-extensions "$list" 2>/dev/null || true
+fi
 rm -rf "$EXTENSION_DIR"
 echo "  Extension removed."
 
@@ -70,13 +84,18 @@ update-desktop-database "$APPS_DIR" 2>/dev/null || true
 # Step 6: Remove data (ask first)
 echo "[6/6] Data cleanup..."
 echo ""
-read -p "Remove clipboard history data ($DATA_DIR)? [y/N] " -n 1 -r
-echo
+# Without a terminal, read gets no answer and set -e used to stop the
+# script here with exit 1. Keep the data then; it is the safe answer.
+REPLY=""
+if [ -t 0 ]; then
+    read -p "Remove clipboard history data ($DATA_DIR)? [y/N] " -n 1 -r || true
+    echo
+fi
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     rm -rf "$DATA_DIR"
     echo "  Data removed."
 else
-    echo "  Data kept."
+    echo "  Data kept in $DATA_DIR"
 fi
 
 echo ""
