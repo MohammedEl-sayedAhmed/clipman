@@ -58,8 +58,6 @@ class ClipmanApp(Adw.Application):
         # Surface repeated wl-paste crashes in the popup instead of dying
         # silently (mockup watcher-crashed).
         self.monitor.on_watcher_dead = self._on_watcher_dead
-        # Incognito also pauses the extension (no clip crosses the bus).
-        self.monitor.on_incognito_changed = shell_bridge.set_paused
         # Phase 1 of the GTK 4 + libadwaita port: keyword args only, the
         # window constructor expects (application, db, monitor) now.
         self.window = ClipmanWindow(
@@ -92,7 +90,12 @@ class ClipmanApp(Adw.Application):
             self.quit()
             return
 
-        # Push the pause state now and after any extension restart.
+        # Incognito also pauses the extension (no clip crosses the bus).
+        # Connected only now: the extension accepts calls from the owner of
+        # our bus name, so a push made before registration (incognito on
+        # launch, above) was refused and logged as a denied call. Push the
+        # state now, and again after any extension restart.
+        self.monitor.on_incognito_changed = shell_bridge.set_paused
         shell_bridge.set_paused(self.monitor.incognito)
         try:
             dbus.SessionBus().watch_name_owner(

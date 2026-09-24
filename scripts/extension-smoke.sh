@@ -32,9 +32,13 @@ expect_denied() {
 echo "== Extension present"
 if gdbus introspect --session --dest "$EXT_NAME" --object-path "$EXT_PATH" 2>/dev/null \
         | grep -q "SetPaused"; then
-    ok "interface exports SetPaused (contract version 8)"
+    ok "interface exports SetPaused (the access-controlled contract)"
 else
-    ko "SetPaused missing: is extension v9 installed and enabled?"
+    ko "SetPaused missing: is the current extension installed and enabled?"
+    # An older extension accepts anyone's calls, so the checks below would
+    # type real Ctrl+V keystrokes into the focused window. Stop here.
+    echo "Stopping: the remaining checks need the current extension."
+    exit 2
 fi
 
 echo "== Foreign callers are refused (direct name)"
