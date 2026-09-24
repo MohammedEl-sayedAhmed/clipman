@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 MAX_TEXT_SIZE = 10 * 1024 * 1024   # 10 MB
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
-MIN_EVENT_INTERVAL = 0.1  # seconds — ignore events faster than this
+MIN_EVENT_INTERVAL = 0.1  # seconds — drop the same content repeated this fast
 SELF_COPY_TTL = 2.0  # seconds — how long a self-copy skip stays armed
 
 
@@ -177,6 +177,7 @@ class ClipboardMonitor:
         self._self_copy_at = 0.0
         self._incognito = False
         self._last_event_time = 0.0
+        self._last_event_key = None
         self._watcher = None
 
     def start(self):
@@ -229,11 +230,18 @@ class ClipboardMonitor:
             except Exception:
                 logger.debug("on_incognito_changed callback failed", exc_info=True)
 
-    def _rate_limited(self):
-        """Return True if this event arrived too fast (debounce)."""
+    def _is_repeat(self, key):
+        """Return True for the same content arriving again within
+        MIN_EVENT_INTERVAL: one copy can fire more than one event.
+
+        A different clip always passes, even right after another. After a
+        busy moment, queued copies are dispatched back to back, and a
+        time-only throttle dropped all but the first of them.
+        """
         now = time.monotonic()
-        if now - self._last_event_time < MIN_EVENT_INTERVAL:
+        if key == self._last_event_key and now - self._last_event_time < MIN_EVENT_INTERVAL:
             return True
+        self._last_event_key = key
         self._last_event_time = now
         return False
 
@@ -242,7 +250,7 @@ class ClipboardMonitor:
         if self._consume_self_copy():
             return
 
-        if self._incognito or self._rate_limited():
+        if self._incognito or self._is_repeat(("text", text)):
             return
 
         if not text or len(text.encode("utf-8", errors="replace")) > MAX_TEXT_SIZE:
@@ -258,7 +266,9 @@ class ClipboardMonitor:
         if self._consume_self_copy():
             return
 
-        if self._incognito or self._rate_limited():
+        # The image is read later, so it has no content to compare yet:
+        # two image events this close together are the same copy.
+        if self._incognito or self._is_repeat(("image",)):
             return
 
         self._run_in_background(self._read_image)

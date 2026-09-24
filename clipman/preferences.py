@@ -561,10 +561,12 @@ class ClipmanPreferences(Adw.Dialog):
         return page
 
     def _on_purge_clicked(self, _btn):
-        # Force-expire by passing a zero timeout — same code path the
-        # daemon's periodic cleanup uses.
+        # Every sensitive entry, pinned or not, even with auto-clear off:
+        # the timed purge (delete_expired_sensitive) skips both, and this
+        # button used to reuse it, so it did nothing when auto-clear was
+        # off, which is exactly when it is needed.
         try:
-            self.db.delete_expired_sensitive(0)
+            self.db.purge_sensitive()
         except Exception:
             # The DB layer can raise OperationalError, IntegrityError,
             # or a wrapped FileNotFoundError if storage has been moved

@@ -448,15 +448,27 @@ class ClipboardDB:
         self.conn.commit()
 
     def delete_expired_sensitive(self, max_age_seconds: int = 30) -> int:
-        # The Privacy pane can switch the auto-clear off; rows stay masked.
+        """The timed purge: delete sensitive entries older than the
+        timeout. A pinned entry is kept, because a pin means "keep this"
+        (often a clip the detector got wrong), and so is everything while
+        the Privacy pane has auto-clear switched off."""
         if self.get_setting("sensitive_autoclear", "true") != "true":
             return 0
         cutoff = time.time() - max_age_seconds
-        rows = self.conn.execute(
+        return self._delete_rows(self.conn.execute(
             """SELECT id, image_path FROM entries
-               WHERE sensitive = 1 AND created_at < ?""",
+               WHERE sensitive = 1 AND pinned = 0 AND created_at < ?""",
             (cutoff,)
-        ).fetchall()
+        ).fetchall())
+
+    def purge_sensitive(self) -> int:
+        """Delete every sensitive entry now, pinned or not, whatever the
+        auto-clear setting ("Purge sensitive entries now")."""
+        return self._delete_rows(self.conn.execute(
+            "SELECT id, image_path FROM entries WHERE sensitive = 1"
+        ).fetchall())
+
+    def _delete_rows(self, rows) -> int:
         for row in rows:
             if row["image_path"] and _safe_image_path(row["image_path"]):
                 _remove_file(row["image_path"])

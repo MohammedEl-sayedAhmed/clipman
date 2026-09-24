@@ -210,10 +210,13 @@ class TestClipboardMonitor(unittest.TestCase):
         )
 
     def test_sensitive_sk_prefix(self):
-        self.monitor.handle_new_text("sk-proj-abcdef123456")
+        # A realistic length: real sk- keys carry 32 to 160 characters after
+        # the prefix. Built by concatenation so secret scanners don't match.
+        key = "sk-proj-" + "Q7zX9mK2" * 6
+        self.monitor.handle_new_text(key)
 
         self.mock_db.add_entry.assert_called_once_with(
-            "text", content_text="sk-proj-abcdef123456", sensitive=True
+            "text", content_text=key, sensitive=True
         )
 
     def test_normal_text_not_sensitive(self):
@@ -283,10 +286,12 @@ class TestClipboardMonitor(unittest.TestCase):
             "text", content_text="sk_live_51H3ABC1234567890abcdef", sensitive=True
         )
 
-    def test_sensitive_pk_live_key(self):
+    def test_pk_live_key_is_not_a_secret(self):
+        # A Stripe publishable key ships in web pages; flagging it deleted
+        # it 30 s after the copy.
         self.monitor.handle_new_text("pk_live_51H3ABC1234567890abcdef")
         self.mock_db.add_entry.assert_called_once_with(
-            "text", content_text="pk_live_51H3ABC1234567890abcdef", sensitive=True
+            "text", content_text="pk_live_51H3ABC1234567890abcdef", sensitive=False
         )
 
     def test_not_sensitive_text_with_spaces(self):
@@ -354,14 +359,22 @@ class TestClipboardMonitor(unittest.TestCase):
 
     # ── Rate limiting ─────────────────────────────────────────────
 
-    def test_rate_limited_drops_fast_events(self):
-        self.monitor.handle_new_text("first")
-        # Don't reset rate limiter — second call should be dropped
-        self.monitor.handle_new_text("second")
+    def test_same_text_twice_fast_is_recorded_once(self):
+        self.monitor.handle_new_text("same")
+        # One copy can fire two events: the repeat is dropped.
+        self.monitor.handle_new_text("same")
 
         self.assertEqual(self.mock_db.add_entry.call_count, 1)
+
+    def test_different_texts_fast_are_both_recorded(self):
+        """Back-to-back different copies (queued after a busy moment)
+        used to lose all but the first."""
+        self.monitor.handle_new_text("first")
+        self.monitor.handle_new_text("second")
+
+        self.assertEqual(self.mock_db.add_entry.call_count, 2)
         self.mock_db.add_entry.assert_called_with(
-            "text", content_text="first", sensitive=False
+            "text", content_text="second", sensitive=False
         )
 
     @patch("clipman.clipboard_monitor.subprocess.run")
@@ -452,35 +465,29 @@ class TestClipboardMonitor(unittest.TestCase):
         self.mock_db.add_entry.assert_called_once()
 
     @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_rate_limiter_drops_image_after_text(self, mock_run):
-        """Image event arriving within MIN_EVENT_INTERVAL after text is dropped."""
+    def test_image_right_after_text_is_recorded(self, mock_run):
+        """An image copied right after a text is a different clip."""
         image_data = b"\x89PNG\r\n\x1a\nimage_after_text"
         mock_run.return_value = FakeCompletedProcess(returncode=0, stdout=image_data)
 
         self.monitor.handle_new_text("some text")
-        # Do NOT reset _last_event_time — image arrives immediately after
         self.monitor.handle_new_image()
 
-        # Only the text event was stored; image was rate-limited
-        self.assertEqual(self.mock_db.add_entry.call_count, 1)
-        self.mock_db.add_entry.assert_called_once_with(
-            "text", content_text="some text", sensitive=False
-        )
+        self.assertEqual(self.mock_db.add_entry.call_count, 2)
+        self.mock_db.add_entry.assert_called_with("image", image_data=image_data)
 
     @patch("clipman.clipboard_monitor.subprocess.run")
-    def test_rate_limiter_drops_text_after_image(self, mock_run):
-        """Text event arriving within MIN_EVENT_INTERVAL after image is dropped."""
+    def test_text_right_after_image_is_recorded(self, mock_run):
+        """A text copied right after an image is a different clip."""
         image_data = b"\x89PNG\r\n\x1a\nimage_before_text"
         mock_run.return_value = FakeCompletedProcess(returncode=0, stdout=image_data)
 
         self.monitor.handle_new_image()
-        # Do NOT reset _last_event_time — text arrives immediately after
         self.monitor.handle_new_text("text after image")
 
-        # Only the image event was stored; text was rate-limited
-        self.assertEqual(self.mock_db.add_entry.call_count, 1)
-        self.mock_db.add_entry.assert_called_once_with(
-            "image", image_data=image_data
+        self.assertEqual(self.mock_db.add_entry.call_count, 2)
+        self.mock_db.add_entry.assert_called_with(
+            "text", content_text="text after image", sensitive=False
         )
 
     @patch("clipman.clipboard_monitor.subprocess.run")
@@ -500,9 +507,9 @@ class TestDebounce(unittest.TestCase):
     """Tests for the debounce / rate-limiting behaviour.
 
     The GNOME Shell extension debounces owner-changed signals with a 150ms
-    GLib timeout (cancel-and-restart).  The Python daemon applies a second
-    layer of rate-limiting via MIN_EVENT_INTERVAL so that bursts of D-Bus
-    NewEntry calls are collapsed.
+    GLib timeout (cancel-and-restart). The Python daemon drops the same
+    content repeated within MIN_EVENT_INTERVAL; a different clip always
+    passes.
     """
 
     def setUp(self):
@@ -518,14 +525,18 @@ class TestDebounce(unittest.TestCase):
         from clipman.clipboard_monitor import MIN_EVENT_INTERVAL
         self.assertGreaterEqual(MIN_EVENT_INTERVAL, 0.1)
 
-    def test_burst_text_events_only_first_recorded(self):
-        """A burst of text events with no delay records only the first."""
+    def test_burst_of_one_text_is_recorded_once(self):
+        """The same text fired five times with no delay is one copy."""
+        for _ in range(5):
+            self.monitor.handle_new_text("burst")
+        self.assertEqual(self.mock_db.add_entry.call_count, 1)
+
+    def test_burst_of_different_texts_is_all_recorded(self):
+        """Five different copies with no delay, as after a main-loop stall,
+        are five clips."""
         for i in range(5):
             self.monitor.handle_new_text(f"burst-{i}")
-        self.assertEqual(self.mock_db.add_entry.call_count, 1)
-        self.mock_db.add_entry.assert_called_with(
-            "text", content_text="burst-0", sensitive=False
-        )
+        self.assertEqual(self.mock_db.add_entry.call_count, 5)
 
     @patch("clipman.clipboard_monitor.subprocess.run")
     def test_burst_image_events_only_first_recorded(self, mock_run):
@@ -537,8 +548,8 @@ class TestDebounce(unittest.TestCase):
             self.monitor.handle_new_image()
         self.assertEqual(self.mock_db.add_entry.call_count, 1)
 
-    def test_burst_mixed_events_only_first_recorded(self):
-        """Mixed text/image burst with no delay records only the first."""
+    def test_burst_of_mixed_clips_is_all_recorded(self):
+        """Text, image, text with no delay: three different clips."""
         self.monitor.handle_new_text("text-first")
         with patch("clipman.clipboard_monitor.subprocess.run") as mock_run:
             mock_run.return_value = FakeCompletedProcess(
@@ -546,7 +557,7 @@ class TestDebounce(unittest.TestCase):
             )
             self.monitor.handle_new_image()
         self.monitor.handle_new_text("text-third")
-        self.assertEqual(self.mock_db.add_entry.call_count, 1)
+        self.assertEqual(self.mock_db.add_entry.call_count, 3)
 
     def test_events_accepted_after_interval_passes(self):
         """Each event is accepted when enough time has passed."""
@@ -562,13 +573,13 @@ class TestDebounce(unittest.TestCase):
         self.assertEqual(self.mock_db.add_entry.call_count, 3)
 
     def test_rate_limiter_does_not_update_time_on_drop(self):
-        """Dropped events must not reset the cooldown timer."""
+        """Dropped repeats must not reset the cooldown timer."""
         self.monitor.handle_new_text("accepted")
         saved_time = self.monitor._last_event_time
 
-        # These should all be dropped
-        self.monitor.handle_new_text("dropped-1")
-        self.monitor.handle_new_text("dropped-2")
+        # Repeats of the same copy: both dropped
+        self.monitor.handle_new_text("accepted")
+        self.monitor.handle_new_text("accepted")
 
         # Timer should still reflect the accepted event
         self.assertEqual(self.monitor._last_event_time, saved_time)
@@ -609,9 +620,10 @@ class TestIsSensitiveFunction(unittest.TestCase):
             "gho_ABCDEFGH12345678",
             "ghs_ABCDEFGH12345678",
             "github_pat_XXXXXXXXXXXXXXXX",
-            "sk-proj-abcdef123456",
+            # Real sk- keys carry 32 or more characters after the prefix.
+            "sk-proj-" + "Q7zX9mK2" * 6,
             "sk_live_1234567890abcdef",
-            "pk_live_1234567890abcdef",
+            # (pk_live_ is a publishable key, public by design: not listed.)
             "Bearer token12345678",
             "eyJhbGciOiJIUzI1NiJ9",
             "xoxb-123456789012",
@@ -667,13 +679,13 @@ class TestIsSensitiveFunction(unittest.TestCase):
     def test_sensitive_redis_connection_string(self):
         self.assertTrue(self.is_sensitive("redis://default:password@redis.example.com:6379"))
 
-    def test_sensitive_ssh_rsa_key(self):
-        key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC..."
-        self.assertTrue(self.is_sensitive(key))
-
-    def test_sensitive_ssh_ed25519_key(self):
-        key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG..."
-        self.assertTrue(self.is_sensitive(key))
+    def test_ssh_public_keys_are_not_secret(self):
+        # Public keys are meant to be pasted into servers and forges;
+        # flagging one deleted it 30 s after the copy.
+        for key in ("ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC...",
+                    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG..."):
+            with self.subTest(key=key[:11]):
+                self.assertFalse(self.is_sensitive(key))
 
     def test_multiline_private_key_detected(self):
         key = "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg\nkqhkiG9w0BAQ..."
