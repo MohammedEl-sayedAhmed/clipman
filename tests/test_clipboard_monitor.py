@@ -885,26 +885,14 @@ class TestWlPasteWatcher(unittest.TestCase):
     @patch("clipman.clipboard_monitor.subprocess.run")
     def test_sentinel_line_triggers_event(self, mock_run):
         """A proper CLIP_CHANGED sentinel triggers _on_clipboard_changed."""
-        mock_run.side_effect = [
-            FakeCompletedProcess(returncode=0, stdout=b"text/plain\n"),
-            FakeCompletedProcess(returncode=0, stdout=b"from sentinel"),
-        ]
-
-        # Simulate data arriving on stdout
-        self.watcher._buf = b""
         from clipman.clipboard_monitor import GLib
-        with patch.object(self.watcher, '_on_clipboard_changed', wraps=self.watcher._on_clipboard_changed):
-            # Feed sentinel + newline
-            self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
-            # Need to inject data first — simulate os.read
-            pass
 
-        # Test directly: feed buffer with sentinel
-        mock_run.reset_mock()
         mock_run.side_effect = [
             FakeCompletedProcess(returncode=0, stdout=b"text/plain\n"),
             FakeCompletedProcess(returncode=0, stdout=b"from sentinel"),
         ]
+        self.watcher._buf = b""
+        # os.read is patched: fd 42 must never be read for real.
         with patch("clipman.clipboard_monitor.os.read", return_value=b"CLIP_CHANGED\n"):
             self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
 

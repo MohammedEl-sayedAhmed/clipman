@@ -318,6 +318,12 @@ All notable changes to Clipman are documented in this file.
 - Every widget test built its window on an application that had not
   emitted `startup`, so each one logged a `Gtk-CRITICAL`. The shared
   fixture registers the application first. The suite is silent now.
+- `test_sentinel_line_triggers_event` began with a dead block that read
+  file descriptor 42 for real, so the test could hang or fail depending
+  on what the runner had open. The block is gone.
+- The last eight CodeQL alerts on `main` are fixed: seven `except …: pass`
+  blocks became `contextlib.suppress` (a missing image file is fine) or
+  a debug log, and one stray `pass` went with the dead test block.
 
 ### Fixed — documentation that did not match the code
 
