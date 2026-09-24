@@ -12,6 +12,8 @@
 #   scripts/dev.sh hooks-test           the git-hook footprint-scanner corpus
 #   scripts/dev.sh validate             actionlint on the workflows; appstreamcli
 #                                       and desktop-file-validate on data/
+#   scripts/dev.sh e2e [workdir]        install, log in, copy, uninstall in a
+#                                       headless GNOME Shell (tests/e2e)
 #   scripts/dev.sh check                lint, then test
 #   scripts/dev.sh help
 #
@@ -106,6 +108,7 @@ cmd_shellcheck() {
         die "shellcheck not found; run: scripts/deps.sh --lint --install (or scripts/dev.sh setup)"
     fi
     shellcheck --severity=warning install.sh uninstall.sh launcher.sh scripts/*.sh \
+        tests/e2e/*.sh \
         .githooks/commit-msg .githooks/pre-commit .githooks/pre-push \
         .githooks/_lib.sh .githooks/_test.sh
 }
@@ -157,6 +160,15 @@ cmd_validate() {
     log "validate ok"
 }
 
+# Runs in its own headless GNOME Shell, bus and home (tests/e2e), so it
+# needs gnome-shell but never touches the desktop's session.
+cmd_e2e() {
+    if ! command -v gnome-shell >/dev/null 2>&1; then
+        die "gnome-shell not found; the end-to-end test runs a headless GNOME Shell"
+    fi
+    bash "$ROOT/tests/e2e/install_flow.sh" "$@"
+}
+
 cmd_check() {
     cmd_lint
     cmd_test "$@"
@@ -180,6 +192,7 @@ main() {
         screenshot) cmd_screenshot "$@" ;;
         hooks-test) cmd_hooks_test ;;
         validate)   cmd_validate ;;
+        e2e)        cmd_e2e "$@" ;;
         check)      cmd_check "$@" ;;
         help|-h|--help) cmd_help ;;
         *)

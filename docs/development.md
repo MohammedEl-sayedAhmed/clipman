@@ -92,6 +92,21 @@ scripts/dev.sh test tests/test_keybindings.py
 scripts/dev.sh test tests/test_database.py::TestClipboardDB::test_add_text_entry
 ```
 
+### End to end
+
+```bash
+scripts/dev.sh e2e
+```
+
+This starts a headless GNOME Shell with its own session bus, display and
+home, so it never touches your desktop. In it, `tests/e2e/install_flow.sh`
+runs `install.sh` while the Shell is running, logs in again, checks that
+the extension is on and a copy reaches the history, opens and hides the
+popup (checking that it does not spin a CPU core), runs
+`scripts/extension-smoke.sh`, and finally `uninstall.sh`. It needs
+`gnome-shell`, the runtime packages and `wl-clipboard`. CI runs it on
+GNOME Shell 46.
+
 ## Lint
 
 ```bash
