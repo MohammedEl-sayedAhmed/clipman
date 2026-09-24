@@ -142,6 +142,8 @@ class ClipmanPreferences(Adw.Dialog):
         # Keep the real toplevel (the ClipmanWindow passed in) for the
         # backup/restore dialogs.
         self._parent_window = parent
+        # The file the last backup went to, for "Retry" after a failure.
+        self._last_backup_path = None
 
         self.set_title(_("Preferences"))
         # Tall enough that the Appearance page fits without a scrollbar
@@ -813,11 +815,31 @@ class ClipmanPreferences(Adw.Dialog):
         except GLib.Error:
             return  # dismissed
         if file is not None:
-            try:
-                self.db.export_backup(file.get_path())
-                self._emit_event("backup_succeeded", file.get_path())
-            except Exception as exc:
-                self._emit_event("backup_failed", str(exc))
+            self._write_backup(file.get_path())
+
+    def _write_backup(self, path):
+        self._last_backup_path = path
+        try:
+            self.db.export_backup(path)
+            self._emit_event("backup_succeeded", path)
+        except Exception as exc:
+            self._emit_event("backup_failed", str(exc))
+
+    def retry_backup(self):
+        """Write the backup again to the file that failed, or ask for a
+        file when there was none ("Retry" on the backup-failed alert)."""
+        if self._last_backup_path:
+            self._write_backup(self._last_backup_path)
+        else:
+            self.choose_backup_file()
+
+    def choose_backup_file(self):
+        """Ask where to write a backup, then write it."""
+        self._on_backup_clicked(None)
+
+    def choose_restore_file(self):
+        """Ask for a backup to restore, then confirm and restore it."""
+        self._on_restore_clicked(None)
 
     def _on_restore_clicked(self, _btn):
         dialog = Gtk.FileDialog()

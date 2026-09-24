@@ -225,6 +225,21 @@ def _domain_of(url):
     return host[4:] if host.startswith("www.") else host
 
 
+_NON_SPACE = re.compile(r"\S")
+
+
+def _first_line(text):
+    """The first line of ``text`` that is not blank, stripped. Only up to
+    121 characters are copied: the row shows 120, and a clip can be
+    megabytes long."""
+    match = _NON_SPACE.search(text or "")
+    if match is None:
+        return ""
+    start = match.start()
+    end = text.find("\n", start, start + 121)
+    return text[start:end if end != -1 else start + 121].strip()
+
+
 def _format_bytes(n):
     """Short human size for the image row meta ("1.2 MB", "640 KB")."""
     if n >= 1024 * 1024:
@@ -286,11 +301,17 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # is still mapped rather than a boolean latch, because hiding the
         # popup does NOT emit a dialog's "closed" signal.
         self._child_dialog = None
+        # The open Preferences dialog, kept apart from _child_dialog: an
+        # alert shown over it (a failed backup, say) takes that slot, and
+        # its buttons must act in this dialog, not open a second one.
+        self._prefs_dialog = None
         # Pending _move_to_cursor timeout id, so a show->hide within 50ms
         # can cancel it (a stale timer would re-activate a closed popup).
         self._cursor_move_id = 0
         # Pending one-shot idle that focuses the search box after a show.
         self._focus_idle_id = 0
+        # Pending one-shot idle that scrolls the list to the top after a show.
+        self._scroll_top_idle_id = 0
         # Incremental list fill: refresh() shows the first screenful
         # immediately, then appends the rest on idle so the popup paints
         # fast and stays responsive instead of freezing to build every row.
@@ -318,6 +339,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._font_size = max(8, min(20, int(float(saved_font))))
         except (TypeError, ValueError):
             self._font_size = DEFAULT_FONT_SIZE
+
+        # Preferences can dim the popup; apply it from the start, not
+        # only when the setting changes.
+        self._apply_opacity(self.db.get_setting("opacity", "1.0"))
 
         saved_theme = self.db.get_setting("theme", DEFAULT_THEME)
         self._theme = (
@@ -620,10 +645,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._new_snippet_btn = Gtk.Button.new_from_icon_name(
             "list-add-symbolic"
         )
-        self._new_snippet_btn.set_tooltip_text(_("Manage snippets"))
+        self._new_snippet_btn.set_tooltip_text(_("New snippet"))
         self._new_snippet_btn.add_css_class("flat")
         self._new_snippet_btn.set_visible(False)
-        self._new_snippet_btn.connect("clicked", self._on_snippets_clicked)
+        self._new_snippet_btn.connect(
+            "clicked", lambda _b: self._on_snippets_clicked(None, new=True)
+        )
         header.pack_end(self._new_snippet_btn)
 
         toolbarview.add_top_bar(header)
@@ -686,6 +713,14 @@ class ClipmanWindow(Adw.ApplicationWindow):
         kbd_chip.set_margin_end(10)
         kbd_chip.set_can_target(False)  # clicks fall through to the entry
         search_overlay.add_overlay(kbd_chip)
+        self._kbd_chip = kbd_chip
+        # The chip sits where the clear button and long queries go, so it
+        # shows only while the field is empty ("changed" fires on every
+        # keystroke; "search-changed" only after a pause).
+        self.search_entry.connect(
+            "changed",
+            lambda entry: self._kbd_chip.set_visible(not entry.get_text()),
+        )
         search_box.append(search_overlay)
         root.append(search_box)
 
@@ -866,7 +901,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
         if not items:
             self._store.remove_all()
             if self._search_query:
-                state_id = "no-results"
+                # Search covers text only (images are tracked in #317).
+                state_id = ("no-image-search"
+                            if self._active_filter == "images"
+                            else "no-results")
             elif is_snippets:
                 state_id = "no-snippets-yet"
             elif self._recording_problem is not None:
@@ -1150,7 +1188,8 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self.refresh()
 
     def _action_open_snippets_dialog(self):
-        self._on_snippets_clicked(None)
+        # "Add snippet" on the no-snippets page.
+        self._on_snippets_clicked(None, new=True)
 
     def _action_open_extensions(self):
         self._open_url(self._EXTENSIONS_URL)
@@ -1224,24 +1263,21 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._on_prefs_clicked(None, page="storage")
 
     def _action_retry_backup(self):
-        # The retry flow is owned by the preferences window — bring
-        # the user back to Storage where the Export action lives so a
-        # second click re-issues the backup.
-        self._on_prefs_clicked(None)
+        """backup-failed: write the backup again, to the same file."""
+        self._open_prefs(page="storage").retry_backup()
 
     def _action_rechoose_backup(self):
-        # Same shape as retry-backup: hand off to preferences where the
-        # FileChooser is wired. Splitting them keeps the dispatcher
-        # table self-documenting even though the destination matches.
-        self._on_prefs_clicked(None)
+        """backup-failed: ask for another file for the backup."""
+        self._open_prefs(page="storage").choose_backup_file()
 
     def _action_rechoose_restore(self):
-        self._on_prefs_clicked(None)
+        """restore-failed: ask for another backup to restore."""
+        self._open_prefs(page="storage").choose_restore_file()
 
     def _action_open_restore(self):
         # db-locked state CTA: take the user to the Restore action so
         # they can recover from the most recent backup.
-        self._on_prefs_clicked(None)
+        self._open_prefs(page="storage")
 
     def _action_reveal_db_folder(self):
         from clipman.database import DATA_DIR
@@ -1557,9 +1593,8 @@ class ClipmanWindow(Adw.ApplicationWindow):
         else:
             row._clip_title.remove_css_class("masked")
             row._clip_subtitle.remove_css_class("warning")
-            first_line = text.split("\n", 1)[0].strip() if text else ""
             title = ("[Image]" if ctype == "image"
-                     else first_line[:120] or _("(empty)"))
+                     else _first_line(text)[:120] or _("(empty)"))
             if ctype == "image":
                 info = self._image_info(entry.get("image_path"))
                 if info:
@@ -2069,12 +2104,15 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._new_snippet_btn.set_visible(filter_id == "snippets")
         self.refresh()
 
-    def _on_snippets_clicked(self, _button):
+    def _on_snippets_clicked(self, _button, new=False):
+        """Open the snippets editor; with ``new``, on a new snippet."""
         from clipman.snippets_dialog import SnippetsDialog
 
         dialog = SnippetsDialog(self.db)
         self._register_child(dialog, on_closed=lambda _d: self.refresh())
         dialog.present(self)
+        if new:
+            dialog.start_new()
 
     def _on_list_activate(self, _listview, position):
         # Position indexes the sorted/section model the ListView shows.
@@ -2152,17 +2190,45 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._incognito_btn.set_active(bool(active))
 
     def _on_prefs_clicked(self, _button, page=None):
+        self._open_prefs(page)
+
+    def _open_prefs(self, page=None):
+        """Show Preferences, at ``page`` if given, and return the dialog.
+        An open one is reused, so there is never a second."""
         from clipman.preferences import ClipmanPreferences
 
+        prefs = self._prefs_dialog
+        if prefs is not None:
+            if page:
+                prefs.show_page(page)
+            return prefs
         prefs = ClipmanPreferences(
             self.db, self, on_setting_changed=self._on_setting_changed
         )
         if page:
             prefs.show_page(page)
+
+        def _closed(dialog):
+            if self._prefs_dialog is dialog:
+                self._prefs_dialog = None
+
+        prefs.connect("closed", _closed)
+        self._prefs_dialog = prefs
         # In-surface dialog anchored to the popup so it can't open behind
         # it on Wayland; tracked so dismiss-on-focus-loss is guarded.
         self._register_child(prefs)
         prefs.present(self)
+        return prefs
+
+    def _apply_opacity(self, value):
+        """Set the popup's opacity from a stored value (0.3 to 1.0)."""
+        try:
+            self.set_opacity(max(0.3, min(1.0, float(value))))
+        except (TypeError, ValueError):
+            # Non-numeric value persisted by an older daemon — log and
+            # keep the current opacity rather than crashing.
+            logger.debug("opacity setting not coercible: %r", value,
+                         exc_info=True)
 
     def _on_setting_changed(self, key, value):
         """Hot-reload settings the popup cares about.
@@ -2205,14 +2271,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._font_color = value or DEFAULT_FONT_COLOR
             self._apply_css()
         elif key == "opacity":
-            try:
-                self.set_opacity(max(0.3, min(1.0, float(value))))
-            except (TypeError, ValueError):
-                # Non-numeric value persisted by an older daemon — log
-                # and keep the current opacity rather than crashing.
-                logger.debug(
-                    "opacity setting not coercible: %r", value, exc_info=True
-                )
+            self._apply_opacity(value)
         elif key == "sensitive_timeout":
             try:
                 self._sensitive_timeout = max(10, min(300, int(value)))
@@ -2272,7 +2331,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
             and keyval in (Gdk.KEY_n, Gdk.KEY_N)
             and _state & Gdk.ModifierType.CONTROL_MASK
         ):
-            self._on_snippets_clicked(None)
+            self._on_snippets_clicked(None, new=True)
             return True
 
         # Down arrow from the search entry drops focus into the list so
@@ -2472,8 +2531,10 @@ class ClipmanWindow(Adw.ApplicationWindow):
     # ------------------------------------------------------------------
 
     def _child_is_open(self):
-        d = self._child_dialog
-        return d is not None and d.get_mapped()
+        return any(
+            d is not None and d.get_mapped()
+            for d in (self._child_dialog, self._prefs_dialog)
+        )
 
     def _register_child(self, dialog, on_closed=None):
         """Track an in-app dialog so dismiss-on-focus-loss doesn't hide the
@@ -2511,6 +2572,13 @@ class ClipmanWindow(Adw.ApplicationWindow):
         if self._focus_idle_id:
             GLib.source_remove(self._focus_idle_id)
         self._focus_idle_id = GLib.idle_add(self._focus_search_once)
+        # Each open starts at the top with the first section header in
+        # view. Refilling the list anchors its first row at the top of
+        # the view, which scrolls the header above it out of sight; so
+        # reset the scroll once the list has been laid out.
+        if self._scroll_top_idle_id:
+            GLib.source_remove(self._scroll_top_idle_id)
+        self._scroll_top_idle_id = GLib.idle_add(self._scroll_to_top_once)
         if self._cursor_move_id:
             GLib.source_remove(self._cursor_move_id)
         self._cursor_move_id = GLib.timeout_add(50, self._move_to_cursor)
@@ -2519,6 +2587,14 @@ class ClipmanWindow(Adw.ApplicationWindow):
         """Idle callback: focus the search box, then remove itself."""
         self._focus_idle_id = 0
         self.search_entry.grab_focus()
+        return GLib.SOURCE_REMOVE
+
+    def _scroll_to_top_once(self):
+        """Idle callback: scroll the list to the top, then remove itself."""
+        self._scroll_top_idle_id = 0
+        adjustment = self.listview.get_vadjustment()
+        if adjustment is not None:
+            adjustment.set_value(adjustment.get_lower())
         return GLib.SOURCE_REMOVE
 
     def _hide(self):
@@ -2531,14 +2607,20 @@ class ClipmanWindow(Adw.ApplicationWindow):
         if self._focus_idle_id:
             GLib.source_remove(self._focus_idle_id)
             self._focus_idle_id = 0
+        if self._scroll_top_idle_id:
+            GLib.source_remove(self._scroll_top_idle_id)
+            self._scroll_top_idle_id = 0
         self._cancel_search_debounce()
         self._cancel_fill()
-        if self._child_dialog is not None:
+        for dialog in (self._child_dialog, self._prefs_dialog):
+            if dialog is None:
+                continue
             try:
-                self._child_dialog.force_close()
+                dialog.force_close()
             except Exception:
                 logger.debug("force_close child dialog failed", exc_info=True)
-            self._child_dialog = None
+        self._child_dialog = None
+        self._prefs_dialog = None
         self.set_visible(False)
 
     def _on_active_changed(self, *_args):
