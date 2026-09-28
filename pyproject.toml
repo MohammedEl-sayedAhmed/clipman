@@ -44,7 +44,7 @@ dev = ["clipman-clipboard[lint,test]"]
 [build-system]
 # 77 is the first release that accepts the PEP 639 license string below;
 # 68 to 76 fail a build without isolation (distro packaging, offline).
-requires = ["setuptools>=77"]
+requires = ["setuptools>=84.0.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
