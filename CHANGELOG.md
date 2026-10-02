@@ -4,6 +4,13 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Fixed — fallback clipboard watcher could pin a CPU core
+
+- A broken `wl-paste --watch` pipe left the GLib IO watch alive (read
+  errors returned `SOURCE_CONTINUE`, `NVAL` was never watched), so the
+  callback re-ran in a tight loop at 100% of one core. A dead pipe now
+  drops the watch and goes through the existing bounded restart.
+
 ### Added — GNOME Shell 51 support
 
 - The Shell extension (v9) now declares support for GNOME Shell 51. The
