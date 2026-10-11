@@ -951,13 +951,28 @@ class TestWlPasteWatcher(unittest.TestCase):
         mock_glib.timeout_add_seconds.assert_called_once_with(1, self.watcher._restart)
         self.assertEqual(result, mock_glib.SOURCE_REMOVE)
 
-    @patch("clipman.clipboard_monitor.os.read", side_effect=OSError("fd error"))
-    def test_oserror_on_read_continues(self, mock_read):
-        """OSError during os.read returns SOURCE_CONTINUE (transient error)."""
+    @patch("clipman.clipboard_monitor.os.read", side_effect=BlockingIOError())
+    def test_spurious_wakeup_continues(self, mock_read):
         from clipman.clipboard_monitor import GLib
         result = self.watcher._on_stdout_ready(42, GLib.IOCondition.IN)
 
         self.assertEqual(result, GLib.SOURCE_CONTINUE)
+
+    @patch("clipman.clipboard_monitor.GLib")
+    @patch("clipman.clipboard_monitor.os.read", side_effect=OSError("fd error"))
+    def test_oserror_on_read_schedules_restart(self, mock_read, mock_glib):
+        result = self.watcher._on_stdout_ready(42, mock_glib.IOCondition.IN)
+
+        mock_glib.timeout_add_seconds.assert_called_once_with(1, self.watcher._restart)
+        self.assertEqual(result, mock_glib.SOURCE_REMOVE)
+
+    def test_nval_schedules_restart(self):
+        from clipman.clipboard_monitor import GLib
+        with patch.object(GLib, "timeout_add_seconds") as add:
+            result = self.watcher._on_stdout_ready(42, GLib.IOCondition.NVAL)
+
+        add.assert_called_once_with(1, self.watcher._restart)
+        self.assertEqual(result, GLib.SOURCE_REMOVE)
 
     @patch("clipman.clipboard_monitor.GLib")
     @patch("clipman.clipboard_monitor.os.set_blocking")

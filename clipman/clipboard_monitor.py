@@ -56,7 +56,8 @@ class _WlPasteWatcher:
         self._io_watch_id = GLib.io_add_watch(
             self._fd,
             GLib.PRIORITY_DEFAULT,
-            GLib.IOCondition.IN | GLib.IOCondition.HUP | GLib.IOCondition.ERR,
+            GLib.IOCondition.IN | GLib.IOCondition.HUP | GLib.IOCondition.ERR
+            | GLib.IOCondition.NVAL,
             self._on_stdout_ready,
         )
 
@@ -78,15 +79,21 @@ class _WlPasteWatcher:
         self._buf = b""
 
     def _on_stdout_ready(self, fd, condition):
-        if condition & (GLib.IOCondition.HUP | GLib.IOCondition.ERR):
+        if condition & (GLib.IOCondition.HUP | GLib.IOCondition.ERR
+                        | GLib.IOCondition.NVAL):
             self._io_watch_id = None
             GLib.timeout_add_seconds(1, self._restart)
             return GLib.SOURCE_REMOVE
 
         try:
             data = os.read(fd, 4096)
-        except OSError:
+        except (BlockingIOError, InterruptedError):
             return GLib.SOURCE_CONTINUE
+        except OSError:
+            logger.warning("wl-paste watcher read failed; restarting", exc_info=True)
+            self._io_watch_id = None
+            GLib.timeout_add_seconds(1, self._restart)
+            return GLib.SOURCE_REMOVE
 
         if not data:
             self._io_watch_id = None
