@@ -63,9 +63,10 @@ specific assistant.
   `shellcheck --severity=warning` over `install.sh`, `uninstall.sh`,
   `launcher.sh`, `scripts/*.sh` and the `.githooks/` scripts,
   the exact CI scopes (`ruff` / `shellcheck` subcommands run one half;
-  `check` runs lint then test). Ruff is pinned at 0.16.8 in the `lint`
-  extra, and `pyproject.toml` names the rule set (`select`), so a newer
-  local ruff checks the same rules as CI instead of its growing default.
+  `check` runs lint then test). Ruff is pinned in the `lint` extra of
+  `pyproject.toml` (Dependabot bumps the pin), and `pyproject.toml` names
+  the rule set (`select`), so a newer local ruff checks the same rules as
+  CI instead of its growing default.
 - Headless visual checks: `scripts/dev.sh screenshot --out /tmp/x.png`
   renders the real window/preferences to PNG under xvfb. Caveat:
   `Adw.Dialog` content can't be captured through the xvfb harness ("empty
