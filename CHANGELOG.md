@@ -11,6 +11,14 @@ All notable changes to Clipman are documented in this file.
   callback re-ran in a tight loop at 100% of one core. A dead pipe now
   drops the watch and goes through the existing bounded restart.
 
+### Added — contributors in the README
+
+- The README has a Contributors section that lists everyone whose pull
+  request was merged, with their name, avatar and links to those pull
+  requests. `scripts/contributors.py` builds it from the GitHub API and
+  never lists the maintainer, bots or AI tools. CONTRIBUTING.md explains
+  who is listed and how to opt out.
+
 ### Added — GNOME Shell 51 support
 
 - The Shell extension (v9) now declares support for GNOME Shell 51. The
