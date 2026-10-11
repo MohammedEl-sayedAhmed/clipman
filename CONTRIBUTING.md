@@ -221,6 +221,16 @@ out.
 - **Dependabot PRs.** PRs labeled `dependencies` by Dependabot for `pip` and `github-actions` are still reviewed but typically merge quickly once CI is green.
 - **GitHub Advanced Security threads.** Resolve every `github-advanced-security` finding before merge — reply on the thread, resolve, and dismiss the alert if it's a false positive.
 
+## Recognition
+
+Everyone whose pull request is merged is listed under
+[Contributors](README.md#contributors) in the README, with their name,
+avatar and links to their pull requests. The list is generated from the
+GitHub API by `scripts/contributors.py`, and the maintainer refreshes it
+when a first-time contributor's pull request is merged. It names people
+only: bots and AI tools are never listed. If you would rather not be
+listed, say so in your pull request or open an issue.
+
 ## Reporting Issues
 
 When filing a bug report, please include:

@@ -424,6 +424,23 @@ journalctl --user -u clipman.service -n 20
 
 Contributions are welcome. See [CONTRIBUTING.md](https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CONTRIBUTING.md) for setup instructions, project structure, coding guidelines, and how to run the test suite.
 
+## Contributors
+
+The following people have contributed code to Clipman.
+
+<!-- The list between these markers is written by scripts/contributors.py. -->
+<!-- contributors:start -->
+<table>
+  <tr>
+    <td align="center" valign="top" width="16.67%"><a href="https://github.com/ngtw-j"><img src="https://avatars.githubusercontent.com/u/172234289?v=4&amp;s=160" width="80" height="80" alt="Josie Ng"/><br/><b>Josie Ng</b></a><br/><sub>Pull request <a href="https://github.com/MohammedEl-sayedAhmed/clipman/pull/5">#5</a></sub></td>
+    <td align="center" valign="top" width="16.67%"><a href="https://github.com/MrTomRod"><img src="https://avatars.githubusercontent.com/u/40867365?v=4&amp;s=160" width="80" height="80" alt="Thomas Roder"/><br/><b>Thomas Roder</b></a><br/><sub>Pull request <a href="https://github.com/MohammedEl-sayedAhmed/clipman/pull/297">#297</a></sub></td>
+    <td align="center" valign="top" width="16.67%"><a href="https://github.com/jendermine"><img src="https://avatars.githubusercontent.com/u/92355621?v=4&amp;s=160" width="80" height="80" alt="jendermine"/><br/><b>jendermine</b></a><br/><sub>Pull request <a href="https://github.com/MohammedEl-sayedAhmed/clipman/pull/354">#354</a></sub></td>
+  </tr>
+</table>
+<!-- contributors:end -->
+
+<sub>The list is generated from the merged pull requests. See <a href="https://github.com/MohammedEl-sayedAhmed/clipman/blob/main/CONTRIBUTING.md#recognition">Recognition</a> in CONTRIBUTING.md.</sub>
+
 ## Uninstall
 
 ```bash
