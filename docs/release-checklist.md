@@ -64,8 +64,8 @@ each stage either annotates the failure or moves on:
 1. **pre-flight** — confirms every version carrier matches the tag
    (`pyproject.toml`, `clipman/_version.py`, the snap, `aur/PKGBUILD`
    and `aur/.SRCINFO`, `CITATION.cff`, the Flatpak manifest, both
-   metainfo files) and that `CHANGELOG.md` has a section for it, which
-   becomes the release notes.
+   metainfo files) and that `CHANGELOG.md` has notes for it
+   (`scripts/release-notes.py`), which become the release notes.
 2. **tests** — Python 3.10 to 3.14 matrix.
 3. **build-pypi** — `python -m build`, then installs the wheel in a
    clean venv and checks that `clipman --version` reports the tag and
@@ -74,9 +74,10 @@ each stage either annotates the failure or moves on:
 5. **build-snap** — `snapcore/action-build`, uploads .snap artifact.
 6. **publish-snap** — releases to `stable`, `candidate` and `beta`.
 7. **bundle-extension** — `gnome-extensions pack` → versioned zip.
-8. **github-release** — creates the GH Release with all artifacts and
-   the auto-extracted CHANGELOG section as the body. It runs only when
-   every publish job before it succeeded.
+8. **github-release** — creates the GH Release with all artifacts.
+   `scripts/release-notes.py` writes the body to a file: the CHANGELOG
+   section, then the Assets table. It runs only when every publish job
+   before it succeeded.
 9. **publish-aur** — refreshes `aur/PKGBUILD` and `aur/.SRCINFO` with
    `scripts/update-aur.sh` and pushes to
    `ssh://aur@aur.archlinux.org/clipman-clipboard.git`. Skipped with a
