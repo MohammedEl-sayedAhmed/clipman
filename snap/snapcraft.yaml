@@ -1,5 +1,5 @@
 name: clipman
-version: '1.2.1'
+version: '1.3.0'
 summary: Clipboard history for GNOME on Wayland — like Win+V for Linux
 description: |
   A fast, native clipboard manager for GNOME on Wayland. Press Super+V
