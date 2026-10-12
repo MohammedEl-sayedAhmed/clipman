@@ -6,7 +6,7 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: Clipman 1.2.1\n"
+"Project-Id-Version: Clipman 1.3.0\n"
 "Report-Msgid-Bugs-To: https://github.com/MohammedEl-sayedAhmed/clipman/issues\n"
 "POT-Creation-Date: \n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
@@ -17,7 +17,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: clipman/app.py:275 clipman/edge_states.py:223 clipman/preferences.py:784
+#: clipman/app.py:281 clipman/edge_states.py:223 clipman/preferences.py:784
 #: clipman/preferences.py:855
 msgid "Restore from backup"
 msgstr ""

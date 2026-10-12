@@ -63,11 +63,11 @@ Per-channel auth, so you know what to rotate when something expires:
   regardless of the support window above — a critical fix lands on
   every still-supported MINOR, and a sufficiently severe issue may
   trigger an out-of-band patch on an otherwise-EOL line.
-- Currently supported lines (as of v1.2.1), matching the table in
+- Currently supported lines (as of v1.3.0), matching the table in
   `SECURITY.md`:
-  - **1.2.x** — full support (latest MINOR).
-  - **1.1.x** and older — unsupported. (No 1.1.x patch release was
-    ever made.)
+  - **1.3.x** — full support (latest MINOR).
+  - **1.2.x** and older — unsupported. 1.2.1 was the last 1.2.x
+    release, and no 1.1.x patch release was ever made.
 
 ## Deprecation policy
 

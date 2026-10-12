@@ -4,6 +4,18 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-12
+
+A large reliability release, built on a full audit of the app, the
+GNOME Shell extension, packaging, CI and the docs, with fixes from two
+outside contributors, Thomas Roder and jendermine. The PyPI package
+starts again (1.2.1 could not). The extension (version 9) supports
+GNOME Shell 51, and incognito now pauses it too. Restoring a backup can
+no longer lose the history, the secret detector no longer deletes
+ordinary clips, and screen readers get names for the popup's controls
+and clip rows. The snap now uses the GNOME runtime instead of shipping
+its own GTK.
+
 ### Fixed — fallback clipboard watcher could pin a CPU core
 
 - A broken `wl-paste --watch` pipe left the GLib IO watch alive (read
