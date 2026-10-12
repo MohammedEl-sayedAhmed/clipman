@@ -4,6 +4,15 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Fixed — release notes on GitHub Releases
+
+- The v1.3.0 GitHub Release was published without its notes. GitHub
+  dropped the job output that carried them, because it thought the
+  output might contain a secret. The release job now writes the notes
+  to a file with `scripts/release-notes.py`, and pre-flight stops a
+  release whose CHANGELOG has no notes before anything is published.
+  The v1.3.0 notes were put back by hand.
+
 ## [1.3.0] - 2026-10-12
 
 A large reliability release, built on a full audit of the app, the

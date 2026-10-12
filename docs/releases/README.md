@@ -31,7 +31,7 @@ flowchart TD
     classDef final   fill:#fee2e2,stroke:#dc2626,color:#991b1b
 
     Tag["push tag v*.*.*"]:::trigger
-    PF["pre-flight<br/>tag/version sanity<br/>+ extract CHANGELOG section"]:::gate
+    PF["pre-flight<br/>tag/version sanity<br/>+ CHANGELOG has notes"]:::gate
     Tests["tests<br/>Python 3.10 to 3.14"]:::gate
 
     BPyPI["build-pypi<br/>wheel + sdist"]:::build
@@ -42,7 +42,7 @@ flowchart TD
     PPyPI["publish-pypi<br/>OIDC trusted publishing"]:::publish
     PSnap["publish-snap<br/>stable, candidate, beta"]:::publish
 
-    Release["github-release<br/>attaches all artifacts<br/>body = CHANGELOG section + templated Assets table"]:::final
+    Release["github-release<br/>attaches all artifacts<br/>body = release-notes.py: CHANGELOG section + Assets table"]:::final
 
     Tag --> PF --> Tests
     Tests --> BPyPI
