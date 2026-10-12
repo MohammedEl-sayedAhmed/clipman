@@ -180,6 +180,13 @@ Dependabot's weekly `github-actions` ecosystem updates keep the pins
 current. Review each Dependabot PR to confirm the new pin is a
 commit SHA, not a tag-object SHA, before merging.
 
+For `pip`, Dependabot uses `versioning-strategy: increase-if-necessary`.
+It leaves a version range in `pyproject.toml` alone while a new release
+already fits it, so it does not raise the lowest supported PyGObject,
+dbus-python or setuptools on every release. It still opens a PR for an
+exact pin (ruff, pytest), and for a release outside a range, such as a
+PyGObject past the test extra's cap.
+
 ## Branch protection and required checks
 
 Required status checks on `main` (from

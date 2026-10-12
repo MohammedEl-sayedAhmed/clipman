@@ -7,6 +7,13 @@ updates:
       day: monday
       time: "04:00"
     open-pull-requests-limit: 5
+    # Leave a range alone while the new release already fits it, and
+    # change it only when a release falls outside it. The default raised
+    # the floor of every range on each release (#349, #350, #356, #361),
+    # which would make contributors on Ubuntu 24.04 build PyGObject and
+    # dbus-python from source. Exact pins (ruff, pytest) still get a PR
+    # for every release.
+    versioning-strategy: increase-if-necessary
     labels:
       - dependencies
       - python
