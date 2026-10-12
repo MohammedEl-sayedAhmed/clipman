@@ -19,7 +19,7 @@ optdepends=(
 )
 _srcname=clipman
 source=("$_srcname-$pkgver.tar.gz::https://github.com/MohammedEl-sayedAhmed/clipman/archive/v$pkgver.tar.gz")
-sha256sums=('c129056324b3b25dbdb10989c866e69d13a511626cfa2682ce094851aa6be4d5')
+sha256sums=('1ae443fe29e43e71d97e2b669648ed8e775fc014e2fb80b5113a2e3c8a63705e')
 
 package() {
     cd "$srcdir/$_srcname-$pkgver"
