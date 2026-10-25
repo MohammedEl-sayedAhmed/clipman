@@ -1,17 +1,17 @@
 {
   "_comment": "Refreshed daily by .github/workflows/refresh-stats.yml onto the stats branch. docs/index.html reads it from raw.githubusercontent.com, because the browser cannot read PyPI stats or extensions.gnome.org directly (no CORS).",
-  "updated_at": "2026-10-24T10:39:45Z",
+  "updated_at": "2026-10-25T11:02:56Z",
   "pypi": {
     "package": "clipman-clipboard",
-    "last_day": 0,
-    "last_week": 17,
+    "last_day": 2,
+    "last_week": 15,
     "last_month": 77,
     "source": "https://pypistats.org/api/packages/clipman-clipboard/recent"
   },
   "gnome": {
     "extension_id": 9407,
     "uuid": "clipman@clipman.com",
-    "downloads": 7717,
+    "downloads": 7749,
     "source": "https://extensions.gnome.org/extension-info/?pk=9407"
   }
 }
