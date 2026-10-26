@@ -4,6 +4,13 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Fixed — Escape did not close the popup while typing a search
+
+- The popup opens with the caret in the search box, and Gtk.SearchEntry
+  handles Escape itself, so the window's Escape shortcut never ran and
+  the popup stayed open. The search box's stop-search signal now closes
+  the popup too. Dialogs inside the popup keep their own Escape.
+
 ### Fixed — release notes on GitHub Releases
 
 - The v1.3.0 GitHub Release was published without its notes. GitHub
