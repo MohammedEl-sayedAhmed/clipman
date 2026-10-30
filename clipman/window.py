@@ -706,6 +706,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
             [Gtk.AccessibleProperty.LABEL], [_("Search clipboard history")]
         )
         self.search_entry.connect("search-changed", self._on_search_changed)
+        # Gtk.SearchEntry consumes Escape itself (its stop-search binding),
+        # so the window's key controller never sees it while the caret is
+        # in the field, which is where every open puts it. Close from the
+        # signal instead; in-window dialogs keep their own Escape handling.
+        self.search_entry.connect("stop-search", lambda _entry: self._hide())
         # Right-aligned keyboard hint inside the field (mockup's ⌘/ chip);
         # "/" focuses the search from anywhere in the popup.
         search_overlay = Gtk.Overlay()

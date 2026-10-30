@@ -1397,6 +1397,14 @@ class TestKeyboardShortcuts(_WidgetTestCase):
         # Falls back to index 0 (most-recent entry) when nothing selected.
         self.assertIs(item, window._store.get_item(0))
 
+    def test_escape_in_search_entry_hides_popup(self):
+        # The entry swallows Escape and emits stop-search instead, so the
+        # window's own Escape shortcut never fires while search has focus.
+        _db, window = self._seeded_window()
+        window._hide = MagicMock()
+        window.search_entry.emit("stop-search")
+        window._hide.assert_called_once_with()
+
     def test_selected_item_prefers_selection(self):
         _db, window = self._seeded_window()
         window._selection.set_selected(1)
