@@ -108,8 +108,12 @@ specific assistant.
 - Colors flow through `@define-color` tokens injected by `window.py`
   (`@clip_dim`, `@type_*`, accent overrides) — never hardcode a hex in
   `style.css` when a token exists.
-- Prefer inline **Mermaid** diagrams (rendered natively on GitHub) in PRs,
-  issues, and docs.
+- Diagrams in the docs are designed SVGs, not Mermaid: numbered columns of
+  cards with labelled lines, a light and a dark version, drawn from the
+  design tokens by `scripts/diagrams.py` and shown with `<picture>`. Change
+  a diagram there, run the script, and commit the SVGs it writes
+  (`tests/test_diagrams.py` fails when they are out of date). Inline
+  Mermaid is still fine in PRs and issues.
 
 ## Release chain (v-tag driven)
 

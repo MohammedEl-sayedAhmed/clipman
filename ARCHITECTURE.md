@@ -202,61 +202,46 @@ No analytics, no crash reporting, no third-party services.
 ## Architecture diagram
 
 <p align="center">
-  <img src="docs/architecture.svg"
-       alt="Clipman architecture: GNOME Shell extension and Python/GTK 4 + libadwaita daemon communicate over D-Bus; clipboard changes flow from the Wayland clipboard via owner-changed signals through the extension (the wl-paste fallback cannot run on GNOME) into the daemon, which deduplicates by SHA256 and persists to a SQLite WAL store."
-       width="100%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/architecture-dark.svg">
+    <img src="docs/diagrams/architecture-light.svg" width="100%"
+         alt="Clipman architecture in four columns: your session (apps, you, the GNOME shortcut), GNOME Shell (the Wayland clipboard and the Clipman extension), the Clipman daemon (clipboard monitor, D-Bus service, popup window, update check) and disk and network (images/, clipman.db and the GitHub Releases API). Copies flow from an app through the clipboard and the extension to the daemon, which stores them; Super+V shows the popup, which pastes through wl-copy and the extension.">
+  </picture>
 </p>
 
 <details>
-<summary>Diagram source (Mermaid fallback / text version)</summary>
+<summary>Read the diagram as a list</summary>
 
-```mermaid
-flowchart LR
-    classDef user fill:#dbeafe,stroke:#3b82f6,color:#1e40af
-    classDef gshell fill:#fef3c7,stroke:#d97706,color:#92400e
-    classDef daemon fill:#dcfce7,stroke:#16a34a,color:#166534
-    classDef storage fill:#f3e8ff,stroke:#9333ea,color:#6b21a8
+**Capture a copy**
 
-    User((User)):::user
-    App["Any GTK / Qt / Electron / terminal app"]:::user
+1. An app copies to the Wayland clipboard.
+2. The Clipman extension sees the `owner-changed` signal and sends the
+   text to the daemon's D-Bus service with `NewEntry`. The daemon reads
+   an image with `wl-paste --type image/png`.
+3. The clipboard monitor drops a duplicate by its SHA-256 hash, checks
+   for secrets, and stores the clip in `clipman.db` (SQLite, WAL). Image
+   files go to `images/`.
 
-    subgraph SHELL ["GNOME Shell"]
-        Ext["clipman extension<br/>extension.js"]:::gshell
-        KB["custom-keybinding<br/>(gsettings)"]:::gshell
-    end
+**Paste**
 
-    Clip["Wayland clipboard"]:::gshell
+1. You press Super+V. The GNOME shortcut runs `clipman toggle`, which
+   calls `Toggle` on the D-Bus service, and the popup opens with the
+   history from `clipman.db`.
+2. When you pick a clip, the popup puts it on the clipboard with
+   `wl-copy`. Over D-Bus it asks the extension to give focus back to
+   your app (`RestorePreviousFocus`) and to type the paste keys
+   (`SimulatePaste`).
 
-    subgraph DAEMON ["clipman daemon (Python, GTK 4 + libadwaita)"]
-        DbusSvc["dbus_service.py<br/>(com.clipman.Daemon)"]:::daemon
-        Monitor["clipboard_monitor.py<br/>(dedupe + sensitive detect)"]:::daemon
-        Window["window.py<br/>(GTK popup + settings)"]:::daemon
-        Fallback["wl-paste --watch<br/>(not on GNOME)"]:::daemon
-    end
+**Around it**
 
-    DB[("SQLite WAL<br/>~/.local/share/clipman/")]:::storage
-
-    App -->|Ctrl+C| Clip
-    Clip -. owner-changed .-> Ext
-    Clip -. owner-changed .-> Fallback
-    Ext -->|D-Bus: NewEntry text or image| DbusSvc
-    Fallback --> DbusSvc
-
-    DbusSvc --> Monitor
-    Monitor -->|SHA256 dedup| DB
-
-    User -->|Super+V| KB
-    KB -->|launcher.sh toggle| DbusSvc
-    DbusSvc -->|Toggle| Window
-    Window <-->|history + snippets| DB
-
-    User -->|click entry| Window
-    Window -->|wl-copy| Clip
-    Window -->|D-Bus: SimulatePaste mode| Ext
-    Ext -->|virtual keyboard| App
-```
+- The daemon runs as a systemd user service.
+- Its only network call is the opt-in update check: one HTTPS GET to
+  the GitHub Releases API a day, on a background thread.
 
 </details>
+
+`scripts/diagrams.py` draws this diagram and the release pipeline, in a
+light and a dark version. Change the drawing there, then run it.
 
 ## Decision records
 

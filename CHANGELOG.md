@@ -11,6 +11,16 @@ All notable changes to Clipman are documented in this file.
   the popup stayed open. The search box's stop-search signal now closes
   the popup too. Dialogs inside the popup keep their own Escape.
 
+### Changed — diagrams in the docs
+
+- The architecture diagram is redrawn from the current code, and the
+  release pipeline diagram replaces the two Mermaid charts of it. Both
+  are designed SVGs in numbered columns of cards with labelled lines,
+  in a light and a dark version that follows the reader's GitHub theme.
+  `scripts/diagrams.py` draws them from the design tokens, and a test
+  checks that the files are up to date, that every label fits its box,
+  and that text and lines keep the project's contrast rules.
+
 ### Fixed — release notes on GitHub Releases
 
 - The v1.3.0 GitHub Release was published without its notes. GitHub
