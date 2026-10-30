@@ -32,40 +32,15 @@ The required context `review` is the job in `dependency-review.yml`.
 tests, which then fan out into the parallel build jobs, which in turn
 gate the parallel publish jobs.
 
-```mermaid
-flowchart TD
-    PF[pre-flight]
-    T[tests<br/>Python 3.10 to 3.14]
-    BP[build-pypi]
-    BS[build-snap]
-    BD[build-distpkgs]
-    BE[bundle-extension]
-    PP[publish-pypi]
-    PS[publish-snap]
-    GR[github-release]
-    PA[publish-aur]
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="diagrams/release-pipeline-dark.svg">
+    <img src="diagrams/release-pipeline-light.svg" width="100%"
+         alt="The release pipeline in four columns. Start: a version tag starts release.yml, then pre-flight and the tests on Python 3.10 to 3.14. Build: build-pypi, build-snap, bundle-extension and build-distpkgs run side by side. Publish: publish-pypi and publish-snap. Release: github-release after every publish, then publish-aur; the extension zip is uploaded to extensions.gnome.org by hand.">
+  </picture>
+</p>
 
-    PF --> T
-    T --> BP
-    T --> BS
-    T --> BD
-    T --> BE
-    PF --> BP
-    PF --> BS
-    PF --> BD
-    PF --> BE
-    BP --> PP
-    PF --> PP
-    BS --> PS
-    PF --> PS
-    PP --> GR
-    PS --> GR
-    BD --> GR
-    BE --> GR
-    PF --> GR
-    GR --> PA
-    PF --> PA
-```
+<sub>Drawn by `scripts/diagrams.py`; `release.yml` has the authoritative `needs:`.</sub>
 
 Per-job notes (consult `release.yml` for the authoritative `needs:`
 graph and step contents):

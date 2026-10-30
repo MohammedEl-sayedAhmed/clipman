@@ -1,0 +1,209 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1164 642" width="1164" height="642" role="img" aria-labelledby="title desc" font-family="Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Noto Sans', Cantarell, Arial, sans-serif">
+<title id="title">Clipman architecture</title>
+<desc id="desc">Capture: an app copies to the Wayland clipboard. The Clipman GNOME Shell extension sees the owner-changed signal and sends the text to the daemon's D-Bus service with NewEntry; images are read with wl-paste. The clipboard monitor drops duplicates by SHA-256 hash, checks for secrets, and stores the clip in clipman.db (SQLite, WAL) and images/. Paste: Super+V runs clipman toggle, which calls Toggle on the D-Bus service to show the popup. The popup reads the history, puts the chosen clip on the clipboard with wl-copy, and asks the extension to give focus back and type the paste keys into the app. The daemon runs as a systemd user service; its only network call is an opt-in daily update check to the GitHub Releases API.</desc>
+<defs>
+<pattern id="hatch-amber" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#f9e2af" stroke-width="1.4" stroke-opacity="0.1"/></pattern>
+<pattern id="hatch-blue" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#89b4fa" stroke-width="1.4" stroke-opacity="0.1"/></pattern>
+<pattern id="hatch-gray" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#bac2de" stroke-width="1.4" stroke-opacity="0.1"/></pattern>
+<pattern id="hatch-green" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#a6e3a1" stroke-width="1.4" stroke-opacity="0.1"/></pattern>
+<pattern id="hatch-violet" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#cba6f7" stroke-width="1.4" stroke-opacity="0.1"/></pattern>
+</defs>
+<rect x="0.5" y="0.5" width="1163" height="641" rx="16" fill="#1e1e2e" stroke="#313244"/>
+<rect x="20" y="20" width="224" height="564" rx="14" fill="#181825" stroke="#313244"/>
+<circle cx="46" cy="48" r="11" fill="#313244"/>
+<text x="46" y="52" font-size="12" font-weight="700" text-anchor="middle" fill="#cdd6f4">1</text>
+<text x="65" y="53" font-size="15" font-weight="700" fill="#cdd6f4">Your session</text>
+<text x="36" y="76" font-size="12" fill="#a6adc8">apps, keys and shortcuts</text>
+<rect x="320" y="20" width="224" height="564" rx="14" fill="#181825" stroke="#313244"/>
+<circle cx="346" cy="48" r="11" fill="#313244"/>
+<text x="346" y="52" font-size="12" font-weight="700" text-anchor="middle" fill="#cdd6f4">2</text>
+<text x="365" y="53" font-size="15" font-weight="700" fill="#cdd6f4">GNOME Shell</text>
+<text x="336" y="76" font-size="12" fill="#a6adc8">Mutter and the extension</text>
+<rect x="620" y="20" width="224" height="564" rx="14" fill="#181825" stroke="#313244"/>
+<circle cx="646" cy="48" r="11" fill="#313244"/>
+<text x="646" y="52" font-size="12" font-weight="700" text-anchor="middle" fill="#cdd6f4">3</text>
+<text x="665" y="53" font-size="15" font-weight="700" fill="#cdd6f4">Clipman daemon</text>
+<text x="636" y="76" font-size="12" fill="#a6adc8">Python · systemd user service</text>
+<rect x="920" y="20" width="224" height="564" rx="14" fill="#181825" stroke="#313244"/>
+<circle cx="946" cy="48" r="11" fill="#313244"/>
+<text x="946" y="52" font-size="12" font-weight="700" text-anchor="middle" fill="#cdd6f4">4</text>
+<text x="965" y="53" font-size="15" font-weight="700" fill="#cdd6f4">Disk and network</text>
+<text x="936" y="76" font-size="12" fill="#a6adc8">local files, one opt-in call</text>
+<g>
+<rect x="34" y="90" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="34" y="90" width="196" height="92" rx="12" fill="url(#hatch-blue)"/>
+<rect x="34.75" y="90.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#89b4fa" stroke-width="1.5" stroke-opacity="0.7"/>
+<rect x="48" y="104" width="99.02" height="20" rx="10" fill="#89b4fa" fill-opacity="0.14"/><text x="56" y="117.96" font-size="11" font-weight="600" fill="#89b4fa">Wayland client</text>
+<g transform="translate(200 106)" fill="none" stroke="#89b4fa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M1.5 5.5h13M4 4h.01M6 4h.01"/></g>
+<text x="48" y="148" font-size="15" font-weight="700" fill="#cdd6f4">Any app</text>
+<text x="48" y="168" font-size="12" fill="#bac2de">copies, gets the paste</text>
+</g>
+<g>
+<rect x="34" y="218" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="34" y="218" width="196" height="92" rx="12" fill="url(#hatch-blue)"/>
+<rect x="34.75" y="218.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#89b4fa" stroke-width="1.5" stroke-opacity="0.7"/>
+<rect x="48" y="232" width="67.19" height="20" rx="10" fill="#89b4fa" fill-opacity="0.14"/><text x="56" y="245.96" font-size="11" font-weight="600" fill="#89b4fa">keyboard</text>
+<g transform="translate(200 234)" fill="none" stroke="#89b4fa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.2" r="2.7"/><path d="M2.8 14c0-2.9 2.3-4.6 5.2-4.6s5.2 1.7 5.2 4.6"/></g>
+<text x="48" y="276" font-size="15" font-weight="700" fill="#cdd6f4">You</text>
+<text x="48" y="296" font-size="12" fill="#bac2de">press Super+V</text>
+</g>
+<g>
+<rect x="34" y="346" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="34" y="346" width="196" height="92" rx="12" fill="url(#hatch-blue)"/>
+<rect x="34.75" y="346.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#89b4fa" stroke-width="1.5" stroke-opacity="0.7"/>
+<rect x="48" y="360" width="68.7" height="20" rx="10" fill="#89b4fa" fill-opacity="0.14"/><text x="56" y="373.96" font-size="11" font-weight="600" fill="#89b4fa">gsettings</text>
+<g transform="translate(200 362)" fill="none" stroke="#89b4fa" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="4" width="13" height="8.5" rx="1.8"/><path d="M4 7h.01M6.7 7h.01M9.3 7h.01M12 7h.01M5 10h6"/></g>
+<text x="48" y="404" font-size="15" font-weight="700" fill="#cdd6f4">GNOME shortcut</text>
+<text x="48" y="424" font-size="12" fill="#bac2de">runs clipman toggle</text>
+</g>
+<g>
+<rect x="334" y="90" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="334" y="90" width="196" height="92" rx="12" fill="url(#hatch-amber)"/>
+<rect x="334.75" y="90.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#f9e2af" stroke-width="1.5" stroke-opacity="0.7"/>
+<rect x="348" y="104" width="78.73" height="20" rx="10" fill="#f9e2af" fill-opacity="0.14"/><text x="356" y="117.96" font-size="11" font-weight="600" fill="#f9e2af">compositor</text>
+<g transform="translate(500 106)" fill="none" stroke="#f9e2af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="10" height="11.5" rx="1.8"/><rect x="5.6" y="1.5" width="4.8" height="3" rx="1"/></g>
+<text x="348" y="148" font-size="15" font-weight="700" fill="#cdd6f4">Wayland clipboard</text>
+<text x="348" y="168" font-size="12" fill="#bac2de">Meta.Selection (Mutter)</text>
+</g>
+<g>
+<rect x="334" y="218" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="334" y="218" width="196" height="92" rx="12" fill="url(#hatch-amber)"/>
+<rect x="334.75" y="218.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#f9e2af" stroke-width="1.5" stroke-opacity="0.7"/>
+<rect x="348" y="232" width="63.22" height="20" rx="10" fill="#f9e2af" fill-opacity="0.14"/><text x="356" y="245.96" font-size="11" font-weight="600" fill="#f9e2af">gjs · v9</text>
+<g transform="translate(500 234)" fill="none" stroke="#f9e2af" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5h2.6a1.6 1.6 0 1 1 3.2 0H11.5v2.6a1.6 1.6 0 1 1 0 3.2V14H3z"/></g>
+<text x="348" y="276" font-size="15" font-weight="700" fill="#cdd6f4">Clipman extension</text>
+<text x="348" y="296" font-size="12" fill="#bac2de">sees copies, types pastes</text>
+</g>
+<g>
+<rect x="634" y="90" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="634" y="90" width="196" height="92" rx="12" fill="url(#hatch-violet)"/>
+<rect x="634.75" y="90.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#cba6f7" stroke-width="1.5" stroke-opacity="0.7"/>
+<rect x="648" y="104" width="55.18" height="20" rx="10" fill="#cba6f7" fill-opacity="0.14"/><text x="656" y="117.96" font-size="11" font-weight="600" fill="#cba6f7">Python</text>
+<g transform="translate(800 106)" fill="none" stroke="#cba6f7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/></g>
+<text x="648" y="148" font-size="15" font-weight="700" fill="#cdd6f4">Clipboard monitor</text>
+<text x="648" y="168" font-size="12" fill="#bac2de">dedupe, secret check</text>
+</g>
+<g>
+<rect x="634" y="218" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="634" y="218" width="196" height="92" rx="12" fill="url(#hatch-violet)"/>
+<rect x="634.75" y="218.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#cba6f7" stroke-width="1.5" stroke-opacity="0.7"/>
+<rect x="648" y="232" width="83.98" height="20" rx="10" fill="#cba6f7" fill-opacity="0.14"/><text x="656" y="245.96" font-size="11" font-weight="600" fill="#cba6f7">session bus</text>
+<g transform="translate(800 234)" fill="none" stroke="#cba6f7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="3.5" cy="8" r="1.8"/><circle cx="12.5" cy="3.8" r="1.8"/><circle cx="12.5" cy="12.2" r="1.8"/><path d="M5.2 7.2l5.6-2.6M5.2 8.8l5.6 2.6"/></g>
+<text x="648" y="276" font-size="15" font-weight="700" fill="#cdd6f4">D-Bus service</text>
+<text x="648" y="296" font-size="12" fill="#bac2de">com.clipman.Daemon</text>
+</g>
+<g>
+<rect x="634" y="346" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="634" y="346" width="196" height="92" rx="12" fill="url(#hatch-violet)"/>
+<rect x="634.75" y="346.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#cba6f7" stroke-width="1.5" stroke-opacity="0.7"/>
+<rect x="648" y="360" width="92.96" height="20" rx="10" fill="#cba6f7" fill-opacity="0.14"/><text x="656" y="373.96" font-size="11" font-weight="600" fill="#cba6f7">GTK 4 + Adw</text>
+<g transform="translate(800 362)" fill="none" stroke="#cba6f7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2" width="13" height="12" rx="2"/><path d="M4.5 6h7M4.5 8.6h7M4.5 11.2h4.5"/></g>
+<text x="648" y="404" font-size="15" font-weight="700" fill="#cdd6f4">Popup window</text>
+<text x="648" y="424" font-size="12" fill="#bac2de">history and snippets</text>
+</g>
+<g>
+<rect x="634" y="474" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="634.75" y="474.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#cba6f7" stroke-width="1.5" stroke-opacity="0.7" stroke-dasharray="5 4"/>
+<rect x="648" y="488" width="48.76" height="20" rx="10" fill="#cba6f7" fill-opacity="0.14"/><text x="656" y="501.96" font-size="11" font-weight="600" fill="#cba6f7">opt-in</text>
+<g transform="translate(800 490)" fill="none" stroke="#cba6f7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.8"/><path d="M13.2 2.2v2.7h-2.7"/></g>
+<text x="648" y="532" font-size="15" font-weight="700" fill="#cdd6f4">Update check</text>
+<text x="648" y="552" font-size="12" fill="#bac2de">once a day, in a thread</text>
+</g>
+<g>
+<rect x="934" y="90" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="934" y="90" width="196" height="92" rx="12" fill="url(#hatch-green)"/>
+<rect x="934.75" y="90.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#a6e3a1" stroke-width="1.5" stroke-opacity="0.7"/>
+<rect x="948" y="104" width="83.51" height="20" rx="10" fill="#a6e3a1" fill-opacity="0.14"/><text x="956" y="117.96" font-size="11" font-weight="600" fill="#a6e3a1">files · 0600</text>
+<g transform="translate(1100 106)" fill="none" stroke="#a6e3a1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><circle cx="5.4" cy="6" r="1.2"/><path d="M2 12l3.8-3.3 2.8 2.3 2-1.6 3.4 2.9"/></g>
+<text x="948" y="148" font-size="15" font-weight="700" fill="#cdd6f4">images/</text>
+<text x="948" y="168" font-size="12" fill="#bac2de">PNG files named by hash</text>
+</g>
+<g>
+<rect x="934" y="218" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="934" y="218" width="196" height="92" rx="12" fill="url(#hatch-green)"/>
+<rect x="934.75" y="218.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#a6e3a1" stroke-width="1.5" stroke-opacity="0.7"/>
+<rect x="948" y="232" width="96.45" height="20" rx="10" fill="#a6e3a1" fill-opacity="0.14"/><text x="956" y="245.96" font-size="11" font-weight="600" fill="#a6e3a1">SQLite · WAL</text>
+<g transform="translate(1100 234)" fill="none" stroke="#a6e3a1" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="8" cy="3.8" rx="5" ry="2"/><path d="M3 3.8v8.4c0 1.1 2.2 2 5 2s5-.9 5-2V3.8"/><path d="M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/></g>
+<text x="948" y="276" font-size="15" font-weight="700" fill="#cdd6f4">clipman.db</text>
+<text x="948" y="296" font-size="12" fill="#bac2de">clips, snippets, settings</text>
+</g>
+<g>
+<rect x="934" y="474" width="196" height="92" rx="12" fill="#1e1e2e"/>
+<rect x="934.75" y="474.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#bac2de" stroke-width="1.5" stroke-opacity="0.7" stroke-dasharray="5 4"/>
+<rect x="948" y="488" width="104.38" height="20" rx="10" fill="#bac2de" fill-opacity="0.14"/><text x="956" y="501.96" font-size="11" font-weight="600" fill="#bac2de">HTTPS · opt-in</text>
+<g transform="translate(1100 490)" fill="none" stroke="#bac2de" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.2"/><ellipse cx="8" cy="8" rx="2.6" ry="6.2"/><path d="M1.8 8h12.4"/></g>
+<text x="948" y="532" font-size="15" font-weight="700" fill="#cdd6f4">GitHub Releases API</text>
+<text x="948" y="552" font-size="12" fill="#bac2de">the latest release</text>
+</g>
+<path d="M230 122 L334 122" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M334 122 L327 118 L327 126 Z" fill="#9399b2"/>
+<path d="M432 182 L432 218" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M432 218 L428 211 L436 211 Z" fill="#9399b2"/>
+<path d="M530 122 L634 122" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M634 122 L627 118 L627 126 Z" fill="#9399b2"/>
+<path d="M530 250 L634 250" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M634 250 L627 246 L627 254 Z" fill="#9399b2"/>
+<path d="M530 250 L537 246 L537 254 Z" fill="#9399b2"/>
+<path d="M732 218 L732 182" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M732 182 L728 189 L736 189 Z" fill="#9399b2"/>
+<path d="M732 310 L732 346" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M732 346 L728 339 L736 339 Z" fill="#9399b2"/>
+<path d="M830 122 L934 122" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M934 122 L927 118 L927 126 Z" fill="#9399b2"/>
+<path d="M830 152 L874 152 Q882 152 882 160 L882 242 Q882 250 890 250 L934 250" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M934 250 L927 246 L927 254 Z" fill="#9399b2"/>
+<path d="M830 392 L886 392 Q894 392 894 384 L894 288 Q894 280 902 280 L934 280" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M934 280 L927 276 L927 284 Z" fill="#9399b2"/>
+<path d="M830 392 L837 388 L837 396 Z" fill="#9399b2"/>
+<path d="M132 310 L132 346" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M132 346 L128 339 L136 339 Z" fill="#9399b2"/>
+<path d="M230 376 L265.6 376 A5 5 0 0 1 275.6 376 L574 376 Q582 376 582 368 L582 290 Q582 282 590 282 L634 282" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M634 282 L627 278 L627 286 Z" fill="#9399b2"/>
+<path d="M634 408 L278.6 408 Q270.6 408 270.6 400 L270.6 208 Q270.6 200 278.6 200 L288.4 200 A5 5 0 0 1 298.4 200 L354 200 Q362 200 362 192 L362 182" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M362 182 L358 189 L366 189 Z" fill="#9399b2"/>
+<path d="M334 264 L301.4 264 Q293.4 264 293.4 256 L293.4 160 Q293.4 152 285.4 152 L230 152" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M230 152 L237 148 L237 156 Z" fill="#9399b2"/>
+<path d="M830 520 L934 520" fill="none" stroke="#9399b2" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 5"/>
+<path d="M934 520 L927 516 L927 524 Z" fill="#9399b2"/>
+<rect x="256.68" y="112" width="50.65" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="282" y="126" font-size="11" text-anchor="middle" fill="#bac2de">copies</text>
+<rect x="383.52" y="190" width="96.96" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="432" y="204" font-size="11" text-anchor="middle" fill="#bac2de">owner-changed</text>
+<rect x="550.68" y="112" width="62.64" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="582" y="126" font-size="11" text-anchor="middle" fill="#bac2de">wl-paste</text>
+<rect x="558.05" y="240" width="47.9" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="582" y="254" font-size="11" text-anchor="middle" fill="#bac2de">D-Bus</text>
+<rect x="697.99" y="190" width="68.03" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="732" y="204" font-size="11" text-anchor="middle" fill="#bac2de">NewEntry</text>
+<rect x="706.07" y="318" width="51.86" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="732" y="332" font-size="11" text-anchor="middle" fill="#bac2de">Toggle</text>
+<rect x="858.22" y="112" width="47.57" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="882" y="126" font-size="11" text-anchor="middle" fill="#bac2de">image</text>
+<rect x="851.17" y="191" width="61.65" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="882" y="205" font-size="11" text-anchor="middle" fill="#bac2de">SHA-256</text>
+<rect x="867.41" y="326" width="53.18" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="894" y="340" font-size="11" text-anchor="middle" fill="#bac2de">history</text>
+<rect x="101.18" y="318" width="61.65" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="132" y="332" font-size="11" text-anchor="middle" fill="#bac2de">Super+V</text>
+<rect x="362.84" y="366" width="94.32" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="410" y="380" font-size="11" text-anchor="middle" fill="#bac2de">clipman toggle</text>
+<rect x="241.48" y="294" width="58.24" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="270.6" y="308" font-size="11" text-anchor="middle" fill="#bac2de">wl-copy</text>
+<rect x="255.92" y="226" width="74.96" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="293.4" y="240" font-size="11" text-anchor="middle" fill="#bac2de">paste keys</text>
+<rect x="841.88" y="510" width="80.24" height="20" rx="10" fill="#1e1e2e" stroke="#45475a"/>
+<text x="882" y="524" font-size="11" text-anchor="middle" fill="#bac2de">HTTPS GET</text>
+<path d="M26 614 L60 614" stroke="#9399b2" stroke-width="1.5"/>
+<path d="M62 614 L55 610 L55 618 Z" fill="#9399b2"/>
+<text x="72" y="618" font-size="12" fill="#a6adc8">calls or data</text>
+<path d="M180.28 614 L214.28 614" stroke="#9399b2" stroke-width="1.5" stroke-dasharray="6 5"/>
+<path d="M216.28 614 L209.28 610 L209.28 618 Z" fill="#9399b2"/>
+<text x="226.28" y="618" font-size="12" fill="#a6adc8">optional or by hand</text>
+<path d="M373.56 614 L407.56 614" stroke="#9399b2" stroke-width="1.5"/>
+<path d="M409.56 614 L402.56 610 L402.56 618 Z" fill="#9399b2"/>
+<path d="M371.56 614 L378.56 610 L378.56 618 Z" fill="#9399b2"/>
+<text x="419.56" y="618" font-size="12" fill="#a6adc8">both ways</text>
+<path d="M520.52 614 L532.52 614 A5 5 0 0 1 542.52 614 L554.52 614" fill="none" stroke="#9399b2" stroke-width="1.5"/>
+<path d="M537.52 604 L537.52 624" stroke="#9399b2" stroke-width="1.5"/>
+<text x="566.52" y="618" font-size="12" fill="#a6adc8">lines cross, they do not join</text>
+</svg>
