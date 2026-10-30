@@ -304,7 +304,7 @@ left sidebar). It carries six panes:
 | | Auto-clear delay | Seconds before detected sensitive entries are purged (default 30) |
 | | Purge sensitive entries now | Remove every stored sensitive entry, even when auto-clear is off |
 | **Shortcuts** | Toggle clipboard popup | Change the popup shortcut (default Super+V) with an in-app capture dialog. This changes the shortcut `install.sh` set up; [#283](https://github.com/MohammedEl-sayedAhmed/clipman/issues/283) tracks the other installs |
-| | When I select a clip | How Clipman pastes: **Auto-paste (best effort)** (the default: Ctrl+Shift+V in terminal apps, Ctrl+V elsewhere), **Simulate Ctrl+V**, **Simulate Ctrl+Shift+V**, or **Simulate Shift+Insert** |
+| | When I select a clip | How Clipman pastes: **Auto-paste (best effort)** (the default: Ctrl+Shift+V in terminal apps, Ctrl+V elsewhere), **Simulate Ctrl+V**, **Simulate Ctrl+Shift+V**, **Simulate Shift+Insert**, or **Copy to clipboard**, which only copies the clip and leaves the paste to you |
 | **Storage** | Maximum entries to keep | Number of entries to keep (50–5,000) |
 | | Database location | Path to the SQLite database |
 | | Export backup / Restore from backup | Export and import your clipboard database |
@@ -435,6 +435,7 @@ The following people have contributed code to Clipman.
     <td align="center" valign="top" width="16.67%"><a href="https://github.com/ngtw-j"><img src="https://avatars.githubusercontent.com/u/172234289?v=4&amp;s=160" width="80" height="80" alt="Josie Ng"/><br/><b>Josie Ng</b></a><br/><sub>Pull request <a href="https://github.com/MohammedEl-sayedAhmed/clipman/pull/5">#5</a></sub></td>
     <td align="center" valign="top" width="16.67%"><a href="https://github.com/MrTomRod"><img src="https://avatars.githubusercontent.com/u/40867365?v=4&amp;s=160" width="80" height="80" alt="Thomas Roder"/><br/><b>Thomas Roder</b></a><br/><sub>Pull request <a href="https://github.com/MohammedEl-sayedAhmed/clipman/pull/297">#297</a></sub></td>
     <td align="center" valign="top" width="16.67%"><a href="https://github.com/jendermine"><img src="https://avatars.githubusercontent.com/u/92355621?v=4&amp;s=160" width="80" height="80" alt="jendermine"/><br/><b>jendermine</b></a><br/><sub>Pull request <a href="https://github.com/MohammedEl-sayedAhmed/clipman/pull/354">#354</a></sub></td>
+    <td align="center" valign="top" width="16.67%"><a href="https://github.com/uAliAmer"><img src="https://avatars.githubusercontent.com/u/40583136?v=4&amp;s=160" width="80" height="80" alt="Ali Amer"/><br/><b>Ali Amer</b></a><br/><sub>Pull request <a href="https://github.com/MohammedEl-sayedAhmed/clipman/pull/370">#370</a></sub></td>
   </tr>
 </table>
 <!-- contributors:end -->

@@ -4,12 +4,30 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Added — copy without pasting
+
+- Preferences → Shortcuts → "When I select a clip" has a new choice,
+  **Copy to clipboard**. Picking a clip then copies it and gives focus
+  back to your window, but types no paste keys, so you paste when you
+  want ([#371](https://github.com/MohammedEl-sayedAhmed/clipman/issues/371)).
+  The design mockup already had this choice.
+
 ### Fixed — Escape did not close the popup while typing a search
 
 - The popup opens with the caret in the search box, and Gtk.SearchEntry
   handles Escape itself, so the window's Escape shortcut never ran and
   the popup stayed open. The search box's stop-search signal now closes
   the popup too. Dialogs inside the popup keep their own Escape.
+
+### Changed — diagrams in the docs
+
+- The architecture diagram is redrawn from the current code, and the
+  release pipeline diagram replaces the two Mermaid charts of it. Both
+  are designed SVGs in numbered columns of cards with labelled lines,
+  in a light and a dark version that follows the reader's GitHub theme.
+  `scripts/diagrams.py` draws them from the design tokens, and a test
+  checks that the files are up to date, that every label fits its box,
+  and that text and lines keep the project's contrast rules.
 
 ### Fixed — release notes on GitHub Releases
 

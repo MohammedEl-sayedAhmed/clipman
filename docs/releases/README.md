@@ -22,40 +22,15 @@ is pushed.
 
 ## Pipeline shape
 
-```mermaid
-flowchart TD
-    classDef trigger fill:#dbeafe,stroke:#3b82f6,color:#1e40af
-    classDef gate    fill:#fef3c7,stroke:#d97706,color:#92400e
-    classDef build   fill:#dcfce7,stroke:#16a34a,color:#166534
-    classDef publish fill:#ede9fe,stroke:#7c3aed,color:#5b21b6
-    classDef final   fill:#fee2e2,stroke:#dc2626,color:#991b1b
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../diagrams/release-pipeline-dark.svg">
+    <img src="../diagrams/release-pipeline-light.svg" width="100%"
+         alt="The release pipeline in four columns. Start: a version tag starts release.yml, then pre-flight and the tests on Python 3.10 to 3.14. Build: build-pypi, build-snap, bundle-extension and build-distpkgs run side by side. Publish: publish-pypi and publish-snap. Release: github-release after every publish, then publish-aur; the extension zip is uploaded to extensions.gnome.org by hand.">
+  </picture>
+</p>
 
-    Tag["push tag v*.*.*"]:::trigger
-    PF["pre-flight<br/>tag/version sanity<br/>+ CHANGELOG has notes"]:::gate
-    Tests["tests<br/>Python 3.10 to 3.14"]:::gate
-
-    BPyPI["build-pypi<br/>wheel + sdist"]:::build
-    BSnap["build-snap"]:::build
-    BExt["bundle-extension<br/>versioned zip"]:::build
-    BPkg["build-distpkgs<br/>.deb + .rpm via fpm"]:::build
-
-    PPyPI["publish-pypi<br/>OIDC trusted publishing"]:::publish
-    PSnap["publish-snap<br/>stable, candidate, beta"]:::publish
-
-    Release["github-release<br/>attaches all artifacts<br/>body = release-notes.py: CHANGELOG section + Assets table"]:::final
-
-    Tag --> PF --> Tests
-    Tests --> BPyPI
-    Tests --> BSnap
-    Tests --> BExt
-    Tests --> BPkg
-    BPyPI --> PPyPI
-    BSnap --> PSnap
-    BExt --> Release
-    BPkg --> Release
-    PPyPI --> Release
-    PSnap --> Release
-```
+<sub>Drawn by `scripts/diagrams.py`; `release.yml` has the authoritative `needs:`.</sub>
 
 ## Release assets
 

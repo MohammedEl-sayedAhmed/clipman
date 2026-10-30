@@ -1987,11 +1987,27 @@ class ClipmanWindow(Adw.ApplicationWindow):
         compositor and does work). Fall back to wtype/ydotool only when the
         extension is absent — other compositors, where wtype works and the
         popup never stole focus.
+
+        The "copy" mode (#371) stops after the copy: it gives focus back
+        and leaves the paste to the user.
         """
         mode = self.db.get_setting("paste_mode", "auto") or "auto"
+        if mode == "copy":
+            iface = self._shell_extension_iface()
+            if iface is not None:
+                self._restore_previous_focus(iface)
+            return
         if self._paste_via_shell(mode):
             return
         GLib.timeout_add(80, self._simulate_paste)
+
+    @staticmethod
+    def _restore_previous_focus(iface):
+        """Ask the extension to give focus back to the user's window."""
+        try:
+            iface.RestorePreviousFocus()
+        except Exception as exc:
+            logger.debug("Shell focus-restore failed: %s", exc, exc_info=True)
 
     def _paste_via_shell(self, mode):
         """Paste through the GNOME Shell extension.
@@ -2006,10 +2022,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         iface = self._shell_extension_iface()
         if iface is None:
             return False
-        try:
-            iface.RestorePreviousFocus()
-        except Exception as exc:
-            logger.debug("Shell focus-restore failed: %s", exc, exc_info=True)
+        self._restore_previous_focus(iface)
 
         # Give the compositor a frame to move focus onto the restored window
         # before the keys land, then inject via the Shell (not wtype).
