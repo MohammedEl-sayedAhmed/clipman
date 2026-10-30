@@ -711,6 +711,11 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # in the field, which is where every open puts it. Close from the
         # signal instead; in-window dialogs keep their own Escape handling.
         self.search_entry.connect("stop-search", lambda _entry: self._hide())
+        # Enter is the same: the entry's text widget keeps it for its own
+        # activate signal, so paste from that signal.
+        self.search_entry.connect(
+            "activate", lambda _entry: self._activate_selected()
+        )
         # Right-aligned keyboard hint inside the field (mockup's ⌘/ chip);
         # "/" focuses the search from anywhere in the popup.
         search_overlay = Gtk.Overlay()
@@ -2329,12 +2334,14 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._show_edge_state("restore-failed")
 
     def _on_key_pressed(self, _controller, keyval, _keycode, _state):
-        """Wire the shortcuts advertised in the footer hints.
+        """Wire the popup's keyboard shortcuts (listed in the README).
 
-        The footer promises ``↵ Paste · ⌫ Delete · P Pin · Esc Close``.
-        Escape/Enter work regardless of focus; Delete and P are gated on
-        the search entry NOT having focus so they stay usable as literal
-        text editing while the user is typing a query.
+        ``↵ Paste · ⌫ Delete · P Pin · Esc Close``. While the caret is in
+        the search box, the entry keeps Escape and Enter for itself, so
+        those two arrive through its ``stop-search`` and ``activate``
+        signals instead of here. Delete and P are gated on the search
+        entry NOT having focus so they stay usable as literal text
+        editing while the user is typing a query.
 
         Returns ``True`` when the key was handled (stops propagation),
         ``False`` otherwise so gated/unhandled keys still reach the
