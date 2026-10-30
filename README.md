@@ -304,7 +304,7 @@ left sidebar). It carries six panes:
 | | Auto-clear delay | Seconds before detected sensitive entries are purged (default 30) |
 | | Purge sensitive entries now | Remove every stored sensitive entry, even when auto-clear is off |
 | **Shortcuts** | Toggle clipboard popup | Change the popup shortcut (default Super+V) with an in-app capture dialog. This changes the shortcut `install.sh` set up; [#283](https://github.com/MohammedEl-sayedAhmed/clipman/issues/283) tracks the other installs |
-| | When I select a clip | How Clipman pastes: **Auto-paste (best effort)** (the default: Ctrl+Shift+V in terminal apps, Ctrl+V elsewhere), **Simulate Ctrl+V**, **Simulate Ctrl+Shift+V**, or **Simulate Shift+Insert** |
+| | When I select a clip | How Clipman pastes: **Auto-paste (best effort)** (the default: Ctrl+Shift+V in terminal apps, Ctrl+V elsewhere), **Simulate Ctrl+V**, **Simulate Ctrl+Shift+V**, **Simulate Shift+Insert**, or **Copy to clipboard**, which only copies the clip and leaves the paste to you |
 | **Storage** | Maximum entries to keep | Number of entries to keep (50–5,000) |
 | | Database location | Path to the SQLite database |
 | | Export backup / Restore from backup | Export and import your clipboard database |

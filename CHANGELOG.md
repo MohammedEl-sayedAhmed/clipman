@@ -4,6 +4,14 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Added — copy without pasting
+
+- Preferences → Shortcuts → "When I select a clip" has a new choice,
+  **Copy to clipboard**. Picking a clip then copies it and gives focus
+  back to your window, but types no paste keys, so you paste when you
+  want ([#371](https://github.com/MohammedEl-sayedAhmed/clipman/issues/371)).
+  The design mockup already had this choice.
+
 ### Fixed — Escape did not close the popup while typing a search
 
 - The popup opens with the caret in the search box, and Gtk.SearchEntry

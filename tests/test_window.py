@@ -507,6 +507,56 @@ class TestWindowConstruction(_WidgetTestCase):
         _delay, callback = timeout_add.call_args[0][:2]
         self.assertEqual(callback, window._simulate_paste)
 
+    def test_copy_mode_gives_focus_back_and_does_not_paste(self):
+        """#371: "Copy to clipboard" stops after the copy. The user's window
+        gets focus back, and no paste keys are typed."""
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        db.set_setting("paste_mode", "copy")
+        app = self._make_app("com.clipman.TestPasteCopy")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        iface = MagicMock()
+        window._shell_extension_iface = lambda: iface
+
+        with patch("clipman.window.GLib.timeout_add") as timeout_add:
+            window._dispatch_paste()
+
+        iface.RestorePreviousFocus.assert_called_once_with()
+        iface.SimulatePaste.assert_not_called()
+        self.assertFalse(timeout_add.called)  # no wtype fallback either
+
+    def test_copy_mode_without_the_extension_only_copies(self):
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        db.set_setting("paste_mode", "copy")
+        app = self._make_app("com.clipman.TestPasteCopyNoShell")
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        window._shell_extension_iface = lambda: None
+
+        with patch("clipman.window.GLib.timeout_add") as timeout_add:
+            window._dispatch_paste()
+
+        self.assertFalse(timeout_add.called)
+
+    def test_preferences_offer_copy_to_clipboard(self):
+        """The paste row saves "copy", and shows it when it is set."""
+        from clipman.preferences import PASTE_MODES, ClipmanPreferences
+        from clipman.window import ClipmanWindow
+
+        ids = [mode for mode, _label in PASTE_MODES]
+        self.assertIn("copy", ids)
+        db = self._make_db()
+        app = self._make_app("com.clipman.TestPasteCopyPrefs")
+        parent = ClipmanWindow(application=app, db=db, monitor=None)
+        prefs = ClipmanPreferences(db, parent, on_setting_changed=None)
+        prefs._paste_row.set_selected(ids.index("copy"))
+        self.assertEqual(db.get_setting("paste_mode"), "copy")
+
+        again = ClipmanPreferences(db, parent, on_setting_changed=None)
+        self.assertEqual(again._paste_row.get_selected(), ids.index("copy"))
+
     def test_paste_via_shell_restores_focus_then_injects(self):
         """The Shell path must restore focus FIRST, then inject the keystroke
         (deferred so focus can settle) — order matters or Ctrl+V misses."""
