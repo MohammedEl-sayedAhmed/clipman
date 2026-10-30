@@ -77,6 +77,8 @@ PASTE_MODES = [
     ("ctrl-v", _("Simulate Ctrl+V")),
     ("ctrl-shift-v", _("Simulate Ctrl+Shift+V")),
     ("shift-insert", _("Simulate Shift+Insert")),
+    # Copies the clip and leaves the paste to the user (#371).
+    ("copy", _("Copy to clipboard")),
 ]
 
 # Six accent presets (mapped to the mockup) + a sentinel "default"
@@ -624,24 +626,25 @@ class ClipmanPreferences(Adw.Dialog):
         paste_group.set_title(_("Paste behaviour"))
 
         paste_model = Gtk.StringList.new([label for _id, label in PASTE_MODES])
-        paste_row = Adw.ComboRow()
-        paste_row.set_title(_("When I select a clip"))
-        paste_row.set_subtitle(
-            _("Auto-paste simulates a keystroke into the focused window.")
+        self._paste_row = Adw.ComboRow()
+        self._paste_row.set_title(_("When I select a clip"))
+        self._paste_row.set_subtitle(
+            _("Auto-paste types the paste into your window; Copy to "
+              "clipboard leaves the paste to you.")
         )
-        paste_row.set_model(paste_model)
+        self._paste_row.set_model(paste_model)
         current_paste = self.db.get_setting("paste_mode", "auto")
         paste_ids = [pid for pid, _label in PASTE_MODES]
-        paste_row.set_selected(
+        self._paste_row.set_selected(
             paste_ids.index(current_paste) if current_paste in paste_ids else 0
         )
-        paste_row.connect(
+        self._paste_row.connect(
             "notify::selected",
             lambda row, _pspec: self._save(
                 "paste_mode", paste_ids[row.get_selected()]
             ),
         )
-        paste_group.add(paste_row)
+        paste_group.add(self._paste_row)
         page.add(paste_group)
 
         # Reference list (mockup preferences.html "In-popup shortcuts"):
