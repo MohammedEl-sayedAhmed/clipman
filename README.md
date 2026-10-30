@@ -435,6 +435,7 @@ The following people have contributed code to Clipman.
     <td align="center" valign="top" width="16.67%"><a href="https://github.com/ngtw-j"><img src="https://avatars.githubusercontent.com/u/172234289?v=4&amp;s=160" width="80" height="80" alt="Josie Ng"/><br/><b>Josie Ng</b></a><br/><sub>Pull request <a href="https://github.com/MohammedEl-sayedAhmed/clipman/pull/5">#5</a></sub></td>
     <td align="center" valign="top" width="16.67%"><a href="https://github.com/MrTomRod"><img src="https://avatars.githubusercontent.com/u/40867365?v=4&amp;s=160" width="80" height="80" alt="Thomas Roder"/><br/><b>Thomas Roder</b></a><br/><sub>Pull request <a href="https://github.com/MohammedEl-sayedAhmed/clipman/pull/297">#297</a></sub></td>
     <td align="center" valign="top" width="16.67%"><a href="https://github.com/jendermine"><img src="https://avatars.githubusercontent.com/u/92355621?v=4&amp;s=160" width="80" height="80" alt="jendermine"/><br/><b>jendermine</b></a><br/><sub>Pull request <a href="https://github.com/MohammedEl-sayedAhmed/clipman/pull/354">#354</a></sub></td>
+    <td align="center" valign="top" width="16.67%"><a href="https://github.com/uAliAmer"><img src="https://avatars.githubusercontent.com/u/40583136?v=4&amp;s=160" width="80" height="80" alt="Ali Amer"/><br/><b>Ali Amer</b></a><br/><sub>Pull request <a href="https://github.com/MohammedEl-sayedAhmed/clipman/pull/370">#370</a></sub></td>
   </tr>
 </table>
 <!-- contributors:end -->
