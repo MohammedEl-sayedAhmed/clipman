@@ -2211,6 +2211,26 @@ class TestThemeAndStyle(_WidgetTestCase):
         self.assertIn("font-size: SETTINGpx", blocks[".clip-row"])
         self.assertEqual(css.count("SETTING"), 1)
 
+    def test_the_popup_paints_its_own_header_ring_and_tabs(self):
+        """UI-3: Ubuntu's Yaru theme fixes libadwaita's colour variables,
+        so the popup paints its header, search ring and tabs itself."""
+        from string import Template
+
+        css = (Path(__file__).resolve().parent.parent
+               / "clipman" / "style.css").read_text()
+        css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+        css = Template(css).safe_substitute(font_size="12", font_color="#000000")
+        blocks = {
+            " ".join(selector.split()): body
+            for selector, body in re.findall(r"([^{}]+)\{([^}]*)\}", css)
+        }
+        top_bar = blocks[".clipman-window toolbarview > .top-bar, "
+                         ".clipman-window toolbarview > .top-bar headerbar"]
+        self.assertIn("background-color: @headerbar_bg_color", top_bar)
+        self.assertIn("background-image: none", top_bar)
+        self.assertIn("outline-color:", blocks[".clipman-search:focus-within"])
+        self.assertIn("background-image: none", blocks[".filter-tab"])
+
     # UI-23: square thumbnails, cut from the middle.
 
     def test_cover_size_keeps_the_short_side(self):

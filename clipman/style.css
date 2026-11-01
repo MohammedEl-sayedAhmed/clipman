@@ -33,6 +33,16 @@
     min-height: 36px;
 }
 
+/* libadwaita clears the header bar inside a toolbar view ("background:
+   none") and paints the top bar instead, from its own colour variable.
+   Ubuntu's Yaru theme sets that variable to a fixed grey, so paint both
+   here. The selector has to beat "toolbarview > .top-bar headerbar". */
+.clipman-window toolbarview > .top-bar,
+.clipman-window toolbarview > .top-bar headerbar {
+    background-color: @headerbar_bg_color;
+    background-image: none;
+}
+
 /* Search ------------------------------------------------------------- */
 
 /* Rest state is recessed into the window (mockup's inset field); focus
@@ -51,6 +61,9 @@
     background-color: @card_bg_color;
     border-color: @accent_color;
     box-shadow: 0 0 0 2px alpha(@accent_color, 0.18);
+    /* libadwaita's focus outline takes its colour from a variable, which
+       Yaru fixes to its own blue; use the popup's accent. */
+    outline-color: alpha(@accent_color, 0.5);
 }
 
 /* Keyboard hint chip inside the search field (mockup .search .kbd) */
@@ -80,6 +93,7 @@
 
 .filter-tab {
     background-color: transparent;
+    background-image: none;
     color: @clip_dim;
     border: none;
     box-shadow: none;

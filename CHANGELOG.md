@@ -90,6 +90,14 @@ All notable changes to Clipman are documented in this file.
   layout, so their buttons stay above the footer on a 768 px screen.
 - Dark-theme cards use the design token's colour (`#252536`).
 
+### Fixed — the popup on Ubuntu's Yaru theme
+
+- With Ubuntu's Yaru theme, the popup's header bar was Yaru grey, the
+  search box's focus ring Yaru blue, and the filter tabs had grey
+  chips, whatever Clipman's theme. The popup now paints these itself,
+  so they follow the Catppuccin or stone palette and your accent.
+  Preferences and dialogs still use Yaru's switches and cards.
+
 ## [1.3.0] - 2026-10-12
 
 A large reliability release, built on a full audit of the app, the
