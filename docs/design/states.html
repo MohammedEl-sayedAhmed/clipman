@@ -739,16 +739,12 @@ const STATES = {
         rows: 'short',
         footer: { left: '39 items', pill: 'recording', clear: true },
     },
+    // No banner: the active eye in the header and the footer's Paused
+    // pill show incognito, and clicking either resumes recording. The
+    // app dropped the banner in #153 because it took too much room.
     'incognito-on': {
-        mode: 'banner+rows',
+        mode: 'baseline',
         incognito: true,
-        banner: {
-            kind: 'privacy', icon: I.eyeSlash,
-            title: 'Incognito is on',
-            desc:  'New copies are not recorded. Existing entries stay available.',
-            primary: 'Resume recording',
-        },
-        rows: 'short',
         footer: { left: '42 items', pill: 'paused', clear: true },
     },
     // Nothing records copies (first-run, snap-required, clipboard-blocked,

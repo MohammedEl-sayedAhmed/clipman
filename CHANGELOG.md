@@ -38,6 +38,13 @@ All notable changes to Clipman are documented in this file.
   and checks each page's theme toggle before it saves a picture. The 18
   screenshots the website did not use are gone.
 
+### Changed — the incognito design shows the footer pill
+
+- The design mockup and the website showed an "Incognito is on" banner
+  that the app has not had since July: the eye in the header and the
+  footer's Paused pill show incognito instead. The mockup, its
+  screenshots and the website's live demo now show what the app does.
+
 ### Fixed — release notes on GitHub Releases
 
 - The v1.3.0 GitHub Release was published without its notes. GitHub
