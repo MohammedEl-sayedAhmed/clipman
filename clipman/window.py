@@ -741,9 +741,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self.search_entry.connect("stop-search", lambda _entry: self._hide())
         # Enter is the same: the entry's text widget keeps it for its own
         # activate signal, so paste from that signal.
-        self.search_entry.connect(
-            "activate", lambda _entry: self._activate_selected()
-        )
+        self.search_entry.connect("activate", self._on_search_activate)
         # Right-aligned keyboard hint inside the field (mockup's ⌘/ chip);
         # "/" focuses the search from anywhere in the popup.
         search_overlay = Gtk.Overlay()
@@ -2149,6 +2147,18 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._search_debounce_id = GLib.timeout_add(
             150, self._run_search_refresh
         )
+
+    def _on_search_activate(self, entry):
+        # Enter in the search box pastes. A fast typist can press it
+        # before the list shows the query: GTK waits a moment before
+        # search-changed, and the refresh above waits again. Filter now,
+        # so Enter pastes a clip that matches what was typed.
+        query = entry.get_text().strip()
+        if query != self._search_query or self._search_debounce_id:
+            self._search_query = query
+            self._cancel_search_debounce()
+            self.refresh()
+        self._activate_selected()
 
     def _run_search_refresh(self):
         # One-shot debounce callback: clear the id first (the source has
