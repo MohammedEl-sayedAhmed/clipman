@@ -603,8 +603,10 @@ class ClipmanPreferences(Adw.Dialog):
         global_group = Adw.PreferencesGroup()
         global_group.set_title(_("Global shortcut"))
         global_group.set_description(
-            _("Bound through the GNOME Shell extension. Changes apply on next "
-              "daemon restart.")
+            _("A GNOME custom shortcut, found in Settings → Keyboard → View "
+              "and Customize Shortcuts → Custom Shortcuts. This page can "
+              "change it but not create it, so if Clipman is not in that "
+              "list yet, add it there first.")
         )
 
         self._toggle_row = Adw.ActionRow()

@@ -38,6 +38,16 @@ All notable changes to Clipman are documented in this file.
   release whose CHANGELOG has no notes before anything is published.
   The v1.3.0 notes were put back by hand.
 
+### Fixed — the Shortcuts page described the shortcut wrongly
+
+- Preferences → Shortcuts said the GNOME Shell extension binds the
+  shortcut and that a change applies on the next daemon restart. Neither
+  is true: it is a GNOME custom shortcut. The page now says where to
+  find it, and that Change… can edit it but not create it
+  ([#283](https://github.com/MohammedEl-sayedAhmed/clipman/issues/283),
+  [#334](https://github.com/MohammedEl-sayedAhmed/clipman/issues/334)).
+  The design mockup said the same and is fixed too.
+
 ## [1.3.0] - 2026-10-12
 
 A large reliability release, built on a full audit of the app, the
