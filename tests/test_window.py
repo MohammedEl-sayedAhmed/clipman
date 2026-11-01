@@ -1464,6 +1464,16 @@ class TestKeyboardShortcuts(_WidgetTestCase):
         window.search_entry.emit("activate")
         window._activate_selected.assert_called_once_with()
 
+    def test_enter_right_after_typing_pastes_a_match(self):
+        # Enter can come before search-changed and before the refresh
+        # debounce runs. It must still paste a clip that matches.
+        _db, window = self._seeded_window(texts=("alpha", "beta", "gamma"))
+        window._paste_entry = MagicMock()
+        window.search_entry.set_text("alp")
+        window.search_entry.emit("activate")
+        pasted = window._paste_entry.call_args.args[0]
+        self.assertEqual(pasted.get("content_text"), "alpha")
+
     def test_selected_item_prefers_selection(self):
         _db, window = self._seeded_window()
         window._selection.set_selected(1)

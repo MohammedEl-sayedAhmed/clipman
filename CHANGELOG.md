@@ -25,6 +25,8 @@ All notable changes to Clipman are documented in this file.
   signal, so pressing Enter there pasted nothing. That signal now pastes
   the selected clip, or the first one when none is selected
   ([#372](https://github.com/MohammedEl-sayedAhmed/clipman/issues/372)).
+  It first brings the list up to date with what you typed, so Enter
+  right after typing pastes a matching clip.
 
 ### Changed — diagrams in the docs
 
