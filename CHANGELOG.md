@@ -73,6 +73,23 @@ All notable changes to Clipman are documented in this file.
   your system accent when the Catppuccin theme is off. It follows a
   change of theme while Preferences is open.
 
+### Fixed — theme and layout details
+
+- The Font size setting scales the clip rows only, as Preferences says;
+  the header, search box, tabs and footer keep their size.
+- Image thumbnails are square. A wide or tall image is cut to its
+  middle, so its text lines up with the other rows.
+- With the Catppuccin theme off, the Color scheme choice applies (dark,
+  light or follow system), with your GNOME theme's colours. If you never
+  picked a scheme, it still follows the system.
+- Light-theme text that was below the 4.5:1 contrast ratio is darker:
+  the Recording and Paused pills, Clear all, the active count badge,
+  banner actions and status-page text (`docs/design/tokens.css` too).
+- Status-page icons are 48 px and take their tone's colour; the CSS
+  selector never matched before. Status pages use libadwaita's compact
+  layout, so their buttons stay above the footer on a 768 px screen.
+- Dark-theme cards use the design token's colour (`#252536`).
+
 ## [1.3.0] - 2026-10-12
 
 A large reliability release, built on a full audit of the app, the

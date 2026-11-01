@@ -141,13 +141,13 @@ body.theme-dark {
     --accent-hover:  #1d4ed8; /* blue-700 */
     --accent-soft:   rgba(37, 99, 235, 0.12);
 
-    --success:       #15803d; /* green-700 — matches the app; holds contrast on white */
-    --warning:       #b45309; /* amber-700 */
-    --error:         #dc2626; /* red-600 */
+    --success:       #166534; /* green-800 — 4.5:1 as text on its own 14% tint */
+    --warning:       #92400e; /* amber-800 — 4.5:1 as text on its own tint */
+    --error:         #b91c1c; /* red-700 — 4.5:1 as text on the stone-200 footer */
     --info:          #0891b2; /* cyan-600 */
 
     --pin:           #b45309; /* amber-700 — darker than the gold star */
-    --incognito:     #7c3aed; /* violet-600 */
+    --incognito:     #5b21b6; /* violet-800 — 4.5:1 as the Paused pill text */
 
     --type-text:     #2563eb; /* blue-600 */
     --type-image:    #9333ea; /* purple-600 */

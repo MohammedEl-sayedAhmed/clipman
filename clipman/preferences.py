@@ -323,15 +323,14 @@ class ClipmanPreferences(Adw.Dialog):
         theme_row = Adw.ComboRow()
         theme_row.set_title(_("Color scheme"))
         theme_row.set_subtitle(
-            _("Dark uses Catppuccin Mocha; Light uses warm stone.")
+            _("With the Catppuccin theme, dark is Catppuccin Mocha and "
+              "light is warm stone.")
         )
         theme_row.set_model(theme_model)
-        current_theme = self.db.get_setting("theme", "dark")
         theme_ids = [tid for tid, _label in THEMES]
-        theme_row.set_selected(
-            theme_ids.index(current_theme) if current_theme in theme_ids else 1
-        )
-        theme_row.connect(
+        theme_row.set_selected(theme_ids.index(self._current_theme()))
+        self._theme_row = theme_row
+        self._theme_handler = theme_row.connect(
             "notify::selected",
             lambda row, _pspec: self._save_theme_setting(
                 "theme", theme_ids[row.get_selected()]
@@ -342,7 +341,7 @@ class ClipmanPreferences(Adw.Dialog):
         catppuccin_row = Adw.SwitchRow()
         catppuccin_row.set_title(_("Catppuccin theme"))
         catppuccin_row.set_subtitle(
-            _("Off: follow your system GNOME theme and accent color.")
+            _("Off: use the colours and accent of your GNOME theme.")
         )
         catppuccin_row.set_active(self._get_bool("use_catppuccin", True))
         catppuccin_row.connect(
@@ -501,10 +500,27 @@ class ClipmanPreferences(Adw.Dialog):
         finally:
             button.handler_unblock(handler_id)
 
+    def _current_theme(self):
+        """The Color scheme in effect, as window.py resolves it: with no
+        stored choice, dark with the Catppuccin theme, else the system's."""
+        default = "dark" if self._get_bool("use_catppuccin", True) else "auto"
+        value = self.db.get_setting("theme", None) or default
+        return value if value in [tid for tid, _label in THEMES] else default
+
     def _save_theme_setting(self, key, value):
         """Save the theme or Catppuccin switch. Both change the default
         accent, so a button that shows the default shows the new one."""
         self._save(key, value)
+        if key == "use_catppuccin" and self.db.get_setting("theme", None) is None:
+            # No stored scheme: its default follows this switch.
+            theme_ids = [tid for tid, _label in THEMES]
+            self._theme_row.handler_block(self._theme_handler)
+            try:
+                self._theme_row.set_selected(
+                    theme_ids.index(self._current_theme())
+                )
+            finally:
+                self._theme_row.handler_unblock(self._theme_handler)
         if self.db.get_setting("accent_color", "default") == "default":
             self._show_color(self._accent_btn, self._accent_handler,
                              self._default_accent_hex())

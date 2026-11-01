@@ -294,7 +294,7 @@ left sidebar). It carries six panes:
 | Pane | Setting | Description |
 |------|---------|-------------|
 | **Appearance** | Color scheme | Follow system / Dark (Catppuccin Mocha) / Light (warm stone) |
-| | Catppuccin theme | On: the Catppuccin Mocha and warm-stone palettes. Off: follow your system GNOME theme and accent color |
+| | Catppuccin theme | On: the Catppuccin Mocha and warm-stone palettes. Off: the colours and accent of your GNOME theme; Color scheme still picks dark or light |
 | | Font size | Text size for entries (8–20px) |
 | | Accent color & font color | Free-form color pickers with one-tap reset to theme defaults |
 | | Window opacity | Window transparency (30%–100%) |

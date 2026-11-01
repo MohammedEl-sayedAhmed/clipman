@@ -14,10 +14,12 @@
  * token when the user picked the ``default`` preset.
  */
 
+/* The chrome stays at 12px (DEFAULT_FONT_SIZE); the Font size setting
+   only scales the clip rows (.clip-row below). */
 .clipman-window {
     background-color: @window_bg_color;
     color: @window_fg_color;
-    font-size: ${font_size}px;
+    font-size: 12px;
 }
 
 /* Mockup surface hierarchy: header/footer sit on the raised "mantle"
@@ -148,8 +150,11 @@
 /* Lightweight box row (replaces the heavier Adw.ActionRow — see
    window._row_setup). Give it the internal padding ActionRow used to
    provide so rows aren't cramped. */
+/* The Font size setting applies here only: clip text, not the chrome
+   around it (Preferences: "Affects clip content"). */
 .clip-row {
     padding: 5px 4px;
+    font-size: ${font_size}px;
 }
 
 .clip-row .title {
@@ -299,10 +304,12 @@
 
 .clipman-window statuspage {
     background-color: transparent;
-    color: alpha(@window_fg_color, 0.55);
+    color: @clip_dim;
 }
 
-.clipman-window statuspage > box > image {
+/* AdwStatusPage nests its icon as
+   scrolledwindow > viewport > box > clamp > box > image.icon. */
+.clipman-window statuspage image.icon {
     color: alpha(@window_fg_color, 0.35);
     -gtk-icon-size: 48px;
 }
@@ -310,16 +317,16 @@
 /* Tone-scoped status icons (mockup states.html: each state's artwork is
    tinted to its tone, not a uniform neutral grey). Neutral states keep
    the 35%-alpha default above. */
-.clipman-window statuspage.info > box > image {
+.clipman-window statuspage.info image.icon {
     color: @accent_color;
 }
-.clipman-window statuspage.warning > box > image {
+.clipman-window statuspage.warning image.icon {
     color: @warning_color;
 }
-.clipman-window statuspage.error > box > image {
+.clipman-window statuspage.error image.icon {
     color: @error_color;
 }
-.clipman-window statuspage.privacy > box > image {
+.clipman-window statuspage.privacy image.icon {
     color: @incognito;
 }
 

@@ -499,8 +499,11 @@ def render_edge_state(
             )
         return dialog
 
-    # Default: status page.
+    # Default: status page. The popup is short (460 px on a 768 px
+    # screen), so use libadwaita's compact layout: smaller spacing, so the
+    # buttons stay above the footer.
     page = Adw.StatusPage()
+    page.add_css_class("compact")
     page.set_icon_name(spec.icon_name)
     page.set_title(spec.title)
     page.set_description(spec.body)

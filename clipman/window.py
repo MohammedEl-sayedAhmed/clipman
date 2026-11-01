@@ -62,7 +62,7 @@ _CATPPUCCIN_MOCHA = {
     "window_bg_color":     "#1e1e2e",
     "view_bg_color":       "#1e1e2e",
     "headerbar_bg_color":  "#181825",
-    "card_bg_color":       "#313244",
+    "card_bg_color":       "#252536",
     "dialog_bg_color":     "#1e1e2e",
     "popover_bg_color":    "#313244",
     "window_fg_color":     "#cdd6f4",
@@ -104,19 +104,23 @@ _STONE_LIGHT = {
     "card_fg_color":       "#1c1917",
     "dialog_fg_color":     "#1c1917",
     "popover_fg_color":    "#1c1917",
-    "accent_color":        "#2563eb",
+    # The *_color tokens colour text, often on a light tint of
+    # themselves, so they are a shade or two darker than the *_bg_color
+    # fills to keep 4.5:1 (as libadwaita splits accent_color from
+    # accent_bg_color).
+    "accent_color":        "#1d4ed8",
     "accent_bg_color":     "#2563eb",
     "accent_fg_color":     "#ffffff",
-    "destructive_color":   "#dc2626",
+    "destructive_color":   "#b91c1c",
     "destructive_bg_color":"#dc2626",
     "destructive_fg_color":"#ffffff",
-    "success_color":       "#15803d",
+    "success_color":       "#166534",
     "success_bg_color":    "#15803d",
     "success_fg_color":    "#ffffff",
-    "warning_color":       "#b45309",
+    "warning_color":       "#92400e",
     "warning_bg_color":    "#b45309",
     "warning_fg_color":    "#ffffff",
-    "error_color":         "#dc2626",
+    "error_color":         "#b91c1c",
     "error_bg_color":      "#dc2626",
     "error_fg_color":      "#ffffff",
 }
@@ -176,7 +180,7 @@ _DIM_TEXT_LIGHT = "#57534e"
 # alongside @clip_dim so privacy-toned banners/pills/status pages can use
 # the mockup's lavender instead of borrowing the warning amber or accent.
 _INCOGNITO_DARK = "#b4befe"
-_INCOGNITO_LIGHT = "#7c3aed"
+_INCOGNITO_LIGHT = "#5b21b6"
 
 _URL_RE = re.compile(r"^(https?://|www\.)\S+$", re.IGNORECASE)
 # Conservative code detection: only strong, code-specific signals so plain
@@ -197,6 +201,30 @@ _CODE_HINT_RE = re.compile(
     r"|\{\w*\}",
     re.MULTILINE,
 )
+
+
+def _cover_size(width, height, box):
+    """Decode size whose short side is ``box``, so a square ``box`` x
+    ``box`` thumbnail can be cut from the middle. The long side is capped
+    at four times ``box``, so a long panorama stays small."""
+    short = max(1, min(width, height))
+    w = max(1, round(width * box / short))
+    h = max(1, round(height * box / short))
+    longest = max(w, h)
+    if longest > 4 * box:
+        w = max(1, round(w * 4 * box / longest))
+        h = max(1, round(h * 4 * box / longest))
+    return w, h
+
+
+def _center_square(pixbuf):
+    """The middle square of a pixbuf, as a pixbuf of its own."""
+    w, h = pixbuf.get_width(), pixbuf.get_height()
+    if w == h:
+        return pixbuf
+    side = min(w, h)
+    return pixbuf.new_subpixbuf((w - side) // 2, (h - side) // 2,
+                                side, side).copy()
 
 
 def _classify_text(text):
@@ -344,18 +372,12 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # only when the setting changes.
         self._apply_opacity(self.db.get_setting("opacity", "1.0"))
 
-        saved_theme = self.db.get_setting("theme", DEFAULT_THEME)
-        self._theme = (
-            saved_theme
-            if saved_theme in ("auto", "dark", "light")
-            else DEFAULT_THEME
-        )
-
         # When off, don't force the Catppuccin @-token overrides so the app
         # follows the user's system GNOME/Adwaita theme + accent. Default on.
         self._use_catppuccin = (
             self.db.get_setting("use_catppuccin", "true") or ""
         ).strip().lower() != "false"
+        self._theme = self._saved_theme()
         self._show_count_badges = (
             self.db.get_setting("show_count_badges", "true") or ""
         ).strip().lower() != "false"
@@ -418,25 +440,31 @@ class ClipmanWindow(Adw.ApplicationWindow):
     # Theme + CSS
     # ------------------------------------------------------------------
 
+    def _saved_theme(self):
+        """The Color scheme setting: auto, dark or light.
+
+        With no stored choice, the Catppuccin theme starts dark and the
+        system theme follows the system, as it did before the choice
+        applied to both.
+        """
+        default = DEFAULT_THEME if self._use_catppuccin else "auto"
+        value = self.db.get_setting("theme", None) or default
+        return value if value in ("auto", "dark", "light") else default
+
     def _apply_theme(self):
-        # Catppuccin off means "follow your system GNOME theme" (the
-        # Preferences subtitle's promise): never force a scheme, let the
-        # system light/dark preference drive appearance. The in-app
-        # Light/Dark row applies when the Catppuccin theme is on.
-        if not self._use_catppuccin:
-            scheme = Adw.ColorScheme.DEFAULT
-        else:
-            scheme = {
-                "auto": Adw.ColorScheme.DEFAULT,
-                "dark": Adw.ColorScheme.FORCE_DARK,
-                "light": Adw.ColorScheme.FORCE_LIGHT,
-            }.get(self._theme, Adw.ColorScheme.FORCE_DARK)
+        # The Color scheme row applies with or without the Catppuccin
+        # theme; without it, the colours come from the system theme.
+        scheme = {
+            "auto": Adw.ColorScheme.DEFAULT,
+            "dark": Adw.ColorScheme.FORCE_DARK,
+            "light": Adw.ColorScheme.FORCE_LIGHT,
+        }.get(self._theme, Adw.ColorScheme.FORCE_DARK)
         Adw.StyleManager.get_default().set_color_scheme(scheme)
 
     def _effective_dark(self):
         """Whether the popup is effectively dark right now — honours the
-        follow-system cases (Catppuccin off, or theme == auto)."""
-        if self._use_catppuccin and self._theme in ("dark", "light"):
+        follow-system case (theme == auto)."""
+        if self._theme in ("dark", "light"):
             return self._theme == "dark"
         try:
             return Adw.StyleManager.get_default().get_dark()
@@ -1362,13 +1390,21 @@ class ClipmanWindow(Adw.ApplicationWindow):
         if cached is not None:
             return cached
 
-        # Oversample: logical px * device scale * COVER-crop headroom.
+        # Oversample: logical px * device scale * 2 for headroom.
         scale = max(1, self.get_scale_factor())
         box = size * scale * 2
         try:
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
-                image_path, box, box, True
+            # Square thumbnails: a wide or tall image is cut to its middle,
+            # so every tile is the same size and the text lines up.
+            image_format, width, height = GdkPixbuf.Pixbuf.get_file_info(
+                image_path
             )
+            if image_format is None or width <= 0 or height <= 0:
+                return None
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                image_path, *_cover_size(width, height, box), False
+            )
+            pixbuf = _center_square(pixbuf)
             # Gdk.Texture.new_for_pixbuf is deprecated since GTK 4.12;
             # build the texture from the pixbuf's raw bytes instead.
             fmt = (
@@ -2283,7 +2319,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._apply_css()  # palette block depends on the theme
         elif key == "use_catppuccin":
             self._use_catppuccin = str(value).lower() not in ("false", "0", "")
-            self._apply_theme()  # off -> follow the system scheme
+            # With no stored scheme, the default depends on this switch.
+            self._theme = self._saved_theme()
+            self._apply_theme()
             self._apply_css()
         elif key == "show_count_badges":
             self._show_count_badges = str(value).lower() not in (
