@@ -1455,6 +1455,15 @@ class TestKeyboardShortcuts(_WidgetTestCase):
         window.search_entry.emit("stop-search")
         window._hide.assert_called_once_with()
 
+    def test_enter_in_search_entry_pastes_selected(self):
+        # The entry's text widget keeps Enter and emits activate instead,
+        # so the window's own Enter shortcut never fires while search has
+        # focus.
+        _db, window = self._seeded_window()
+        window._activate_selected = MagicMock()
+        window.search_entry.emit("activate")
+        window._activate_selected.assert_called_once_with()
+
     def test_selected_item_prefers_selection(self):
         _db, window = self._seeded_window()
         window._selection.set_selected(1)

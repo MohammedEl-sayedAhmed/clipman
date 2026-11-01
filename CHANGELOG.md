@@ -19,6 +19,13 @@ All notable changes to Clipman are documented in this file.
   the popup stayed open. The search box's stop-search signal now closes
   the popup too. Dialogs inside the popup keep their own Escape.
 
+### Fixed — Enter did not paste while typing a search
+
+- Same cause as Escape: the search box keeps Enter for its own activate
+  signal, so pressing Enter there pasted nothing. That signal now pastes
+  the selected clip, or the first one when none is selected
+  ([#372](https://github.com/MohammedEl-sayedAhmed/clipman/issues/372)).
+
 ### Changed — diagrams in the docs
 
 - The architecture diagram is redrawn from the current code, and the
