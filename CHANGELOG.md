@@ -29,6 +29,15 @@ All notable changes to Clipman are documented in this file.
   checks that the files are up to date, that every label fits its box,
   and that text and lines keep the project's contrast rules.
 
+### Changed — the website's screenshots
+
+- The screenshots on the website are made again from the current design
+  pages. The old ones dated from June: three light ones showed "Dark"
+  selected in the theme toggle, and the edge-states picker showed 15
+  states instead of 17. `scripts/design-screenshots.py` now makes them,
+  and checks each page's theme toggle before it saves a picture. The 18
+  screenshots the website did not use are gone.
+
 ### Fixed — release notes on GitHub Releases
 
 - The v1.3.0 GitHub Release was published without its notes. GitHub

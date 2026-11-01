@@ -72,6 +72,12 @@ specific assistant.
   `Adw.Dialog` content can't be captured through the xvfb harness ("empty
   render node") — snapshot the dialog's child widget, or verify on a real
   display.
+- Website screenshots: `scripts/design-screenshots.py` remakes the PNGs
+  in `docs/design/screenshots/` from the design pages (it needs
+  Playwright; the setup is in its docstring) and refuses a page whose
+  theme toggle marks the wrong theme. Look at every image before you
+  commit it; `tests/test_design_screenshots.py` checks the names, the
+  sizes and that the website uses each one.
 - The CodeQL **security-baseline gate** fails PRs on *new* findings —
   historically `py/empty-except`, `py/multiple-definition`,
   `py/implicit-string-concatenation-in-list`,
