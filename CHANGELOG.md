@@ -57,6 +57,15 @@ All notable changes to Clipman are documented in this file.
   [#334](https://github.com/MohammedEl-sayedAhmed/clipman/issues/334)).
   The design mockup said the same and is fixed too.
 
+### Fixed — the colour buttons in Preferences
+
+- After a reset, the accent and font colour buttons kept showing the
+  old colour. They now show the default at once. The accent button
+  also showed mauve for the default whatever the theme; it now shows
+  the accent the popup really uses: the Catppuccin or stone accent, or
+  your system accent when the Catppuccin theme is off. It follows a
+  change of theme while Preferences is open.
+
 ## [1.3.0] - 2026-10-12
 
 A large reliability release, built on a full audit of the app, the

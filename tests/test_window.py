@@ -2008,6 +2008,99 @@ class TestRestoreFlow(_WidgetTestCase):
         self.assertGreater(db.add_entry("text", content_text="still recording"), 0)
 
 
+class TestColorButtons(_WidgetTestCase):
+    """Preferences → Appearance: the accent and font colour buttons."""
+
+    _STYLE = "clipman.preferences.Adw.StyleManager.get_default"
+
+    def _prefs(self, **settings):
+        from clipman.preferences import ClipmanPreferences
+
+        db = self._make_db()
+        for key, value in settings.items():
+            db.set_setting(key, value)
+        return db, ClipmanPreferences(db, None, on_setting_changed=None)
+
+    @staticmethod
+    def _shown(button):
+        from clipman.preferences import _rgba_hex
+
+        return _rgba_hex(button.get_rgba())
+
+    @staticmethod
+    def _style(dark):
+        style = MagicMock()
+        style.get_dark.return_value = dark
+        return style
+
+    def test_accent_reset_shows_the_default_without_saving_it(self):
+        db, prefs = self._prefs(accent_color="#ff0000")
+        self.assertEqual(self._shown(prefs._accent_btn), "#ff0000")
+        prefs._on_accent_reset(None)
+        # Showing the default fires notify::rgba; it must not be saved
+        # back as a picked colour.
+        self.assertEqual(db.get_setting("accent_color"), "default")
+        self.assertEqual(self._shown(prefs._accent_btn),
+                         prefs._default_accent_hex())
+
+    def test_font_color_reset_shows_the_default_without_saving_it(self):
+        db, prefs = self._prefs(font_color="#00ff00")
+        prefs._on_font_color_reset(None)
+        self.assertEqual(db.get_setting("font_color"), "default")
+        self.assertEqual(self._shown(prefs._font_color_btn),
+                         prefs._font_color_display_hex("default"))
+
+    def test_the_default_accent_is_the_palette_accent(self):
+        from clipman.window import _CATPPUCCIN_MOCHA, _STONE_LIGHT
+
+        _db, prefs = self._prefs(use_catppuccin="true")
+        for dark, palette in ((True, _CATPPUCCIN_MOCHA), (False, _STONE_LIGHT)):
+            with self.subTest(dark=dark), \
+                    patch(self._STYLE, return_value=self._style(dark)):
+                self.assertEqual(prefs._default_accent_hex(),
+                                 palette["accent_bg_color"])
+
+    def test_without_catppuccin_the_default_is_the_system_accent(self):
+        _db, prefs = self._prefs(use_catppuccin="false")
+        style = self._style(False)
+        accent = Gdk.RGBA()
+        accent.parse("#336699")
+        style.get_accent_color_rgba.return_value = accent
+        with patch(self._STYLE, return_value=style):
+            self.assertEqual(prefs._default_accent_hex(), "#336699")
+        # libadwaita before 1.6 has no system accent: Adwaita's blue.
+        old = MagicMock(spec=["get_dark"])
+        with patch(self._STYLE, return_value=old):
+            self.assertEqual(prefs._default_accent_hex(), "#3584e4")
+
+    def test_a_theme_change_updates_a_default_accent(self):
+        db, prefs = self._prefs(use_catppuccin="true", accent_color="default")
+        with patch(self._STYLE, return_value=self._style(False)):
+            prefs._save_theme_setting("theme", "light")
+        self.assertEqual(self._shown(prefs._accent_btn), "#2563eb")
+        self.assertEqual(db.get_setting("accent_color"), "default")
+
+    def test_a_theme_change_keeps_a_picked_accent(self):
+        db, prefs = self._prefs(accent_color="#ff0000")
+        prefs._save_theme_setting("theme", "light")
+        self.assertEqual(self._shown(prefs._accent_btn), "#ff0000")
+        self.assertEqual(db.get_setting("accent_color"), "#ff0000")
+
+    def test_picking_a_colour_saves_it(self):
+        db, prefs = self._prefs()
+        picked = Gdk.RGBA()
+        picked.parse("#123456")
+        prefs._accent_btn.set_rgba(picked)
+        self.assertEqual(db.get_setting("accent_color"), "#123456")
+
+    def test_rgba_hex_clamps_each_channel(self):
+        from clipman.preferences import _rgba_hex
+
+        rgba = Gdk.RGBA()
+        rgba.red, rgba.green, rgba.blue = 1.05, -0.1, 0.5
+        self.assertEqual(_rgba_hex(rgba), "#ff0080")
+
+
 class TestEdgeStateDeclaration(unittest.TestCase):
     """Module-level invariants of edge_states.py that don't need GTK.
 
