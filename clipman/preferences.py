@@ -464,6 +464,18 @@ class ClipmanPreferences(Adw.Dialog):
             lambda r, _p: self._save("show_count_badges", r.get_active()),
         )
         layout_group.add(badges_row)
+
+        collapse_row = Adw.SwitchRow()
+        collapse_row.set_title(_("Collapsible Pinned section"))
+        collapse_row.set_subtitle(
+            _("Click the Pinned header to hide or show pinned clips")
+        )
+        collapse_row.set_active(self._get_bool("collapsible_pinned", False))
+        collapse_row.connect(
+            "notify::active",
+            lambda r, _p: self._save("collapsible_pinned", r.get_active()),
+        )
+        layout_group.add(collapse_row)
         page.add(layout_group)
 
         return page
