@@ -724,16 +724,18 @@ html[data-theme="light"] .reel-frame {
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.geo-list .geo-bar {
+.geo-bar {
+    display: block;
     height: 8px;
-    border-radius: var(--r-pill);
+    border-radius: 2px;
     background: var(--border);
     overflow: hidden;
 }
-.geo-list .geo-bar > span {
+/* Square where the bar starts, rounded at its value. */
+.geo-bar > span {
     display: block;
     height: 100%;
-    border-radius: inherit;
+    border-radius: 0 4px 4px 0;
     background: var(--accent);
 }
 .geo-list .geo-n {
@@ -753,10 +755,79 @@ html[data-theme="light"] .reel-frame {
 }
 .geo-more {
     margin: 12px 0 0;
-    font-size: 0.85rem;
-    color: var(--muted);
 }
 .geo-more[hidden] { display: none; }
+.geo-more > summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    list-style: none;
+    font-size: 0.85rem;
+    color: var(--link);
+    border-radius: var(--r-sm);
+}
+.geo-more > summary::-webkit-details-marker { display: none; }
+.geo-more > summary::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    transform: translateY(-2px) rotate(45deg);
+    transition: transform var(--dur) var(--ease);
+}
+.geo-more[open] > summary::after { transform: translateY(2px) rotate(-135deg); }
+.geo-more > summary:hover { color: var(--link-hover); }
+.geo-more > summary:focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+}
+/* The rest of the ranking, in two halves side by side. */
+.geo-tables {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0 32px;
+    margin-top: 12px;
+}
+@media (max-width: 640px) {
+    .geo-tables { grid-template-columns: 1fr; }
+    /* Too narrow to read; the numbers say it. */
+    .geo-table .bar { display: none; }
+}
+.geo-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+.geo-table th {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-strong);
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: var(--label);
+    text-transform: uppercase;
+    text-align: left;
+    color: var(--muted);
+}
+.geo-table td {
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+}
+.geo-table tbody tr:hover td { background: var(--border); }
+.geo-table .rank,
+.geo-table .num {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+}
+.geo-table .rank { width: 2.5em; }
+.geo-table .num { text-align: right; width: 4.5em; }
+.geo-table .bar { width: 30%; }
+.geo-table th.num { text-align: right; }
 .geo-foot {
     margin: 14px 0 0;
     font-size: 0.8rem;
@@ -1304,7 +1375,10 @@ footer.site .legal .mono { font-size: 0.78rem; }
           <span class="geo-total"><span id="geo-devices">—</span> devices in <span id="geo-territories">—</span> territories · week to <span id="geo-date">—</span></span>
         </div>
         <ol class="geo-list" id="geo-list"></ol>
-        <p class="geo-more" id="geo-more" hidden></p>
+        <details class="geo-more" id="geo-more" hidden>
+          <summary id="geo-more-label">+ more territories</summary>
+          <div class="geo-tables" id="geo-tables"></div>
+        </details>
         <p class="geo-foot">From the Snap Store’s weekly metrics. The other channels don’t report countries.</p>
       </div>
     </div>
@@ -1592,6 +1666,56 @@ footer.site .legal .mono { font-size: 0.78rem; }
         el.textContent = s;
         el.setAttribute('data-loading', 'false');
     }
+    // Every country after the top ten, behind "+ N more territories":
+    // rank, name, a bar on the same scale as the top ten, devices and the
+    // share of the week. Two tables side by side, stacked on a phone.
+    // Countries with the same count share a rank (1, 2, 2, 4).
+    function showRest(rows, from, devices, nameOf, barOf) {
+        const more = document.getElementById('geo-more');
+        const label = document.getElementById('geo-more-label');
+        const tables = document.getElementById('geo-tables');
+        const rest = rows.length - from;
+        if (!more || !label || !tables || rest <= 0) return;
+        label.textContent = '+ ' + rest + ' more ' + (rest === 1 ? 'territory' : 'territories');
+        tables.textContent = '';
+        const half = Math.ceil(rest / 2);
+        for (const [start, end] of [[from, from + half], [from + half, rows.length]]) {
+            if (start >= end) continue;
+            const table = document.createElement('table');
+            table.className = 'geo-table';
+            table.setAttribute('aria-label', 'Snap installs this week, ranks ' + (start + 1) + ' to ' + end);
+            const head = table.createTHead().insertRow();
+            for (const [text, cls] of [['#', 'rank'], ['Country', ''], ['', 'bar'], ['Devices', 'num'], ['Share', 'num']]) {
+                const th = document.createElement('th');
+                th.scope = 'col';
+                th.textContent = text;
+                if (cls) th.className = cls;
+                head.appendChild(th);
+            }
+            const body = table.createTBody();
+            for (let i = start; i < end; i++) {
+                const [code, n] = rows[i];
+                const tr = body.insertRow();
+                const rank = rows.findIndex((row) => row[1] === n) + 1;
+                const cells = [
+                    ['rank', String(rank)],
+                    ['', nameOf(code)],
+                    ['bar', null],
+                    ['num', fmt(n) ?? String(n)],
+                    ['num', (n / devices * 100).toFixed(1) + '%'],
+                ];
+                for (const [cls, text] of cells) {
+                    const td = tr.insertCell();
+                    if (cls) td.className = cls;
+                    if (text === null) td.appendChild(barOf(n));
+                    else td.textContent = text;
+                }
+            }
+            tables.appendChild(table);
+        }
+        more.hidden = false;
+    }
+
     // The ten countries with the most Snap installs this week, as rows
     // with a bar scaled to the largest. Built with textContent only: the
     // file is data, never markup.
@@ -1600,29 +1724,36 @@ footer.site .legal .mono { font-size: 0.78rem; }
         const list = document.getElementById('geo-list');
         const by = j && j.by_country;
         if (!card || !list || !by || typeof by !== 'object') return;
-        const rows = Object.entries(by)
-            .filter(([code, n]) => /^[A-Z]{2}$/.test(code) && typeof n === 'number' && n > 0)
-            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-        if (!rows.length) return;
         let names = null;
         try { names = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (_) { /* codes only */ }
         const nameOf = (code) => {
             try { return (names && names.of(code)) || code; } catch (_) { return code; }
         };
+        // Most devices first; a tie goes by the country's name.
+        const rows = Object.entries(by)
+            .filter(([code, n]) => /^[A-Z]{2}$/.test(code) && typeof n === 'number' && n > 0)
+            .sort((a, b) => b[1] - a[1] || nameOf(a[0]).localeCompare(nameOf(b[0]), 'en'));
+        if (!rows.length) return;
         const top = rows.slice(0, 10);
         const max = top[0][1];
-        list.textContent = '';
-        for (const [code, n] of top) {
-            const li = document.createElement('li');
-            const name = document.createElement('span');
-            name.className = 'geo-name';
-            name.textContent = nameOf(code);
+        const devices = typeof j.devices === 'number' && j.devices > 0 ? j.devices
+            : rows.reduce((sum, row) => sum + row[1], 0);
+        const barOf = (n) => {
             const bar = document.createElement('span');
             bar.className = 'geo-bar';
             bar.setAttribute('aria-hidden', 'true');
             const fill = document.createElement('span');
             fill.style.width = Math.max(4, Math.round(n / max * 100)) + '%';
             bar.appendChild(fill);
+            return bar;
+        };
+        list.textContent = '';
+        for (const [code, n] of top) {
+            const li = document.createElement('li');
+            const name = document.createElement('span');
+            name.className = 'geo-name';
+            name.textContent = nameOf(code);
+            const bar = barOf(n);
             const num = document.createElement('span');
             num.className = 'geo-n';
             num.textContent = fmt(n) ?? String(n);
@@ -1631,14 +1762,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
             list.appendChild(li);
         }
         list.style.setProperty('--geo-rows', String(Math.ceil(top.length / 2)));
-        const rest = rows.length - top.length;
-        const more = document.getElementById('geo-more');
-        if (more && rest > 0) {
-            more.textContent = '+ ' + rest + ' more ' + (rest === 1 ? 'territory' : 'territories');
-            more.hidden = false;
-        }
-        const devices = typeof j.devices === 'number' ? j.devices
-            : rows.reduce((sum, row) => sum + row[1], 0);
+        showRest(rows, top.length, devices, nameOf, barOf);
         setNum('geo-devices', devices);
         setNum('geo-territories', rows.length);
         const date = typeof j.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(j.date)
