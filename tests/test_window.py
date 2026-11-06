@@ -802,6 +802,64 @@ class TestWindowConstruction(_WidgetTestCase):
             window._expand_snippet_tokens("> ${clipboard}"), "> newer clip"
         )
 
+    def _collapsed_pinned_window(self, app_id, collapsible="true"):
+        from clipman.window import ClipmanWindow
+
+        db = self._make_db()
+        for text in ("pinned one", "pinned two"):
+            db.toggle_pin(db.add_entry("text", content_text=text))
+        db.add_entry("text", content_text="recent clip")
+        db.set_setting("collapsible_pinned", collapsible)
+        db.set_setting("pinned_collapsed", "true")
+        app = self._make_app(app_id)
+        window = ClipmanWindow(application=app, db=db, monitor=None)
+        window.refresh()
+        return window
+
+    @staticmethod
+    def _list_kinds(window):
+        return [
+            window._selection.get_item(i).kind
+            for i in range(window._selection.get_n_items())
+        ]
+
+    def test_collapsed_pinned_section_shows_one_stand_in_row(self):
+        window = self._collapsed_pinned_window("com.clipman.TestPinCollapsed")
+
+        self.assertEqual(self._list_kinds(window), ["pinned_collapsed", "entry"])
+        self.assertEqual(window._selection.get_item(0).data["count"], 2)
+
+    def test_collapsed_pinned_section_ignored_without_the_setting(self):
+        window = self._collapsed_pinned_window(
+            "com.clipman.TestPinCollapseOff", collapsible="false"
+        )
+
+        self.assertEqual(self._list_kinds(window), ["entry"] * 3)
+
+    def test_search_shows_pinned_clips_while_collapsed(self):
+        window = self._collapsed_pinned_window("com.clipman.TestPinSearch")
+        window._search_query = "pinned"
+        window.refresh()
+
+        self.assertEqual(self._list_kinds(window), ["entry", "entry"])
+
+    def test_activating_stand_in_row_expands_and_remembers(self):
+        window = self._collapsed_pinned_window("com.clipman.TestPinExpand")
+
+        window._on_list_activate(window.listview, 0)
+
+        self.assertEqual(self._list_kinds(window), ["entry"] * 3)
+        self.assertEqual(window.db.get_setting("pinned_collapsed"), "false")
+
+    def test_enter_without_selection_skips_collapsed_pins(self):
+        window = self._collapsed_pinned_window("com.clipman.TestPinEnter")
+        window._paste_entry = MagicMock()
+
+        self.assertTrue(window._activate_selected())
+
+        pasted = window._paste_entry.call_args.args[0]
+        self.assertEqual(pasted["content_text"], "recent clip")
+
     def test_snap_notes_url_points_at_a_readme_heading(self):
         from clipman.window import ClipmanWindow
 
