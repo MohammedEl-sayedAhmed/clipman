@@ -1,0 +1,111 @@
+name: Upload to extensions.gnome.org
+
+# Uploads the GNOME Shell extension zip of a GitHub Release to
+# extensions.gnome.org (e.g.o.) through its API: scripts/ego-upload.py
+# makes the same calls as GNOME's own `gnome-extensions upload` (log in,
+# POST the zip to /api/v1/extensions, log out). e.g.o. reviews every
+# upload before users get it.
+#
+# release.yml calls this after the GitHub Release, only when extension/
+# changed since the previous release. Run it by hand to upload the
+# extension of any existing release, for example one that was missed.
+#
+# Needs the EGO_USERNAME and EGO_PASSWORD repository secrets: the e.g.o.
+# login of the account that owns the extension. Without them the job
+# warns and skips.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag whose extension zip to upload"
+        required: true
+        type: string
+      only-if-changed:
+        description: "Skip when extension/ did not change since the previous release"
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      EGO_USERNAME:
+        required: false
+      EGO_PASSWORD:
+        required: false
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag whose extension zip to upload (e.g. v1.3.0)"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: ego-upload-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Upload the extension
+    if: github.repository == 'MohammedEl-sayedAhmed/clipman'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read        # the release asset and the tags
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+
+      # The script comes from the commit this workflow runs from, so a
+      # manual run can upload an older release that predates the script.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the tag and the login
+        id: check
+        env:
+          TAG: ${{ inputs.tag }}
+          ONLY_IF_CHANGED: ${{ inputs.only-if-changed }}
+          EGO_USERNAME: ${{ secrets.EGO_USERNAME }}
+          EGO_PASSWORD: ${{ secrets.EGO_PASSWORD }}
+        run: |
+          if ! printf '%s\n' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::tag '$TAG' is not of the form vX.Y.Z"
+            exit 1
+          fi
+          if [ -z "$EGO_USERNAME" ] || [ -z "$EGO_PASSWORD" ]; then
+            echo "::warning::EGO_USERNAME / EGO_PASSWORD not set; skipping the extensions.gnome.org upload."
+            echo "upload=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$ONLY_IF_CHANGED" = "true" ]; then
+            prev=$(git describe --tags --abbrev=0 --match 'v*.*.*' "$TAG^" 2>/dev/null || true)
+            if [ -n "$prev" ] && git diff --quiet "$prev" "$TAG" -- extension/; then
+              echo "::notice::extension/ did not change since $prev; nothing to upload."
+              echo "upload=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "upload=true" >> "$GITHUB_OUTPUT"
+
+      - name: Download the release's extension zip
+        if: steps.check.outputs.upload == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern "clipman-extension-${TAG}.zip" --dir dist
+
+      - name: Upload to extensions.gnome.org
+        if: steps.check.outputs.upload == 'true'
+        env:
+          TAG: ${{ inputs.tag }}
+          EGO_USERNAME: ${{ secrets.EGO_USERNAME }}
+          EGO_PASSWORD: ${{ secrets.EGO_PASSWORD }}
+        run: python3 scripts/ego-upload.py "dist/clipman-extension-${TAG}.zip"

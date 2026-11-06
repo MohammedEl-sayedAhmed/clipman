@@ -12,6 +12,7 @@ on `main`.
 | Baseline guard | `baseline-guard.yml` | `push` to `security-baseline` branch | Auto-reverts unauthorized pushes to the security-baseline branch and opens a high-priority security issue; the branch is meant to be written only by the `update-baseline` job in `codeql.yml`. | No (operates on a side branch) |
 | Delete merged branch | `delete-merged-branch.yml` | `pull_request` `closed` | Deletes the head branch of a merged same-repo pull request. GitHub's repository-level auto-delete does not fire for pull requests merged by the Actions auto-merge queue, so this closes that gap. It skips forks and refuses to delete the default branch. | No |
 | CodeQL | `codeql.yml` | `push` to `main`, `pull_request` to `main`, weekly cron (`27 4 * * 1`), `workflow_dispatch` | Runs `security-and-quality` CodeQL queries for Python and JavaScript; on PRs ratchets against the `security-baseline` branch; on push to `main` rebuilds the baseline from the fresh SARIF. | Yes — `Analyze (python)` and `Analyze (javascript)` |
+| Upload to extensions.gnome.org | `ego-upload.yml` | `workflow_call` from `release.yml` (only when `extension/` changed since the previous release), `workflow_dispatch` with a tag | Downloads the release's `clipman-extension-vX.Y.Z.zip` and uploads it with `scripts/ego-upload.py`, through the e.g.o. API (the same calls as `gnome-extensions upload`). Needs `EGO_USERNAME` and `EGO_PASSWORD`; without them it warns and skips. e.g.o. reviews every upload. | No |
 | Dependency review | `dependency-review.yml` | `pull_request` to `main` | Fails the PR on high-severity vulnerabilities or disallowed licenses introduced by dependency changes. | Yes — `review` (its job's name) |
 | Auto-label PR | `labeler.yml` | `pull_request_target` to `main` | Applies path-based labels from `.github/labeler.yml` so triage knows which area a PR touches. | No |
 | Sync labels | `labels.yml` | `push` to `main` touching `.github/labels.yml`, `workflow_dispatch` | Reconciles repository labels with the declarative `.github/labels.yml` source of truth. | No (push-only) |
@@ -36,7 +37,7 @@ gate the parallel publish jobs.
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="diagrams/release-pipeline-dark.svg">
     <img src="diagrams/release-pipeline-light.svg" width="100%"
-         alt="The release pipeline in four columns. Start: a version tag starts release.yml, then pre-flight and the tests on Python 3.10 to 3.14. Build: build-pypi, build-snap, bundle-extension and build-distpkgs run side by side. Publish: publish-pypi and publish-snap. Release: github-release after every publish, then publish-aur; the extension zip is uploaded to extensions.gnome.org by hand.">
+         alt="The release pipeline in four columns. Start: a version tag starts release.yml, then pre-flight and the tests on Python 3.10 to 3.14. Build: build-pypi, build-snap, bundle-extension and build-distpkgs run side by side. Publish: publish-pypi and publish-snap. Release: github-release after every publish, then publish-aur and, when extension/ changed, publish-ego, which uploads the extension zip to extensions.gnome.org.">
   </picture>
 </p>
 
@@ -105,6 +106,8 @@ and PKGBUILD refresh), PR #39 (AUR auto-publish wiring).
 | (none — OIDC trusted publishing) | `publish-pypi` | Configured once at <https://pypi.org/manage/account/publishing/> against project `clipman-clipboard`, repo `clipman`, workflow `release.yml`, environment `pypi`. See ADR 0004. | n/a (no long-lived secret) | `publish-pypi` fails — investigate the trusted-publisher binding. |
 | `SNAPCRAFT_STORE_CREDENTIALS` | `publish-snap` in `release.yml`, `publish` job in `snap-refresh.yml` | `snapcraft export-login --acls package_access,package_push,package_release,package_update` then paste into repo secrets. | Yearly. Snap Store emails a reminder roughly 30 days before expiry. | `publish-snap` and `snap-refresh` `publish` log `::warning::` and skip — the build artifact is still uploaded for manual review. |
 | `AUR_SSH_PRIVATE_KEY` | `publish-aur` in `release.yml` | ed25519 keypair; register the public key on the AUR maintainer account and paste the private key into repo secrets. | As needed (compromise, account change). | `publish-aur` logs a `::warning::` and skips the push; no release artifacts are affected. |
+| `SNAP_METRICS_CREDENTIALS` | the Snap Store step in `refresh-stats.yml` | `snapcraft export-login --snaps=clipman --acls=package_metrics FILE`, then `gh secret set SNAP_METRICS_CREDENTIALS < FILE`. Read-only: never use the release login here. | Yearly, like the release login. | The step logs a `::notice::` and skips; the other stats still refresh. |
+| `EGO_USERNAME`, `EGO_PASSWORD` | `ego-upload.yml` (called by `release.yml`) | The extensions.gnome.org login of the account that owns the extension (e.g.o. has no other kind of token). | When the e.g.o. password changes. | `ego-upload.yml` logs a `::warning::` and skips the upload; the release is not affected. |
 | `GITHUB_TOKEN` | Every workflow | Built-in; nothing to add. | Rotated per-job by GitHub. | n/a — token always present. Each workflow declares the minimum `permissions:` block it needs (deny-by-default at the workflow level). |
 
 To reconfirm the exact set of secret names declared in the workflows:
@@ -113,8 +116,10 @@ To reconfirm the exact set of secret names declared in the workflows:
 grep -RhoE "secrets\.[A-Z_]+" .github/workflows/ | sort -u
 ```
 
-That returns `secrets.AUR_SSH_PRIVATE_KEY`, `secrets.GITHUB_TOKEN`,
-and `secrets.SNAPCRAFT_STORE_CREDENTIALS`.
+That returns `secrets.AUR_SSH_PRIVATE_KEY`, `secrets.EGO_PASSWORD`,
+`secrets.EGO_USERNAME`, `secrets.GITHUB_TOKEN`,
+`secrets.SNAPCRAFT_STORE_CREDENTIALS`, and
+`secrets.SNAP_METRICS_CREDENTIALS`.
 
 ## SHA-pinning policy
 

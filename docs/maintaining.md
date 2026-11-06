@@ -32,11 +32,12 @@ new maintainer knows what they are about to invoke.
   GitHub Release end-to-end. The full job DAG, secrets matrix, and
   SHA-pinning policy are documented in
   [docs/ci-cd.md](ci-cd.md#release-pipeline-end-to-end).
-- The GNOME Extensions website upload at
-  https://extensions.gnome.org/upload/ is the one step that remains
-  manual — EGO has no programmatic upload API. Grab the
-  `clipman-extension-vX.Y.Z.zip` asset off the new GitHub Release and
-  upload it by hand.
+- The extension goes to extensions.gnome.org through the site's API
+  (`ego-upload.yml`, which `release.yml` calls when `extension/` changed
+  since the previous release). It needs the `EGO_USERNAME` and
+  `EGO_PASSWORD` secrets. To upload a missed release, run "Upload to
+  extensions.gnome.org" from the Actions tab with its tag. e.g.o. still
+  reviews each upload before users get it.
 
 Per-channel auth, so you know what to rotate when something expires:
 
@@ -51,6 +52,12 @@ Per-channel auth, so you know what to rotate when something expires:
   push to `ssh://aur@aur.archlinux.org/clipman-clipboard.git`. Rotate by
   regenerating the keypair, registering the new public key on the AUR
   account, and updating the repository secret.
+- **extensions.gnome.org** — `EGO_USERNAME` and `EGO_PASSWORD`
+  repository secrets, the login of the account that owns the
+  extension. Update them when that password changes.
+- **Snap Store metrics** — `SNAP_METRICS_CREDENTIALS`, a login that
+  can only read metrics, for the daily stats job. It expires yearly,
+  like the release login.
 - **GitHub Release** — the workflow's default `GITHUB_TOKEN` (no
   separate PAT) creates the release entry and uploads assets.
 

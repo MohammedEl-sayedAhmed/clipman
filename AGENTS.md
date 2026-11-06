@@ -132,12 +132,14 @@ specific assistant.
    GitHub's squash commits.
 5. The tag triggers `release.yml`: PyPI (OIDC), Snap Store, AUR push,
    GitHub Release marked Latest.
-6. **extensions.gnome.org has no publish API** — if `extension/` changed,
-   bump the integer `version` in `extension/metadata.json` (mandatory for
-   any e.g.o. upload; stale versions serve stale code) and upload the zip
-   manually at https://extensions.gnome.org/upload/ (listing 9407, UUID
-   `clipman@clipman.com`). Zip layout: `extension.js` + `metadata.json` at
-   the archive root.
+6. **extensions.gnome.org** — if `extension/` changed, bump the integer
+   `version` in `extension/metadata.json` (stale versions serve stale
+   code). `release.yml` then uploads the zip through the e.g.o. API
+   (`ego-upload.yml` + `scripts/ego-upload.py`, the same calls as
+   `gnome-extensions upload`; secrets `EGO_USERNAME` / `EGO_PASSWORD`;
+   listing 9407, UUID `clipman@clipman.com`). For a missed release, run
+   that workflow by hand with the tag. e.g.o. reviews every upload. Zip
+   layout: `extension.js` + `metadata.json` at the archive root.
 7. PyPI/store pages render the **README snapshot from the release** —
    README fixes reach PyPI only via the next release.
 8. Snap Store security emails ("built with packages that have since

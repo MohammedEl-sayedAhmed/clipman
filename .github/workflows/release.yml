@@ -611,3 +611,21 @@ jobs:
               -c user.name="MohammedEl-sayedAhmed" \
               commit -am "Update to $VERSION"
           git push
+
+  publish-ego:
+    # Upload the extension to extensions.gnome.org after the GitHub
+    # Release, which holds the zip. Only when extension/ changed since the
+    # previous release, so an unchanged extension never waits in e.g.o.'s
+    # review queue. Needs EGO_USERNAME / EGO_PASSWORD; without them the
+    # job warns and skips. See ego-upload.yml.
+    name: Upload to extensions.gnome.org
+    needs: [pre-flight, github-release]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ego-upload.yml
+    with:
+      tag: ${{ needs.pre-flight.outputs.tag }}
+      only-if-changed: true
+    secrets:
+      EGO_USERNAME: ${{ secrets.EGO_USERNAME }}
+      EGO_PASSWORD: ${{ secrets.EGO_PASSWORD }}
