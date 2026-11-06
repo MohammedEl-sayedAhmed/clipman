@@ -64,6 +64,16 @@ All notable changes to Clipman are documented in this file.
   footer's Paused pill show incognito instead. The mockup, its
   screenshots and the website's live demo now show what the app does.
 
+### Fixed — CI failed when the Ubuntu mirror was slow
+
+- CI jobs failed several times a day at "Install system dependencies":
+  the mirror sent packages at 45 to 70 kB/s and the step stopped after
+  four minutes. The test jobs' install (about 22 MB) now gets 15
+  minutes and the smaller installs eight, and
+  `scripts/deps.sh --install` tries once more when apt fails without
+  a person to ask (`--yes` or CI). The direct `apt-get` installs in
+  the workflows retry the same way.
+
 ### Fixed — release notes on GitHub Releases
 
 - The v1.3.0 GitHub Release was published without its notes. GitHub
@@ -117,6 +127,8 @@ All notable changes to Clipman are documented in this file.
   how many territories had Clipman installed in the past year.
 - Under the numbers, the website lists the ten countries with the most
   Snap installs this week, with a bar for each and the week's total.
+  "+ N more territories" opens a table of all the others: rank, bar,
+  devices and share of the week.
   It says that the counts come from the daily job and that the page
   has no analytics, instead of "public numbers anyone can verify":
   Snap Store metrics are not public.

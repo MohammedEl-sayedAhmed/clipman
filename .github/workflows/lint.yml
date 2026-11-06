@@ -45,7 +45,7 @@ jobs:
   shell:
     name: Shell (shellcheck)
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
@@ -60,7 +60,7 @@ jobs:
           persist-credentials: false
 
       - name: Install the lint packages
-        timeout-minutes: 4
+        timeout-minutes: 8
         run: scripts/deps.sh --lint --install --yes
 
       - name: Run shellcheck
@@ -91,7 +91,7 @@ jobs:
   validate:
     name: Validate (workflows, metainfo, desktop entry)
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:
@@ -106,7 +106,7 @@ jobs:
           persist-credentials: false
 
       - name: Install the lint packages
-        timeout-minutes: 4
+        timeout-minutes: 8
         run: scripts/deps.sh --lint --install --yes
 
       # Ubuntu 24.04 does not package actionlint: use the release binary,

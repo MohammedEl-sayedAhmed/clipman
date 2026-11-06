@@ -16,7 +16,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
     strategy:
@@ -43,8 +43,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # The dev set is about 22 MB. On a slow day the Azure mirror sends
+      # 45 kB/s, which needs 8 to 9 minutes; a fast mirror takes seconds.
       - name: Install system dependencies
-        timeout-minutes: 4
+        timeout-minutes: 15
         run: scripts/deps.sh --dev --install --yes
 
       - name: Install Python dependencies
@@ -86,7 +88,7 @@ jobs:
   e2e:
     name: e2e (headless GNOME Shell)
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
     steps:
@@ -107,9 +109,17 @@ jobs:
       - name: Install GNOME Shell and Clipman's runtime packages
         run: |
           scripts/deps.sh --runtime --install --yes
-          sudo apt-get install -y --no-install-recommends \
-            gnome-shell gjs dbus-daemon libglib2.0-bin libgl1-mesa-dri \
-            dconf-service dconf-gsettings-backend
+          # A mirror can drop a connection mid-download: try once more.
+          for attempt in 1 2; do
+            if sudo apt-get install -y --no-install-recommends \
+                gnome-shell gjs dbus-daemon libglib2.0-bin libgl1-mesa-dri \
+                dconf-service dconf-gsettings-backend; then
+              break
+            fi
+            if [ "$attempt" = 2 ]; then exit 1; fi
+            echo "::warning::apt-get failed; trying once more"
+            sleep 10
+          done
 
       # Its own headless Shell, bus and home: install, log in again, copy,
       # open the popup, uninstall. See tests/e2e/install_flow.sh.
