@@ -64,6 +64,16 @@ All notable changes to Clipman are documented in this file.
   footer's Paused pill show incognito instead. The mockup, its
   screenshots and the website's live demo now show what the app does.
 
+### Fixed — CI failed when the Ubuntu mirror was slow
+
+- CI jobs failed several times a day at "Install system dependencies":
+  the mirror sent packages at 45 to 70 kB/s and the step stopped after
+  four minutes. The test jobs' install (about 22 MB) now gets 15
+  minutes and the smaller installs eight, and
+  `scripts/deps.sh --install` tries once more when apt fails without
+  a person to ask (`--yes` or CI). The direct `apt-get` installs in
+  the workflows retry the same way.
+
 ### Fixed — release notes on GitHub Releases
 
 - The v1.3.0 GitHub Release was published without its notes. GitHub

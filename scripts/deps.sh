@@ -268,6 +268,7 @@ clipman_deps_missing() {
 # Globals:
 #   CLIPMAN_DEPS_YES        1 passes the assume-yes flag (implied on CI)
 #   CLIPMAN_DEPS_NO_UPDATE  1 skips apt-get update
+#   CLIPMAN_DEPS_RETRY_DELAY  seconds before the one retry (default 10)
 # Arguments:
 #   One or more of runtime, test, lint, dev.
 # Outputs:
@@ -298,8 +299,8 @@ clipman_deps_install() {
             pacman) yes=(--noconfirm) ;;
         esac
     fi
-    # A 30 s fetch timeout lets a stalled mirror fail and retry within CI's
-    # 4-minute step cap.
+    # A 30 s fetch timeout lets a stalled mirror fail and retry well within
+    # CI's step cap.
     local -a apt_opts=(-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o DPkg::Lock::Timeout=60)
     local -a update_cmd=()
     if [ "$pm" = "apt" ] && [ "${CLIPMAN_DEPS_NO_UPDATE:-0}" != "1" ]; then
@@ -334,6 +335,21 @@ clipman_deps_install() {
 
     if [ "$rc" -eq 0 ]; then
         _clipman_deps_run_privileged "${install_cmd[@]}" || rc=$?
+    fi
+
+    # A mirror can drop a connection mid-download. Without a person to
+    # ask (--yes or CI), try the whole thing once more; the packages that
+    # did arrive stay in the cache. Never when root is out of reach.
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 3 ] && _clipman_deps_assume_yes; then
+        _clipman_deps_log "the $pm install failed (exit $rc); trying once more"
+        sleep "${CLIPMAN_DEPS_RETRY_DELAY:-10}"
+        rc=0
+        if [ "${#update_cmd[@]}" -gt 0 ]; then
+            _clipman_deps_run_privileged "${update_cmd[@]}" || rc=$?
+        fi
+        if [ "$rc" -eq 0 ]; then
+            _clipman_deps_run_privileged "${install_cmd[@]}" || rc=$?
+        fi
     fi
 
     if [ "$rc" -eq 3 ]; then
