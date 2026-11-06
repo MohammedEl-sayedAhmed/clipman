@@ -1652,17 +1652,41 @@ footer.site .legal .mono { font-size: 0.78rem; }
     async function loadNumbers() {
         const REPO = 'MohammedEl-sayedAhmed/clipman';
 
+        // GitHub allows a browser 60 API calls an hour per IP address, so
+        // behind a busy shared address (an office, a campus, a phone
+        // network) the live calls fail. The daily stats job saves the same
+        // three numbers to github.json; fetched once, only when needed.
+        let daily = null;
+        const dailyGithub = () => {
+            if (!daily) {
+                const day = new Date().toISOString().slice(0, 10);
+                daily = fetch('https://raw.githubusercontent.com/' + REPO + '/stats/github.json?d=' + day)
+                    .then((r) => (r.ok ? r.json() : null))
+                    .catch(() => null);
+            }
+            return daily;
+        };
+
         // 1+2) Repo metadata → stars and forks (single request).
         (async () => {
             try {
                 const r = await fetch('https://api.github.com/repos/' + REPO, {
                     headers: { 'Accept': 'application/vnd.github+json' },
                 });
-                if (!r.ok) return;
-                const j = await r.json();
-                setNum('num-stars', j.stargazers_count);
-                setNum('num-forks', j.forks_count);
-            } catch (_) { /* leave placeholder */ }
+                if (r.ok) {
+                    const j = await r.json();
+                    if (typeof j.stargazers_count === 'number') {
+                        setNum('num-stars', j.stargazers_count);
+                        setNum('num-forks', j.forks_count);
+                        return;
+                    }
+                }
+            } catch (_) { /* fall back to the daily numbers */ }
+            const d = await dailyGithub();
+            if (d) {
+                setNum('num-stars', d.stars);
+                setNum('num-forks', d.forks);
+            }
         })();
 
         // 3) Releases → sum of asset download counts across every release.
@@ -1671,18 +1695,21 @@ footer.site .legal .mono { font-size: 0.78rem; }
                 const r = await fetch('https://api.github.com/repos/' + REPO + '/releases?per_page=100', {
                     headers: { 'Accept': 'application/vnd.github+json' },
                 });
-                if (!r.ok) return;
-                const releases = await r.json();
-                if (!Array.isArray(releases)) return;
-                let total = 0;
-                for (const rel of releases) {
-                    if (!rel || !Array.isArray(rel.assets)) continue;
-                    for (const a of rel.assets) {
-                        if (typeof a.download_count === 'number') total += a.download_count;
+                const releases = r.ok ? await r.json() : null;
+                if (Array.isArray(releases)) {
+                    let total = 0;
+                    for (const rel of releases) {
+                        if (!rel || !Array.isArray(rel.assets)) continue;
+                        for (const a of rel.assets) {
+                            if (typeof a.download_count === 'number') total += a.download_count;
+                        }
                     }
+                    setNum('num-releases', total);
+                    return;
                 }
-                setNum('num-releases', total);
-            } catch (_) { /* leave placeholder */ }
+            } catch (_) { /* fall back to the daily numbers */ }
+            const d = await dailyGithub();
+            if (d) setNum('num-releases', d.release_downloads);
         })();
 
         // 4 + 5) JSON refreshed daily by the refresh-stats.yml
