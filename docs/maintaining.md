@@ -38,6 +38,10 @@ new maintainer knows what they are about to invoke.
   `EGO_PASSWORD` secrets. To upload a missed release, run "Upload to
   extensions.gnome.org" from the Actions tab with its tag. e.g.o. still
   reviews each upload before users get it.
+- The listing's name, description, URL and donation links come from
+  `extension/metadata.json`: every upload resets them, so edit them
+  there, not on the website. The icon and the screenshot are set only
+  on the website, from the listing page while logged in as the owner.
 
 Per-channel auth, so you know what to rotate when something expires:
 

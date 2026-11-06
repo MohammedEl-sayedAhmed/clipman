@@ -149,6 +149,10 @@ All notable changes to Clipman are documented in this file.
   maintainer had to upload it by hand, and the site still serves
   version 7. The workflow can also be run by hand with a release tag.
   e.g.o. still reviews each upload.
+- The extension's description says what Clipman does for you and that
+  it needs the Clipman app, instead of naming D-Bus signals. The
+  listing on extensions.gnome.org already shows it, with the app
+  icon and the current popup as its screenshot.
 
 ## [1.3.0] - 2026-10-12
 
