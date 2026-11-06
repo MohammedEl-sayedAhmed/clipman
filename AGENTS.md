@@ -140,6 +140,10 @@ specific assistant.
    listing 9407, UUID `clipman@clipman.com`). For a missed release, run
    that workflow by hand with the tag. e.g.o. reviews every upload. Zip
    layout: `extension.js` + `metadata.json` at the archive root.
+   Every upload resets the listing's name, description, URL and
+   donation links to `metadata.json`, so change them there (a
+   text-only change needs no `version` bump). The icon and the
+   screenshot live only on the website (owner login, listing page).
 7. PyPI/store pages render the **README snapshot from the release** —
    README fixes reach PyPI only via the next release.
 8. Snap Store security emails ("built with packages that have since
