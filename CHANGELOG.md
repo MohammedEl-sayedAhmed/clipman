@@ -109,6 +109,13 @@ All notable changes to Clipman are documented in this file.
   layout, so their buttons stay above the footer on a 768 px screen.
 - Dark-theme cards use the design token's colour (`#252536`).
 
+### Changed — the website's territory count is live
+
+- The website said Clipman runs in 38 territories, a number fixed in
+  June. The daily stats job now records Snap Store devices by country
+  (`snap_countries.json` on the `stats` branch), and the website shows
+  how many territories had Clipman installed in the past year.
+
 ### Fixed — the popup on Ubuntu's Yaru theme
 
 - With Ubuntu's Yaru theme, the popup's header bar was Yaru grey, the

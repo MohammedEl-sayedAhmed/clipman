@@ -12,6 +12,10 @@ directory:
 - ``stats_history.json`` — append-only daily series of
   ``{date, stars, gh_downloads}`` so release-download growth (which
   GitHub only exposes as a live total) accrues a history we own.
+- ``snap_countries.json`` — Snap Store devices by country, from
+  ``--snap-metrics``: the JSON that ``snapcraft metrics clipman --name
+  weekly_installed_base_by_country --format json`` prints. The workflow
+  runs that command with a login that can only read metrics.
 
 Deterministic on unchanged inputs: same stars + same downloads produce
 byte-identical files, so the branch only gets a commit when a number
@@ -32,6 +36,7 @@ import urllib.request
 
 REPO = "MohammedEl-sayedAhmed/clipman"
 HISTORY_FILE = "stats_history.json"
+SNAP_COUNTRIES_FILE = "snap_countries.json"
 SVG_DARK = "star-history-dark.svg"
 SVG_LIGHT = "star-history-light.svg"
 UA = f"clipman-stats/1.0 (+https://github.com/{REPO})"
@@ -234,6 +239,91 @@ def build_star_svg(dates, theme):
     )
 
 
+def _count(value):
+    """A device count from a metrics value: int, numeric text or None."""
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int):
+        return max(value, 0)
+    if isinstance(value, str) and value.strip().isdigit():
+        return int(value.strip())
+    return 0
+
+
+def summarize_snap_countries(metric):
+    """Devices by country from a ``weekly_installed_base_by_country``
+    metric, or None when the store sent no usable data.
+
+    ``territories`` and ``by_country`` describe the newest week with data;
+    ``territories_year`` counts every country seen in the whole period,
+    like the "1y" view of the store's metrics page.
+    """
+    if not isinstance(metric, dict) or metric.get("status") != "OK":
+        return None
+    buckets = metric.get("buckets")
+    series = metric.get("series")
+    if not isinstance(buckets, list) or not isinstance(series, list):
+        return None
+    counts = {}
+    for item in series:
+        if not isinstance(item, dict) or not item.get("name"):
+            continue
+        values = item.get("values")
+        if not isinstance(values, list):
+            continue
+        name = str(item["name"]).upper()
+        counts[name] = [_count(values[i]) if i < len(values) else 0
+                        for i in range(len(buckets))]
+    newest = next((i for i in range(len(buckets) - 1, -1, -1)
+                   if any(row[i] for row in counts.values())), None)
+    if newest is None:
+        return None
+    week = {name: row[newest] for name, row in counts.items() if row[newest]}
+    return {
+        "_comment": ("Snap Store devices by country, written by "
+                     "scripts/refresh_stats.py (refresh-stats workflow)."),
+        "date": str(buckets[newest]),
+        "since": str(buckets[0]),
+        "devices": sum(week.values()),
+        "territories": len(week),
+        "territories_year": sum(1 for row in counts.values() if any(row)),
+        "by_country": dict(sorted(week.items(),
+                                  key=lambda item: (-item[1], item[0]))),
+    }
+
+
+def read_snap_metrics(path):
+    """The metric object in a ``snapcraft metrics --format json`` output
+    file; None when the file is missing or holds no JSON object."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except OSError:
+        return None
+    start = text.find("{")
+    if start < 0:
+        return None
+    try:
+        return json.loads(text[start:])
+    except ValueError:
+        return None
+
+
+def write_snap_countries(out, metrics_path):
+    """Write snap_countries.json from the metrics file, if it holds data.
+
+    The last good file stays when the store sent nothing usable, so a
+    failed fetch never shows zero countries on the website.
+    """
+    summary = summarize_snap_countries(read_snap_metrics(metrics_path))
+    if summary is None:
+        return False
+    with open(os.path.join(out, SNAP_COUNTRIES_FILE), "w") as f:
+        json.dump(summary, f, indent=2)
+        f.write("\n")
+    return True
+
+
 def update_history(path, stars, downloads_total, per_tag):
     """Append today's point only when a value moved (no-churn invariant)."""
     try:
@@ -267,8 +357,18 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--out", default=".",
                         help="directory to write into (default: current)")
-    out = parser.parse_args(argv).out
+    parser.add_argument("--snap-metrics", metavar="FILE",
+                        help="snapcraft metrics JSON for snap_countries.json")
+    args = parser.parse_args(argv)
+    out = args.out
     os.makedirs(out, exist_ok=True)
+
+    if args.snap_metrics:
+        if write_snap_countries(out, args.snap_metrics):
+            print("snap_countries.json written")
+        else:
+            print("WARN: no Snap Store metrics; snap_countries.json left "
+                  "as-is", file=sys.stderr)
 
     dates = fetch_star_dates()
     if dates is not None:

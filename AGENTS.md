@@ -156,12 +156,18 @@ specific assistant.
 ## Bots & automation
 
 - `refresh-stats.yml` (daily 06:00 UTC + on push to its own paths)
-  refreshes marketing counters, the self-hosted star-history SVGs, and the
-  downloads history, and commits them straight to the `stats` branch
+  refreshes marketing counters, the self-hosted star-history SVGs, the
+  downloads history and the Snap Store devices by country
+  (`snap_countries.json`; the website reads its territory count), and
+  commits them straight to the `stats` branch
   with the built-in `GITHUB_TOKEN`. There is no PR, no personal token and
   nothing for the maintainer to do; `main` never gets a bot commit. Its
   outputs are **deterministic on unchanged inputs** — keep them that way,
   or the branch gets a junk commit every day.
+- The Snap Store numbers need `SNAP_METRICS_CREDENTIALS`, a login that
+  can only read metrics (`snapcraft export-login --snaps=clipman
+  --acls=package_metrics FILE`). Never give this daily job the release
+  login: that one can publish.
 - The website (`docs/index.html`) and the README read the data from
   `raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/stats/…`.
   Never commit the data to `main` again. If the branch is deleted, the

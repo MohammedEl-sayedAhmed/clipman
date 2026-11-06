@@ -1090,7 +1090,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
             </a>
           </div>
           <ul class="chips" role="list">
-            <li class="chip"><span class="v">Snap Store</span><span class="l">38 territories</span></li>
+            <li class="chip"><span class="v">Snap Store</span><span class="l"><span id="num-territories-chip">62</span> territories</span></li>
             <li class="chip"><span class="v">Ext #9407</span><span class="l">GNOME Shell extension</span></li>
             <li class="chip"><span class="v">clipman-clipboard</span><span class="l">PyPI · AUR</span></li>
             <li class="chip"><span class="v">100%</span><span class="l">Wayland-native</span></li>
@@ -1150,7 +1150,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
   <section id="numbers">
     <div class="wrap">
       <p class="eyebrow">By the numbers</p>
-      <h2>Already running across <span class="accent">38 territories</span>. On every channel that matters.</h2>
+      <h2>Used across <span class="accent"><span id="num-territories">62</span> territories</span> in the past year. On every channel that matters.</h2>
       <p class="lede">
         Live counts pulled straight from GitHub, the GNOME Extensions registry, and PyPI on page load.
         No analytics, no dashboards — just the public numbers anyone can verify.
@@ -1544,6 +1544,23 @@ footer.site .legal .mono { font-size: 0.78rem; }
                 if (typeof gnome === 'number') setNum('num-gnome', gnome);
                 if (typeof pypi  === 'number') setNum('num-pypi',  pypi);
             } catch (_) { /* leave placeholder */ }
+        })();
+
+        // 6) Snap Store countries, from the same daily job: the number of
+        // territories with Clipman installed in the past year. The page
+        // keeps its last known number when the file is missing.
+        (async () => {
+            try {
+                const day = new Date().toISOString().slice(0, 10);
+                const r = await fetch('https://raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/stats/snap_countries.json?d=' + day);
+                if (!r.ok) return;
+                const j = await r.json();
+                const n = j && j.territories_year;
+                if (typeof n === 'number' && n > 0) {
+                    setNum('num-territories', n);
+                    setNum('num-territories-chip', n);
+                }
+            } catch (_) { /* keep the last known number */ }
         })();
     }
     if (document.readyState === 'loading') {

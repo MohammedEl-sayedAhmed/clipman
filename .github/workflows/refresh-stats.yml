@@ -25,9 +25,16 @@ name: Refresh project stats
 # people change it. Pushes made with the built-in token start no
 # workflows, so this cannot loop.
 #
-# Readers: docs/index.html (numbers.json) and README.md (the star-history
-# SVGs and the downloads history), all through
+# Readers: docs/index.html (numbers.json, snap_countries.json) and
+# README.md (the star-history SVGs and the downloads history), all through
 # raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/stats/.
+#
+# Snap Store devices by country come from `snapcraft metrics`, which needs
+# a store login. This job uses SNAP_METRICS_CREDENTIALS, a login that can
+# only read this snap's metrics, made with:
+#   snapcraft export-login --snaps=clipman --acls=package_metrics FILE
+# Never the release login (SNAPCRAFT_STORE_CREDENTIALS): that one can
+# publish, and this job runs every day. Without the secret the step skips.
 # (Until 2026-09 the branch was called `numbers`.)
 
 on:
@@ -57,7 +64,8 @@ jobs:
     # A fork has no use for a stats branch of its own.
     if: github.repository == 'MohammedEl-sayedAhmed/clipman'
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # Installing snapcraft takes about a minute.
+    timeout-minutes: 10
     permissions:
       contents: write       # commit to the stats branch
     env:
@@ -120,6 +128,7 @@ jobs:
             '' \
             '- `numbers.json`: PyPI and GNOME Extensions counters for the website.' \
             '- `stats_history.json`: stars and release downloads, one point per change.' \
+            '- `snap_countries.json`: Snap Store devices by country (the website reads the territory count).' \
             '- `star-history-dark.svg`, `star-history-light.svg`: the README star chart.' \
             > "$DATA_DIR/README.md"
 
@@ -202,10 +211,38 @@ jobs:
           }))
           PY
 
+      - name: Fetch Snap Store devices by country
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAP_METRICS_CREDENTIALS }}
+          METRICS_FILE: ${{ runner.temp }}/snap-countries.json
+        run: |
+          if [ -z "$SNAPCRAFT_STORE_CREDENTIALS" ]; then
+            echo "::notice::SNAP_METRICS_CREDENTIALS is not set; skipping the Snap Store numbers."
+            exit 0
+          fi
+          # A store problem must not stop the other stats: keep the last
+          # numbers and warn.
+          if ! sudo snap install snapcraft --classic --channel=9.x/stable; then
+            echo "::warning::could not install snapcraft; keeping the last Snap Store numbers."
+            exit 0
+          fi
+          # One year of weekly figures: the newest week gives the devices
+          # by country, the whole year gives the territory count.
+          start=$(date -u -d '366 days ago' +%F)
+          end=$(date -u -d '1 day ago' +%F)
+          if ! snapcraft metrics clipman --name weekly_installed_base_by_country \
+              --start "$start" --end "$end" --format json > "$METRICS_FILE"; then
+            echo "::warning::snapcraft metrics failed; keeping the last Snap Store numbers."
+            rm -f "$METRICS_FILE"
+          fi
+
       - name: Refresh self-hosted stats (star chart + downloads history)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 scripts/refresh_stats.py --out "$DATA_DIR"
+          METRICS_FILE: ${{ runner.temp }}/snap-countries.json
+        run: |
+          python3 scripts/refresh_stats.py --out "$DATA_DIR" \
+            --snap-metrics "$METRICS_FILE"
 
       - name: Commit to the stats branch if anything changed
         env:
