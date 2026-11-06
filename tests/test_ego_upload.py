@@ -1,7 +1,9 @@
 """scripts/ego-upload.py against a fake extensions.gnome.org API.
 
 The fake server answers the three calls the script makes (login, upload,
-logout) the way the real API documents them; nothing leaves this machine.
+logout) with the replies of the real site's code: django-rest-registration
+for login and logout, with knox tokens, and the extension upload view.
+Nothing leaves this machine.
 """
 import contextlib
 import email.parser
@@ -45,6 +47,10 @@ class FakeEgo(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    @staticmethod
+    def _form(raw):
+        return {k: v[0] for k, v in urllib.parse.parse_qs(raw.decode()).items()}
+
     def do_POST(self):
         state = self.server.state
         length = int(self.headers.get("Content-Length") or 0)
@@ -52,12 +58,14 @@ class FakeEgo(http.server.BaseHTTPRequestHandler):
         call = {"path": self.path, "auth": self.headers.get("Authorization")}
         state["calls"].append(call)
         if self.path == "/api/v1/accounts/login/":
-            form = urllib.parse.parse_qs(raw.decode())
-            call["form"] = {k: v[0] for k, v in form.items()}
-            if call["form"] == {"login": USER, "password": PASSWORD}:
-                self._reply(200, {"token": TOKEN, "expiry": "2026-11-07T00:00:00Z"})
+            call["form"] = self._form(raw)
+            if call["form"] != {"login": USER, "password": PASSWORD}:
+                self._reply(400, {"detail": "Login or password invalid."})
+            elif state.get("login_without_token"):
+                self._reply(200, {"detail": "Login successful"})
             else:
-                self._reply(400, {"non_field_errors": ["Unable to log in."]})
+                self._reply(200, {"detail": "Login successful", "token": {
+                    "expiry": "2026-11-13T00:00:00Z", "token": TOKEN}})
         elif self.path == "/api/v1/extensions":
             message = email.parser.BytesParser(policy=email.policy.default).parsebytes(
                 b"Content-Type: " + self.headers["Content-Type"].encode() + b"\r\n\r\n" + raw)
@@ -69,11 +77,18 @@ class FakeEgo(http.server.BaseHTTPRequestHandler):
             if call["auth"] != f"Token {TOKEN}":
                 self._reply(401, {"detail": "Invalid token."})
             elif state.get("reject"):
-                self._reply(400, {"detail": state["reject"]})
+                self._reply(400, state["reject"])
             else:
-                self._reply(201, {"uuid": "clipman@clipman.com", "version": 8})
+                self._reply(201, {"extension": "clipman@clipman.com", "version": 8,
+                                  "status": 0, "link": "/extension/9407/"})
         elif self.path == "/api/v1/accounts/logout/":
-            self._reply(200, {})
+            call["form"] = self._form(raw)
+            if call["auth"] != f"Token {TOKEN}":
+                self._reply(401, {"detail": "Invalid token."})
+            elif state.get("logout_status"):
+                self._reply(state["logout_status"], {"detail": "Server error."})
+            else:
+                self._reply(200, {"detail": "Logout successful"})
         else:
             self._reply(404, {"detail": "Not found."})
 
@@ -89,7 +104,8 @@ class TestEgoUpload(unittest.TestCase):
         self.dir = tempfile.mkdtemp(prefix="clipman-ego-")
         self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
         self.zip = self._zip({"metadata.json": json.dumps(
-            {"uuid": "clipman@clipman.com", "version": 9}),
+            {"uuid": "clipman@clipman.com", "version": 9,
+             "url": "https://github.com/MohammedEl-sayedAhmed/clipman"}),
             "extension.js": "export default class {}\n"})
 
     def _zip(self, files, name="clipman-extension-v1.3.0.zip"):
@@ -127,6 +143,7 @@ class TestEgoUpload(unittest.TestCase):
         self.assertEqual(login["form"], {"login": USER, "password": PASSWORD})
         self.assertEqual(upload["auth"], f"Token {TOKEN}")
         self.assertEqual(logout["auth"], f"Token {TOKEN}")
+        self.assertEqual(logout["form"], {"revoke_token": "true"})
         fields = upload["fields"]
         self.assertEqual(fields["shell_license_compliant"][1], b"true")
         self.assertEqual(fields["tos_compliant"][1], b"true")
@@ -134,20 +151,35 @@ class TestEgoUpload(unittest.TestCase):
         self.assertEqual(filename, "clipman-extension-v1.3.0.zip")
         with open(self.zip, "rb") as f:
             self.assertEqual(content, f.read())
+        self.assertIn('"version": 8', text)
         self.assertIn("reviews each version", text)
+        self.assertNotIn("note:", text)
 
     def test_a_refused_login_stops_before_the_upload(self):
         code, text = self._run(env={"EGO_USERNAME": USER, "EGO_PASSWORD": "wrong"})
         self.assertEqual(code, 1)
-        self.assertIn("login failed: ['Unable to log in.']", text)
+        self.assertIn("login failed: Login or password invalid. (HTTP 400)", text)
+        self.assertEqual(self._paths(), ["/api/v1/accounts/login/"])
+
+    def test_a_login_reply_without_a_token_stops_before_the_upload(self):
+        self.server.state["login_without_token"] = True
+        code, text = self._run()
+        self.assertEqual(code, 1)
+        self.assertIn("login failed: the reply has no token", text)
         self.assertEqual(self._paths(), ["/api/v1/accounts/login/"])
 
     def test_a_rejected_upload_still_logs_out(self):
-        self.server.state["reject"] = "This version already exists."
+        self.server.state["reject"] = {"source": ["The `url` field is missing"]}
         code, text = self._run()
         self.assertEqual(code, 1)
-        self.assertIn("upload failed: This version already exists. (HTTP 400)", text)
+        self.assertIn("upload failed: ['The `url` field is missing'] (HTTP 400)", text)
         self.assertEqual(self._paths()[-1], "/api/v1/accounts/logout/")
+        # The site also answers some rejections with a bare list.
+        self.server.state["reject"] = ["An extension with that UUID has already been added"]
+        code, text = self._run()
+        self.assertEqual(code, 1)
+        self.assertIn("upload failed: An extension with that UUID has already been "
+                      "added (HTTP 400)", text)
 
     def test_a_failed_logout_does_not_fail_the_upload(self):
         real_post = ego._post
@@ -160,8 +192,14 @@ class TestEgoUpload(unittest.TestCase):
         with unittest.mock.patch.object(ego, "_post", post):
             code, text = self._run()
         self.assertEqual(code, 0, text)
-        self.assertIn("note: logout failed", text)
+        self.assertIn("note: logout failed (cannot reach", text)
         self.assertIn("Uploaded", text)
+
+    def test_a_refused_logout_does_not_fail_the_upload(self):
+        self.server.state["logout_status"] = 500
+        code, text = self._run()
+        self.assertEqual(code, 0, text)
+        self.assertIn("note: logout failed (Server error. (HTTP 500))", text)
 
     def test_a_bad_zip_stops_before_any_request(self):
         bad = self._zip({"metadata.json": "{}"}, name="bad.zip")
@@ -174,6 +212,9 @@ class TestEgoUpload(unittest.TestCase):
         no_uuid = self._zip({"metadata.json": "{}", "extension.js": ""},
                             name="no-uuid.zip")
         self.assertIn("no uuid", self._run(zip_path=no_uuid)[1])
+        no_url = self._zip({"metadata.json": json.dumps({"uuid": "a@b"}),
+                            "extension.js": ""}, name="no-url.zip")
+        self.assertIn("no url", self._run(zip_path=no_url)[1])
         self.assertEqual(self._paths(), [])
 
     def test_a_missing_login_stops_before_any_request(self):
