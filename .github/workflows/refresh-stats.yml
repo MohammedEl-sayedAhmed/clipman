@@ -7,7 +7,9 @@ name: Refresh project stats
 # Why this exists: the marketing page (docs/index.html) renders live
 # counts under "By the numbers". The GitHub-derived ones (stars, forks,
 # release downloads) come straight from api.github.com, which permits
-# cross-origin browser fetches. PyPI's stat endpoints either require an
+# cross-origin browser fetches; when the visitor's IP address has used up
+# GitHub's 60 calls an hour, the page reads github.json from this job
+# instead. PyPI's stat endpoints either require an
 # API key (pepy.tech v2) or rate-limit, and extensions.gnome.org sends
 # no CORS header at all — so client-side fetches silently fail and
 # leave the tile showing "—". This workflow does the same fetches from
@@ -25,7 +27,7 @@ name: Refresh project stats
 # people change it. Pushes made with the built-in token start no
 # workflows, so this cannot loop.
 #
-# Readers: docs/index.html (numbers.json, snap_countries.json) and
+# Readers: docs/index.html (numbers.json, github.json, snap_countries.json) and
 # README.md (the star-history SVGs and the downloads history), all through
 # raw.githubusercontent.com/MohammedEl-sayedAhmed/clipman/stats/.
 #
@@ -127,6 +129,7 @@ jobs:
             'Nothing here is edited by hand; the next run would overwrite it.' \
             '' \
             '- `numbers.json`: PyPI and GNOME Extensions counters for the website.' \
+            '- `github.json`: stars, forks and release downloads, for when the website cannot reach api.github.com.' \
             '- `stats_history.json`: stars and release downloads, one point per change.' \
             '- `snap_countries.json`: Snap Store devices by country (the website reads the territory count).' \
             '- `star-history-dark.svg`, `star-history-light.svg`: the README star chart.' \

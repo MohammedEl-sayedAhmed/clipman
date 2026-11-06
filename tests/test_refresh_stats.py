@@ -1,8 +1,9 @@
-"""scripts/refresh_stats.py: the Snap Store devices-by-country summary.
+"""scripts/refresh_stats.py: the Snap Store summary and the GitHub counts.
 
 The workflow passes the JSON that ``snapcraft metrics clipman --name
 weekly_installed_base_by_country --format json`` prints; these tests feed
-the same shape without the store.
+the same shape without the store. The GitHub calls are replaced too, so
+nothing here touches the network.
 """
 import importlib.util
 import json
@@ -10,6 +11,7 @@ import os
 import shutil
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -120,6 +122,63 @@ class TestWrite(unittest.TestCase):
             self.dir, os.path.join(self.dir, "missing.json")))
         with open(self.out, encoding="utf-8") as f:
             self.assertEqual(json.load(f), {"territories_year": 62})
+
+
+class TestGithubNumbers(unittest.TestCase):
+    def setUp(self):
+        self.dir = tempfile.mkdtemp(prefix="clipman-stats-")
+        self.addCleanup(shutil.rmtree, self.dir, ignore_errors=True)
+        self.out = os.path.join(self.dir, stats.GITHUB_FILE)
+
+    def _read(self):
+        with open(self.out, encoding="utf-8") as f:
+            return json.load(f)
+
+    def test_writes_the_three_numbers(self):
+        stats.write_github_numbers(self.dir, 37, 12, 245)
+        data = self._read()
+        self.assertEqual((data["stars"], data["forks"], data["release_downloads"]),
+                         (37, 12, 245))
+
+    def test_the_same_numbers_write_the_same_bytes(self):
+        stats.write_github_numbers(self.dir, 37, 12, 245)
+        with open(self.out, "rb") as f:
+            first = f.read()
+        stats.write_github_numbers(self.dir, 37, 12, 245)
+        with open(self.out, "rb") as f:
+            self.assertEqual(f.read(), first)
+
+    def test_repo_counts_need_two_whole_numbers(self):
+        cases = [
+            ({"stargazers_count": 37, "forks_count": 12}, (37, 12)),
+            (None, None),
+            ({"stargazers_count": 37}, None),
+            ({"stargazers_count": "37", "forks_count": 12}, None),
+            ({"stargazers_count": -1, "forks_count": 12}, None),
+        ]
+        for reply, want in cases:
+            with self.subTest(reply=reply), \
+                    unittest.mock.patch.object(stats, "_get_json", return_value=reply):
+                self.assertEqual(stats.fetch_repo_counts(), want)
+
+    def _main(self, repo, releases):
+        with unittest.mock.patch.object(stats, "fetch_star_dates", return_value=None), \
+                unittest.mock.patch.object(stats, "fetch_repo_counts", return_value=repo), \
+                unittest.mock.patch.object(stats, "fetch_release_downloads",
+                                           return_value=releases):
+            stats.main(["--out", self.dir])
+
+    def test_main_writes_the_file(self):
+        self._main((37, 12), (245, {"v1.3.0": 245}))
+        self.assertEqual(self._read()["stars"], 37)
+
+    def test_main_keeps_the_last_file_when_github_fails(self):
+        with open(self.out, "w", encoding="utf-8") as f:
+            f.write('{"stars": 30}\n')
+        for repo, releases in ((None, (245, {})), ((37, 12), None)):
+            with self.subTest(repo=repo, releases=releases):
+                self._main(repo, releases)
+                self.assertEqual(self._read(), {"stars": 30})
 
 
 if __name__ == "__main__":

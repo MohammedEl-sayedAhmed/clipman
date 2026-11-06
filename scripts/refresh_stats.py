@@ -16,6 +16,9 @@ directory:
   ``--snap-metrics``: the JSON that ``snapcraft metrics clipman --name
   weekly_installed_base_by_country --format json`` prints. The workflow
   runs that command with a login that can only read metrics.
+- ``github.json`` — stars, forks and release downloads. The website asks
+  api.github.com first and reads this file when the visitor's IP address
+  has used up GitHub's 60 calls an hour.
 
 Deterministic on unchanged inputs: same stars + same downloads produce
 byte-identical files, so the branch only gets a commit when a number
@@ -37,6 +40,7 @@ import urllib.request
 REPO = "MohammedEl-sayedAhmed/clipman"
 HISTORY_FILE = "stats_history.json"
 SNAP_COUNTRIES_FILE = "snap_countries.json"
+GITHUB_FILE = "github.json"
 SVG_DARK = "star-history-dark.svg"
 SVG_LIGHT = "star-history-light.svg"
 UA = f"clipman-stats/1.0 (+https://github.com/{REPO})"
@@ -324,6 +328,38 @@ def write_snap_countries(out, metrics_path):
     return True
 
 
+def fetch_repo_counts():
+    """(stars, forks) of the repository; None on failure."""
+    repo = _get_json(f"https://api.github.com/repos/{REPO}")
+    if not isinstance(repo, dict):
+        return None
+    stars, forks = repo.get("stargazers_count"), repo.get("forks_count")
+    if not all(isinstance(n, int) and n >= 0 for n in (stars, forks)):
+        return None
+    return stars, forks
+
+
+def write_github_numbers(out, stars, forks, release_downloads):
+    """Write github.json for the website's fallback.
+
+    The page asks api.github.com first. Browsers share a limit of 60
+    calls an hour per IP address, so behind a busy shared address the
+    page reads these daily numbers instead. No timestamp, so unchanged
+    numbers write the same bytes and the stats branch gets no commit.
+    """
+    data = {
+        "_comment": ("GitHub counts for the website when api.github.com "
+                     "refuses the visitor; written by "
+                     "scripts/refresh_stats.py (refresh-stats workflow)."),
+        "stars": stars,
+        "forks": forks,
+        "release_downloads": release_downloads,
+    }
+    with open(os.path.join(out, GITHUB_FILE), "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+
+
 def update_history(path, stars, downloads_total, per_tag):
     """Append today's point only when a value moved (no-churn invariant)."""
     try:
@@ -381,6 +417,14 @@ def main(argv=None):
               file=sys.stderr)
 
     rel = fetch_release_downloads()
+    counts = fetch_repo_counts()
+    if rel is not None and counts is not None:
+        write_github_numbers(out, counts[0], counts[1], rel[0])
+        print(f"github.json written (stars={counts[0]} forks={counts[1]} "
+              f"release_downloads={rel[0]})")
+    else:
+        print("WARN: GitHub counts fetch failed; github.json left as-is",
+              file=sys.stderr)
     if rel is not None and dates is not None:
         total, per_tag = rel
         changed = update_history(os.path.join(out, HISTORY_FILE),

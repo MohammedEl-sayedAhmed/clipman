@@ -133,6 +133,15 @@ All notable changes to Clipman are documented in this file.
   has no analytics, instead of "public numbers anyone can verify":
   Snap Store metrics are not public.
 
+### Fixed — the website's GitHub numbers on a shared connection
+
+- The website asks api.github.com for stars, forks and release
+  downloads, and GitHub allows a browser 60 such calls an hour per IP
+  address. Behind a busy shared address (an office, a campus, a phone
+  network) the three counts showed "—". The daily stats job now saves
+  them to `github.json` on the `stats` branch, and the page uses that
+  file when GitHub refuses.
+
 ### Fixed — the popup on Ubuntu's Yaru theme
 
 - With Ubuntu's Yaru theme, the popup's header bar was Yaru grey, the
