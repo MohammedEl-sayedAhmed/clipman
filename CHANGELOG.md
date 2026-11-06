@@ -115,6 +115,11 @@ All notable changes to Clipman are documented in this file.
   June. The daily stats job now records Snap Store devices by country
   (`snap_countries.json` on the `stats` branch), and the website shows
   how many territories had Clipman installed in the past year.
+- Under the numbers, the website lists the ten countries with the most
+  Snap installs this week, with a bar for each and the week's total.
+  It says that the counts come from the daily job and that the page
+  has no analytics, instead of "public numbers anyone can verify":
+  Snap Store metrics are not public.
 
 ### Fixed — the popup on Ubuntu's Yaru theme
 

@@ -669,6 +669,100 @@ html[data-theme="light"] .reel-frame {
     font-weight: 500;
 }
 
+/* Snap installs by country */
+.geo-card {
+    margin-top: 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 22px 20px;
+}
+.geo-card[hidden] { display: none; }
+.geo-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px 16px;
+    margin-bottom: 14px;
+}
+.geo-head .num-label {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: var(--label);
+    color: var(--muted);
+    font-weight: 500;
+}
+.geo-total {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+/* Ranked down the first column, then the second. */
+.geo-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-rows: repeat(var(--geo-rows, 5), auto);
+    grid-auto-flow: column;
+    gap: 10px 32px;
+}
+.geo-list li {
+    display: grid;
+    grid-template-columns: minmax(7.5em, 34%) 1fr 3.5em;
+    align-items: center;
+    gap: 12px;
+    font-size: 0.92rem;
+    color: var(--text);
+}
+.geo-list .geo-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.geo-list .geo-bar {
+    height: 8px;
+    border-radius: var(--r-pill);
+    background: var(--border);
+    overflow: hidden;
+}
+.geo-list .geo-bar > span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--accent);
+}
+.geo-list .geo-n {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    text-align: right;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+@media (max-width: 640px) {
+    .geo-list {
+        grid-template-columns: 1fr;
+        grid-template-rows: none;
+        grid-auto-flow: row;
+    }
+    .geo-list li { grid-template-columns: 9em 1fr 2.5em; }
+}
+.geo-more {
+    margin: 12px 0 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+.geo-more[hidden] { display: none; }
+.geo-foot {
+    margin: 14px 0 0;
+    font-size: 0.8rem;
+    color: var(--muted);
+}
+
 /* ================================================================
    INSTALL TABS
    ================================================================ */
@@ -1090,7 +1184,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
             </a>
           </div>
           <ul class="chips" role="list">
-            <li class="chip"><span class="v">Snap Store</span><span class="l"><span id="num-territories-chip">62</span> territories</span></li>
+            <li class="chip"><span class="v">Snap Store</span><span class="l"><span id="num-territories-chip">99</span> territories</span></li>
             <li class="chip"><span class="v">Ext #9407</span><span class="l">GNOME Shell extension</span></li>
             <li class="chip"><span class="v">clipman-clipboard</span><span class="l">PyPI · AUR</span></li>
             <li class="chip"><span class="v">100%</span><span class="l">Wayland-native</span></li>
@@ -1150,10 +1244,10 @@ footer.site .legal .mono { font-size: 0.78rem; }
   <section id="numbers">
     <div class="wrap">
       <p class="eyebrow">By the numbers</p>
-      <h2>Used across <span class="accent"><span id="num-territories">62</span> territories</span> in the past year. On every channel that matters.</h2>
+      <h2>Used across <span class="accent"><span id="num-territories">99</span> territories</span> in the past year. On every channel that matters.</h2>
       <p class="lede">
-        Live counts pulled straight from GitHub, the GNOME Extensions registry, and PyPI on page load.
-        No analytics, no dashboards — just the public numbers anyone can verify.
+        Counts from GitHub, the GNOME Extensions registry, PyPI and the Snap Store, refreshed every day.
+        No analytics and no cookies on this page.
       </p>
 
       <div class="numbers-grid">
@@ -1201,6 +1295,17 @@ footer.site .legal .mono { font-size: 0.78rem; }
           <div class="num-value" id="num-pypi" data-loading="true">—</div>
           <div class="num-label">downloads · last 30 days</div>
         </div>
+      </div>
+
+      <!-- Filled from stats/snap_countries.json; stays hidden without it. -->
+      <div class="geo-card" id="geo" hidden>
+        <div class="geo-head">
+          <span class="num-label">Snap installs by country</span>
+          <span class="geo-total"><span id="geo-devices">—</span> devices in <span id="geo-territories">—</span> territories · week to <span id="geo-date">—</span></span>
+        </div>
+        <ol class="geo-list" id="geo-list"></ol>
+        <p class="geo-more" id="geo-more" hidden></p>
+        <p class="geo-foot">From the Snap Store’s weekly metrics. The other channels don’t report countries.</p>
       </div>
     </div>
   </section>
@@ -1487,6 +1592,63 @@ footer.site .legal .mono { font-size: 0.78rem; }
         el.textContent = s;
         el.setAttribute('data-loading', 'false');
     }
+    // The ten countries with the most Snap installs this week, as rows
+    // with a bar scaled to the largest. Built with textContent only: the
+    // file is data, never markup.
+    function showCountries(j) {
+        const card = document.getElementById('geo');
+        const list = document.getElementById('geo-list');
+        const by = j && j.by_country;
+        if (!card || !list || !by || typeof by !== 'object') return;
+        const rows = Object.entries(by)
+            .filter(([code, n]) => /^[A-Z]{2}$/.test(code) && typeof n === 'number' && n > 0)
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+        if (!rows.length) return;
+        let names = null;
+        try { names = new Intl.DisplayNames(['en'], { type: 'region' }); } catch (_) { /* codes only */ }
+        const nameOf = (code) => {
+            try { return (names && names.of(code)) || code; } catch (_) { return code; }
+        };
+        const top = rows.slice(0, 10);
+        const max = top[0][1];
+        list.textContent = '';
+        for (const [code, n] of top) {
+            const li = document.createElement('li');
+            const name = document.createElement('span');
+            name.className = 'geo-name';
+            name.textContent = nameOf(code);
+            const bar = document.createElement('span');
+            bar.className = 'geo-bar';
+            bar.setAttribute('aria-hidden', 'true');
+            const fill = document.createElement('span');
+            fill.style.width = Math.max(4, Math.round(n / max * 100)) + '%';
+            bar.appendChild(fill);
+            const num = document.createElement('span');
+            num.className = 'geo-n';
+            num.textContent = fmt(n) ?? String(n);
+            li.append(name, bar, num);
+            li.setAttribute('aria-label', nameOf(code) + ': ' + n + (n === 1 ? ' device' : ' devices'));
+            list.appendChild(li);
+        }
+        list.style.setProperty('--geo-rows', String(Math.ceil(top.length / 2)));
+        const rest = rows.length - top.length;
+        const more = document.getElementById('geo-more');
+        if (more && rest > 0) {
+            more.textContent = '+ ' + rest + ' more ' + (rest === 1 ? 'territory' : 'territories');
+            more.hidden = false;
+        }
+        const devices = typeof j.devices === 'number' ? j.devices
+            : rows.reduce((sum, row) => sum + row[1], 0);
+        setNum('geo-devices', devices);
+        setNum('geo-territories', rows.length);
+        const date = typeof j.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(j.date)
+            ? new Date(j.date + 'T00:00:00Z') : null;
+        const when = document.getElementById('geo-date');
+        if (when && date && !isNaN(date)) {
+            when.textContent = date.toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        }
+        card.hidden = false;
+    }
     async function loadNumbers() {
         const REPO = 'MohammedEl-sayedAhmed/clipman';
 
@@ -1560,6 +1722,7 @@ footer.site .legal .mono { font-size: 0.78rem; }
                     setNum('num-territories', n);
                     setNum('num-territories-chip', n);
                 }
+                showCountries(j);
             } catch (_) { /* keep the last known number */ }
         })();
     }
