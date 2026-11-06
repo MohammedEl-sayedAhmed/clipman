@@ -299,6 +299,7 @@ left sidebar). It carries six panes:
 | | Accent color & font color | Free-form color pickers with one-tap reset to theme defaults |
 | | Window opacity | Window transparency (30%–100%) |
 | | Show count badges on filter tabs | Show the per-filter item count on the All / Text / Images / Snippets tabs |
+| | Collapsible Pinned section | Click the ★ Pinned header to hide or show pinned clips (off by default) |
 | **Privacy** | Incognito mode | Pause recording now and on every launch |
 | | Auto-clear sensitive clips | Delete detected secrets after the delay below; when off they stay masked (on by default) |
 | | Auto-clear delay | Seconds before detected sensitive entries are purged (default 30) |

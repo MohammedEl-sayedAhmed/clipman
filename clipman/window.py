@@ -21,6 +21,7 @@ import gi
 # Direct submodule imports — avoid ``from clipman import …`` which
 # CodeQL flags as a cyclic import (window <-> clipman package).
 from gettext import gettext as _
+from gettext import ngettext
 
 import clipman.updates as updates
 from clipman._version import __version__
@@ -293,7 +294,9 @@ class ClipItem(GObject.Object):
     The virtualized list only builds widgets for the ~dozen visible rows, so
     switching filters / opening the popup no longer rebuilds hundreds of
     ``Adw.ActionRow``s up front. ``data`` is the raw row dict; ``kind`` is
-    ``"entry"`` or ``"snippet"``.
+    ``"entry"``, ``"snippet"`` or ``"pinned_collapsed"`` (the single row
+    that stands in for a collapsed Pinned section; ``data`` holds the
+    pinned ``count``).
     """
 
     __gtype_name__ = "ClipmanClipItem"
@@ -381,6 +384,14 @@ class ClipmanWindow(Adw.ApplicationWindow):
         self._show_count_badges = (
             self.db.get_setting("show_count_badges", "true") or ""
         ).strip().lower() != "false"
+        # Collapsible Pinned section (Preferences > Layout), off by default.
+        # The collapsed state itself is remembered across popup opens.
+        self._collapsible_pinned = (
+            self.db.get_setting("collapsible_pinned", "false") or ""
+        ).strip().lower() == "true"
+        self._pinned_collapsed = (
+            self.db.get_setting("pinned_collapsed", "false") or ""
+        ).strip().lower() == "true"
         self._accent_color = (
             self.db.get_setting("accent_color", "default") or "default"
         )
@@ -933,11 +944,24 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 entries = self.db.get_entries(limit=200, content_type="image")
             else:
                 entries = self.db.get_entries(limit=200)
-            items = [ClipItem(e, "entry") for e in entries]
+            if self._pinned_section_collapsed():
+                # A section header only exists while its section has rows,
+                # so one stand-in row keeps the Pinned header on screen.
+                pinned = [e for e in entries if e.get("pinned")]
+                items = [
+                    ClipItem(e, "entry") for e in entries if not e.get("pinned")
+                ]
+                if pinned:
+                    items.insert(
+                        0, ClipItem({"count": len(pinned)}, "pinned_collapsed")
+                    )
+            else:
+                items = [ClipItem(e, "entry") for e in entries]
 
         # Cancel any in-flight incremental fill from a previous refresh.
         self._cancel_fill()
-        self._update_count(len(items))
+        # Count the clips themselves, not the stand-in row.
+        self._update_count(len(entries))
         self._update_filter_counts()
 
         if not items:
@@ -975,6 +999,24 @@ class ClipmanWindow(Adw.ApplicationWindow):
         if len(items) > _FILL_FIRST:
             self._fill_rest = items[_FILL_FIRST:]
             self._fill_id = GLib.idle_add(self._fill_more)
+
+    def _pinned_section_collapsed(self):
+        """True when the Pinned section shows as one stand-in row.
+
+        Search results and the snippet list are never collapsed.
+        """
+        return (
+            self._collapsible_pinned
+            and self._pinned_collapsed
+            and not self._search_query
+            and self._active_filter != "snippets"
+        )
+
+    def _set_pinned_collapsed(self, collapsed):
+        """Collapse or expand the Pinned section and remember the choice."""
+        self._pinned_collapsed = collapsed
+        self.db.set_setting("pinned_collapsed", "true" if collapsed else "false")
+        self.refresh()
 
     def _fill_more(self):
         """Append the next batch of queued rows (idle callback). Returns True
@@ -1529,6 +1571,8 @@ class ClipmanWindow(Adw.ApplicationWindow):
         row._clip_item = item
         if item.kind == "snippet":
             self._bind_snippet_row(row, item.data)
+        elif item.kind == "pinned_collapsed":
+            self._bind_collapsed_pinned_row(row, item.data["count"])
         else:
             self._bind_entry_row(row, item.data)
         # What a screen reader says for the row: its title and meta line,
@@ -1549,6 +1593,8 @@ class ClipmanWindow(Adw.ApplicationWindow):
 
     def _compute_bucket(self, item):
         """Return (order, label) for the item's dated section."""
+        if item.kind == "pinned_collapsed":
+            return (0, _("★ Pinned"))
         if item.kind != "entry":
             return (0, "")
         entry = item.data
@@ -1596,17 +1642,48 @@ class ClipmanWindow(Adw.ApplicationWindow):
         return -1 if oa < ob else (1 if oa > ob else 0)
 
     def _header_setup(self, _factory, header):
-        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4)
+        # Chevron for the collapsible Pinned header; hidden otherwise.
+        chevron = Gtk.Image()
+        chevron.add_css_class("clip-section-header")
+        chevron.set_visible(False)
         title = Gtk.Label(xalign=0)
         title.add_css_class("clip-section-header")
         title.set_hexpand(True)
         count = Gtk.Label(xalign=1)
         count.add_css_class("clip-section-header")
+        box.append(chevron)
         box.append(title)
         box.append(count)
+        click = Gtk.GestureClick()
+        click.connect("released", self._on_section_header_released, box)
+        box.add_controller(click)
+        box._h_chevron = chevron
         box._h_title = title
         box._h_count = count
+        box._h_collapsible = False
         header.set_child(box)
+
+    def _on_section_header_released(self, _gesture, _n_press, _x, _y, box):
+        if box._h_collapsible:
+            self._set_pinned_collapsed(not self._pinned_collapsed)
+
+    def _set_header_collapsible(self, box, collapsible):
+        """Show or hide the Pinned header's chevron and click affordance."""
+        box._h_collapsible = collapsible
+        box._h_chevron.set_visible(collapsible)
+        if not collapsible:
+            box.set_tooltip_text(None)
+            box.set_cursor_from_name(None)
+            return
+        collapsed = self._pinned_collapsed
+        box._h_chevron.set_from_icon_name(
+            "pan-end-symbolic" if collapsed else "pan-down-symbolic"
+        )
+        box.set_tooltip_text(
+            _("Show pinned clips") if collapsed else _("Hide pinned clips")
+        )
+        box.set_cursor_from_name("pointer")
 
     def _header_bind(self, _factory, header):
         item = header.get_item()
@@ -1614,6 +1691,7 @@ class ClipmanWindow(Adw.ApplicationWindow):
         if item is None:
             box._h_title.set_text("")
             box._h_count.set_text("")
+            self._set_header_collapsible(box, False)
             return
         order, label = self._bucket(item)
         # Uppercase like the mockup's group headers (GTK CSS has no
@@ -1625,15 +1703,25 @@ class ClipmanWindow(Adw.ApplicationWindow):
             # .group-header.pinned with a trailing count).
             box._h_title.add_css_class("pinned")
             box._h_count.add_css_class("pinned")
-            n = sum(
-                1 for i in range(self._selection.get_n_items())
-                if self._bucket(self._selection.get_item(i))[0] == 0
-            )
+            box._h_chevron.add_css_class("pinned")
+            n = 0
+            for i in range(self._selection.get_n_items()):
+                it = self._selection.get_item(i)
+                if self._bucket(it)[0] == 0:
+                    n += it.data["count"] if it.kind == "pinned_collapsed" else 1
             box._h_count.set_text(str(n))
+            self._set_header_collapsible(
+                box,
+                self._collapsible_pinned
+                and not self._search_query
+                and self._active_filter != "snippets",
+            )
         else:
             box._h_title.remove_css_class("pinned")
             box._h_count.remove_css_class("pinned")
+            box._h_chevron.remove_css_class("pinned")
             box._h_count.set_text("")
+            self._set_header_collapsible(box, False)
 
     def _bind_entry_row(self, row, entry):
         ctype = entry.get("content_type") or "text"
@@ -1771,6 +1859,22 @@ class ClipmanWindow(Adw.ApplicationWindow):
         # Snippets are managed in the Snippets dialog — no inline pin/delete.
         row._clip_actions.set_visible(False)
         row.remove_css_class("pinned")
+
+    def _bind_collapsed_pinned_row(self, row, count):
+        """Stand-in row for a collapsed Pinned section; activating it
+        expands the section."""
+        row._clip_title.remove_css_class("masked")
+        row._clip_subtitle.remove_css_class("warning")
+        row._clip_title.set_text(
+            ngettext("{n} pinned clip", "{n} pinned clips", count).format(n=count)
+        )
+        row._clip_subtitle.set_text(_("Hidden · Click to show"))
+        row._clip_thumb.set_paintable(None)
+        row._clip_thumb.set_visible(False)
+        self._set_tile(row, "text")
+        row._clip_icon.set_from_icon_name("starred-symbolic")
+        row._clip_actions.set_visible(False)
+        row.add_css_class("pinned")
 
     def _set_tile(self, row, rtype):
         """Show the coloured type tile for ``rtype`` (text/link/code/image/
@@ -2212,6 +2316,8 @@ class ClipmanWindow(Adw.ApplicationWindow):
             self._paste_snippet(item.data)
         elif item.kind == "entry":
             self._paste_entry(item.data)
+        elif item.kind == "pinned_collapsed":
+            self._set_pinned_collapsed(False)
 
     def _on_pin_clicked(self, _button, entry_id):
         self.db.toggle_pin(entry_id)
@@ -2343,6 +2449,9 @@ class ClipmanWindow(Adw.ApplicationWindow):
                 "false", "0", ""
             )
             self._update_filter_counts()
+        elif key == "collapsible_pinned":
+            self._collapsible_pinned = str(value).lower() == "true"
+            self.refresh()
         elif key == "accent_color":
             self._accent_color = value or "default"
             self._apply_css()
@@ -2490,6 +2599,15 @@ class ClipmanWindow(Adw.ApplicationWindow):
         item = self._selected_item()
         if item is None:
             return False
+        if item.kind == "pinned_collapsed":
+            if self._selection.get_selected() != Gtk.INVALID_LIST_POSITION:
+                self._set_pinned_collapsed(False)
+                return True
+            # Nothing picked: Enter pastes the newest clip, not the
+            # hidden pins.
+            item = self._selection.get_item(1)
+            if item is None:
+                return False
         if item.kind == "snippet":
             self._paste_snippet(item.data)
         elif item.kind == "entry":

@@ -4,6 +4,16 @@ All notable changes to Clipman are documented in this file.
 
 ## [Unreleased]
 
+### Added — collapsible Pinned section
+
+- Preferences → Appearance → Layout has a new switch, **Collapsible
+  Pinned section** (off by default). With it on, clicking the ★ Pinned
+  header hides or shows the pinned clips, so recent history sits at the
+  top of the list. While collapsed, one row shows how many clips are
+  pinned; clicking it or pressing Enter on it expands them again. The
+  choice is remembered, and search results always show pinned clips
+  ([#386](https://github.com/MohammedEl-sayedAhmed/clipman/issues/386)).
+
 ### Added — copy without pasting
 
 - Preferences → Shortcuts → "When I select a clip" has a new choice,
