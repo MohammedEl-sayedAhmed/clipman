@@ -66,8 +66,9 @@ jobs:
     # A fork has no use for a stats branch of its own.
     if: github.repository == 'MohammedEl-sayedAhmed/clipman'
     runs-on: ubuntu-24.04
-    # Installing snapcraft takes about a minute.
-    timeout-minutes: 10
+    # Installing snapcraft usually takes about a minute; its step has its
+    # own cap below, so the other steps always get their turn.
+    timeout-minutes: 15
     permissions:
       contents: write       # commit to the stats branch
     env:
@@ -214,7 +215,13 @@ jobs:
           }))
           PY
 
+      # snapd can hang for many minutes ("Waiting for automatic snapd
+      # restart"), as it did on 2026-11-06. The step's own cap and the
+      # timeouts inside it make a hang cost the Snap numbers only: the
+      # last ones stay, and the steps after this one still run.
       - name: Fetch Snap Store devices by country
+        timeout-minutes: 9
+        continue-on-error: true
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAP_METRICS_CREDENTIALS }}
           METRICS_FILE: ${{ runner.temp }}/snap-countries.json
@@ -225,17 +232,17 @@ jobs:
           fi
           # A store problem must not stop the other stats: keep the last
           # numbers and warn.
-          if ! sudo snap install snapcraft --classic --channel=9.x/stable; then
-            echo "::warning::could not install snapcraft; keeping the last Snap Store numbers."
+          if ! timeout 300 sudo snap install snapcraft --classic --channel=9.x/stable; then
+            echo "::warning::could not install snapcraft within 5 minutes; keeping the last Snap Store numbers."
             exit 0
           fi
           # One year of weekly figures: the newest week gives the devices
           # by country, the whole year gives the territory count.
           start=$(date -u -d '366 days ago' +%F)
           end=$(date -u -d '1 day ago' +%F)
-          if ! snapcraft metrics clipman --name weekly_installed_base_by_country \
+          if ! timeout 180 snapcraft metrics clipman --name weekly_installed_base_by_country \
               --start "$start" --end "$end" --format json > "$METRICS_FILE"; then
-            echo "::warning::snapcraft metrics failed; keeping the last Snap Store numbers."
+            echo "::warning::snapcraft metrics failed or took over 3 minutes; keeping the last Snap Store numbers."
             rm -f "$METRICS_FILE"
           fi
 
