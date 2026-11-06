@@ -124,6 +124,15 @@ All notable changes to Clipman are documented in this file.
   so they follow the Catppuccin or stone palette and your accent.
   Preferences and dialogs still use Yaru's switches and cards.
 
+### Changed — the extension uploads itself to extensions.gnome.org
+
+- extensions.gnome.org has an API now, and GNOME's own `gnome-extensions
+  upload` uses it. A release that changes `extension/` uploads the
+  extension zip there on its own (`ego-upload.yml`); before, the
+  maintainer had to upload it by hand, and the site still serves
+  version 7. The workflow can also be run by hand with a release tag.
+  e.g.o. still reviews each upload.
+
 ## [1.3.0] - 2026-10-12
 
 A large reliability release, built on a full audit of the app, the

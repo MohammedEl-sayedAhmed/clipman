@@ -590,8 +590,8 @@ def release():
              "release", "release", "green"),
         Card("aur", 3, 1, "publish-aur", "PKGBUILD and .SRCINFO",
              "publish", "upload", "violet"),
-        Card("ego", 3, 2, "extensions.gnome.org", "upload the zip",
-             "by hand", "hand", "gray", dashed=True),
+        Card("ego", 3, 2, "publish-ego", "to extensions.gnome.org",
+             "publish", "upload", "violet"),
     ]
     d = Diagram(
         name="release-pipeline",
@@ -604,8 +604,9 @@ def release():
               ".rpm). publish-pypi uploads with OIDC trusted publishing and "
               "publish-snap releases to stable, candidate and beta. Once both "
               "succeed, github-release attaches every file with the CHANGELOG "
-              "notes, and publish-aur pushes the PKGBUILD. The extension zip is "
-              "uploaded to extensions.gnome.org by hand."),
+              "notes, and publish-aur pushes the PKGBUILD. When extension/ "
+              "changed since the previous release, publish-ego uploads the "
+              "extension zip to extensions.gnome.org."),
         columns=[("Start", "a tag, then the checks"),
                  ("Build", "side by side, after the tests"),
                  ("Publish", "to PyPI and the Snap Store"),
@@ -638,9 +639,9 @@ def release():
         *[Edge(points) for points in fan_in],
         Edge([ghr.bottom(), aur.top()], "then", mid(ghr.bottom(), aur.top())),
         # The zip is built by bundle-extension and attached to the release;
-        # the upload to extensions.gnome.org is done by hand.
-        Edge([ext.right(18), ego.left(18)], "the zip, by hand",
-             (d.col_x(2) + d.col_w / 2, ext.right(18)[1]), dashed=True),
+        # publish-ego uploads it when extension/ changed.
+        Edge([ext.right(18), ego.left(18)], "the zip, if changed",
+             (d.col_x(2) + d.col_w / 2, ext.right(18)[1])),
     ]
     return d
 
