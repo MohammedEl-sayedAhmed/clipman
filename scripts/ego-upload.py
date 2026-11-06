@@ -3,8 +3,10 @@
 
 Uses the site's API the same way GNOME's own ``gnome-extensions upload``
 does: log in with the account's username and password to get a token,
-POST the zip to ``/api/v1/extensions``, then log out. extensions.gnome.org
-reviews every upload before users get it.
+POST the zip to ``/api/v1/extensions``, then log out with
+``revoke_token=true``. That revokes every API token of the account, so
+none outlives the job; the website login is a separate session and stays.
+extensions.gnome.org reviews every upload before users get it.
 
 Reads the login from the ``EGO_USERNAME`` and ``EGO_PASSWORD`` environment
 variables and never prints the password or the token.
@@ -25,6 +27,7 @@ import zipfile
 BASE = "https://extensions.gnome.org/api/v1"
 UA = "clipman-ego-upload/1.0 (+https://github.com/MohammedEl-sayedAhmed/clipman)"
 TIMEOUT = 60
+_FORM = {"Content-Type": "application/x-www-form-urlencoded"}
 
 
 class UploadError(Exception):
@@ -44,6 +47,10 @@ def check_zip(path):
         raise UploadError(f"{path}: not a usable extension zip ({error})") from None
     if not isinstance(meta, dict) or not meta.get("uuid"):
         raise UploadError(f"{path}: metadata.json has no uuid")
+    url = meta.get("url")
+    if not isinstance(url, str) or not url.strip():
+        raise UploadError(f"{path}: metadata.json has no url "
+                          "(extensions.gnome.org requires one)")
     return meta
 
 
@@ -72,6 +79,8 @@ def _post(url, data, headers):
 
 def _detail(body, status):
     """The server's reason for a failure, without echoing a token."""
+    if isinstance(body, list) and body:
+        return f"{'; '.join(str(item) for item in body)[:300]} (HTTP {status})"
     if isinstance(body, dict):
         for key in ("detail", "non_field_errors", "source", "error"):
             if body.get(key):
@@ -82,13 +91,18 @@ def _detail(body, status):
 
 
 def login(base, user, password):
-    """A login token for the account."""
+    """A login token for the account.
+
+    The reply is ``{"detail": ..., "token": {"token": ..., "expiry": ...}}``.
+    """
     data = urllib.parse.urlencode({"login": user, "password": password}).encode()
-    status, body = _post(f"{base}/accounts/login/", data,
-                         {"Content-Type": "application/x-www-form-urlencoded"})
-    token = body.get("token") if isinstance(body, dict) else None
-    if status != 200 or not isinstance(token, str) or not token:
+    status, body = _post(f"{base}/accounts/login/", data, _FORM)
+    if status != 200:
         raise UploadError(f"login failed: {_detail(body, status)}")
+    info = body.get("token") if isinstance(body, dict) else None
+    token = info.get("token") if isinstance(info, dict) else None
+    if not isinstance(token, str) or not token:
+        raise UploadError("login failed: the reply has no token")
     return token
 
 
@@ -130,12 +144,19 @@ def upload(base, token, path):
 
 
 def logout(base, token):
-    """End the session; a failure here only gets a note in the log."""
+    """Revoke the token; a failure here only gets a note in the log."""
+    data = urllib.parse.urlencode({"revoke_token": "true"}).encode()
     try:
-        _post(f"{base}/accounts/logout/", b"", {"Authorization": f"Token {token}"})
+        status, body = _post(f"{base}/accounts/logout/", data,
+                             {**_FORM, "Authorization": f"Token {token}"})
     except UploadError as error:
-        print(f"note: logout failed ({error}); the token expires by itself",
-              file=sys.stderr)
+        reason = str(error)
+    else:
+        if status == 200:
+            return
+        reason = _detail(body, status)
+    print(f"note: logout failed ({reason}); the token expires by itself",
+          file=sys.stderr)
 
 
 def main(argv=None):
@@ -161,7 +182,7 @@ def main(argv=None):
     except UploadError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
-    shown = {k: reply[k] for k in ("uuid", "version", "status")
+    shown = {k: reply[k] for k in ("extension", "version", "status", "link")
              if isinstance(reply, dict) and k in reply}
     print(f"Uploaded {json.dumps(shown) if shown else ''}".rstrip())
     print("extensions.gnome.org reviews each version before users get it.")

@@ -3,8 +3,8 @@ name: Upload to extensions.gnome.org
 # Uploads the GNOME Shell extension zip of a GitHub Release to
 # extensions.gnome.org (e.g.o.) through its API: scripts/ego-upload.py
 # makes the same calls as GNOME's own `gnome-extensions upload` (log in,
-# POST the zip to /api/v1/extensions, log out). e.g.o. reviews every
-# upload before users get it.
+# POST the zip to /api/v1/extensions), then logs out and revokes the
+# account's API tokens. e.g.o. reviews every upload before users get it.
 #
 # release.yml calls this after the GitHub Release, only when extension/
 # changed since the previous release. Run it by hand to upload the

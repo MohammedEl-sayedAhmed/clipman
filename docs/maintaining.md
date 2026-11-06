@@ -54,7 +54,10 @@ Per-channel auth, so you know what to rotate when something expires:
   account, and updating the repository secret.
 - **extensions.gnome.org** — `EGO_USERNAME` and `EGO_PASSWORD`
   repository secrets, the login of the account that owns the
-  extension. Update them when that password changes.
+  extension. Update them when that password changes. Each upload
+  ends by revoking the account's API tokens, so a `gnome-extensions
+  upload` login on your own machine asks for the password again; the
+  website login is not affected.
 - **Snap Store metrics** — `SNAP_METRICS_CREDENTIALS`, a login that
   can only read metrics, for the daily stats job. It expires yearly,
   like the release login.
