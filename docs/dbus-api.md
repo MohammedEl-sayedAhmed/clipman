@@ -164,9 +164,14 @@ per sender. When no daemon is running, every call is refused. The
 `gdbus` examples below therefore fail from a plain shell; they are here
 to show the signatures.
 
-**Errors.** When `SimulatePaste` or `MoveWindowToCursor` fails inside
-the Shell, the caller gets `org.gnome.Shell.Extensions.clipman.Error`
-with the failure's message.
+**Errors.** The extension raises no error of its own. When a method
+fails inside the Shell, GJS logs the failure in the Shell's journal.
+From GJS 1.88 (GNOME 50) on, GJS also answers the caller with an
+`org.gnome.gjs.JSError.*` error that carries the failure's message.
+Before that (GNOME 45 to 49) the caller gets no answer, and its call
+fails when its D-Bus timeout ends. Until extension version 10,
+`SimulatePaste` and `MoveWindowToCursor` answered with
+`org.gnome.Shell.Extensions.clipman.Error` instead.
 
 ### SimulatePaste
 
