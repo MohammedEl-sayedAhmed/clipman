@@ -21,7 +21,8 @@ specific assistant.
 ## Git workflow
 
 - `git fetch origin --prune` **before any base-vs-branch operation**
-  (rebase, merge, PR status check). `main` moves fast via daily bots;
+  (rebase, merge, PR status check). `main` moves fast (Dependabot runs weekly; the stats job writes to
+  the `stats` branch, not `main`);
   branch protection requires branches to be up to date, so serial PRs are
   the norm: merge one, pull, rebase/branch the next.
 - **One clean commit per PR.** Verify locally before pushing; amend fixups
@@ -61,8 +62,8 @@ specific assistant.
   against noble's GLib 2.80, so bump the cap deliberately.
 - Lint: `scripts/dev.sh lint` = `ruff check clipman tests scripts clipman.py` +
   `shellcheck --severity=warning` over `install.sh`, `uninstall.sh`,
-  `launcher.sh`, `scripts/*.sh` and the `.githooks/` scripts,
-  the exact CI scopes (`ruff` / `shellcheck` subcommands run one half;
+  `launcher.sh`, `scripts/*.sh`, `tests/e2e/*.sh` and the `.githooks/`
+  scripts, the exact CI scopes (`ruff` / `shellcheck` subcommands run one half;
   `check` runs lint then test). Ruff is pinned in the `lint` extra of
   `pyproject.toml` (Dependabot bumps the pin), and `pyproject.toml` names
   the rule set (`select`), so a newer local ruff checks the same rules as
@@ -106,7 +107,7 @@ specific assistant.
 ## Design source of truth
 
 - The UI must match the mockups in `docs/design/` (`main-window.html`,
-  `preferences.html`, `states.html`) with tokens in
+  `preferences.html`, `snippets.html`, `states.html`) with tokens in
   `docs/design/tokens.css`. Dark palette: Catppuccin Mocha; light palette:
   "warm stone" (deliberately *not* Catppuccin Latte — its muted text fails
   WCAG AA on white). Check contrast (4.5:1 text, 3:1 large/graphical)
@@ -124,8 +125,10 @@ specific assistant.
 ## Release chain (v-tag driven)
 
 1. `scripts/bump-version.sh <ver>` updates pyproject, `_version.py`, snap,
-   flathub, AUR, `CITATION.cff`.
-2. Update `CHANGELOG.md` (rename `[Unreleased]` → `[<ver>] - <date>`).
+   flathub, AUR, `CITATION.cff`. It also adds an empty `<release>` entry
+   to both `data/*.metainfo.xml` files.
+2. Update `CHANGELOG.md` (rename `[Unreleased]` → `[<ver>] - <date>`) and
+   fill the release notes into both `<release>` entries.
 3. Release PR → squash-merge.
 4. **Create the tag via the GitHub API** (`gh api .../git/refs`), not
    `git push --tags`: the identity pre-push hook rejects tags pointing at

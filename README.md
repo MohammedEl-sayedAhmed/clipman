@@ -43,7 +43,7 @@ Press **Super+V** to view your clipboard history, search entries, pin favorites,
 
 <br>
 
-<sub><i>Above: the shipped GTK 4 + libadwaita popup. The full settings surface is a sidebar <code>Adw.Dialog</code>, the snippets editor is an <code>Adw.NavigationSplitView</code> dialog, and the edge states (empty, no results, sensitive clips cleared, first run, errors…) render as Adwaita <code>StatusPage</code> / <code>Banner</code> / <code>AlertDialog</code> with a shared Catppuccin overlay. <a href="https://mohammedel-sayedahmed.github.io/clipman/#design">Browse the mockups</a> · <a href="https://mohammedel-sayedahmed.github.io/clipman/">project page</a>.</i></sub>
+<sub><i>Above: the shipped GTK 4 + libadwaita popup. The full settings surface is a sidebar <code>Adw.Dialog</code>, the snippets editor is an <code>Adw.NavigationSplitView</code> dialog, and the edge states (empty, no results, sensitive clips cleared, first run, errors…) render as an Adwaita <code>StatusPage</code>, a custom banner row, or an Adwaita <code>AlertDialog</code>, with a shared Catppuccin overlay. <a href="https://mohammedel-sayedahmed.github.io/clipman/#design">Browse the mockups</a> · <a href="https://mohammedel-sayedahmed.github.io/clipman/">project page</a>.</i></sub>
 
 </div>
 
@@ -381,6 +381,7 @@ clipman/
 │                                  #   Shell run of install, copy and uninstall
 ├── docs/                          # ADRs, design mockups, the project page
 ├── snap/                          # Snap packaging
+├── flathub/                       # Flatpak manifest
 ├── aur/                           # AUR packaging
 ├── scripts/                       # dev.sh task runner, release and install helpers
 ├── .github/workflows/             # CI: tests, lint, CodeQL, Scorecard, secret scan,

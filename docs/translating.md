@@ -57,7 +57,8 @@ That runs `scripts/gen-pot.py`, which reads `po/POTFILES.in` and
 extracts with `pygettext`. `pygettext` ships with CPython, so no extra
 system package is needed. The header is rewritten afterwards, so the
 template is byte-identical between runs when the sources have not
-changed, and the diff shows only real string changes. The same command
+changed. Each string keeps its `#: file:line` references, so the diff
+also shows strings whose lines only moved. The same command
 then compiles any `po/*.po` into `locale/`, which needs `msgfmt` from
 the `gettext` package (`scripts/deps.sh --i18n --install`).
 
@@ -100,8 +101,9 @@ gettext.textdomain("clipman")
 `install.sh` and `scripts/dev.sh i18n` both compile every
 `po/<lang>.po` into `locale/<lang>/LC_MESSAGES/clipman.mo`, so a source
 checkout picks up translations. Both steps are best effort: with no
-`.po` files, or without `msgfmt` installed, they print a line and carry
-on, and the app stays in English.
+`.po` files they do nothing, and with `.po` files but no `msgfmt`
+installed they print a line and carry on. Either way the app stays in
+English.
 
 Still open: the packaged builds. `snap/snapcraft.yaml`, `aur/PKGBUILD`
 and `pyproject.toml` have no locale install step, so snap, AUR and pip

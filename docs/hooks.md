@@ -59,15 +59,19 @@ checks as the hooks (`scan_commit_content` in `.githooks/_lib.sh`) on each
 commit's trailers, message and added lines, and also scans the pull
 request's title and description. The description of a pull request
 opened by a bot is skipped, because Dependabot quotes upstream release
-notes. It never looks at who you are. So the rule holds even for someone
-who never installed the hooks or skipped them with `--no-verify`.
+notes. The scans of added lines skip the paths in `HOOKS_PATH_ALLOWLIST`
+(`.githooks/_lib.sh`): `docs/hooks.md`, `scripts/install-hooks.sh`, and
+the hook scripts and their test files under `.githooks/` (`_lib.sh`,
+`_test.sh`, `_test_parse.py`, `_test_corpus.json`, `commit-msg`,
+`pre-commit`, `pre-push`), which have to name what they look for. It never looks at who you
+are. So the rule holds even for someone who never installed the hooks or skipped them with `--no-verify`.
 
 ## What gets checked
 
 | Hook | When it runs | What it does |
 |---|---|---|
 | `commit-msg` | After you save the commit message | Scans the message for AI footprints (Claude/Anthropic/🤖). Rejects trailers (`Co-Authored-By:`, `Signed-off-by:`, …) from an AI-assistant vendor domain, or that borrow an allowlisted handle on an address that doesn't back it up. Everyone else's trailers pass. |
-| `pre-commit` | Before the commit-msg editor opens | Scans the **added** lines in your staged diff for footprints. In maintainer mode, also compares your active git identity (config, env vars, `GIT_AUTHOR_IDENT`) against the allowlist. |
+| `pre-commit` | Before the commit-msg editor opens | Scans the **added** lines in your staged diff for footprints, except in the allowlisted paths above. In maintainer mode, also compares your active git identity (config, env vars, `GIT_AUTHOR_IDENT`) against the allowlist. |
 | `pre-push` | Before commits leave the machine | Scans each commit being pushed (trailers, message, added lines). In maintainer mode, also checks each commit's author and committer, refuses a push whose real destination belongs to an account outside the allowlist, and refuses when the `gh` CLI's active account is outside it. |
 
 The push check looks at the URL the push actually goes to, after any

@@ -13,8 +13,10 @@ should still be reported through the private channel in
 | -------------------- | -------------------------------------------------- | -------------------------------------------------------------- |
 | Clipboard contents   | high (passwords, tokens, recovery codes)           | in-memory + history DB                                         |
 | History database     | high (transitive — contains past clipboard)        | `~/.local/share/clipman/clipman.db` (SQLite WAL)               |
+| Safety copies        | high (each holds the whole history, sensitive clips included) | `~/.local/share/clipman/`: up to 3 `clipman.db.<time>.bak` files taken before a restore, and the `clipman.db.<time>.damaged` files a restore sets aside |
 | Image files          | medium                                             | `~/.local/share/clipman/images/`                               |
 | Daemon D-Bus surface | medium (injection + control vector)                | session bus, `com.clipman.Daemon`                              |
+| App D-Bus surface    | low (its `Activate` toggles the popup, as `Toggle` does) | session bus, `com.clipman.Clipman` (`org.gtk.Application`, `org.freedesktop.Application`) |
 | Extension D-Bus surface | high (keystroke synthesis and window focus inside the compositor) | session bus, `org.gnome.Shell.Extensions.clipman`       |
 
 ## Adversaries
@@ -50,6 +52,9 @@ should still be reported through the private channel in
   configurable delay (default 30 seconds). Not covered: a bare
   password with no label is stored as an ordinary clip
   ([#313](https://github.com/MohammedEl-sayedAhmed/clipman/issues/313)),
+  only the first 65,536 characters of a clip are scanned, the
+  timer keeps pinned clips and removes nothing while auto-clear is
+  switched off,
   and the system clipboard itself is not cleared
   ([#314](https://github.com/MohammedEl-sayedAhmed/clipman/issues/314)).
 - **Restrictive on-disk permissions** — data dir `0o700`, database
@@ -60,11 +65,15 @@ should still be reported through the private channel in
   `IMAGES_DIR`).
 - **Backup-import hardening** — a backup is checked in a private copy
   before it can replace the history: `PRAGMA integrity_check`, the
-  required columns, no triggers, views or virtual tables, and
-  `trusted_schema=OFF`, because the file is untrusted. Image paths are
-  sanitised, SQLite-URI injection is rejected via URL-encoded `file:`
-  URIs, and the live database is replaced by a single rename only
-  after every check passes.
+  required columns, no triggers or views, plain (not virtual)
+  `entries`, `snippets` and `settings` tables, and
+  `trusted_schema=OFF`, because the file is untrusted. A virtual table
+  under any other name still passes.
+  [#407](https://github.com/MohammedEl-sayedAhmed/clipman/issues/407)
+  will make the check refuse every virtual table.
+  Image paths are sanitised, the private copy is opened by its path,
+  never as a `file:` URI, and the live database is replaced by a
+  single rename only after every check passes.
 - **Image signature check** — when an image is copied, it is stored
   only if it starts with a PNG, JPEG, GIF, BMP or WebP signature. The
   BMP and WebP checks look only at the first bytes (`BM`, `RIFF`), so

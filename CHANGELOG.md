@@ -163,6 +163,26 @@ All notable changes to Clipman are documented in this file.
   listing on extensions.gnome.org already shows it, with the app
   icon and the current popup as its screenshot.
 
+### Fixed — docs that no longer matched the code
+
+- A check of every current-state doc against the code found about 60
+  places that were out of date or wrong
+  ([#408](https://github.com/MohammedEl-sayedAhmed/clipman/issues/408)).
+  Among them: the update check is opt-out for source, PyPI and AUR
+  installs, not opt-in; the database, not the clipboard monitor, keeps
+  one row per clip; the D-Bus reference lists the app's own
+  `com.clipman.Clipman` name, the error name and the right
+  "Introduced" versions; the threat model lists the safety copies of
+  the database; and the release docs describe the automatic
+  extensions.gnome.org upload and how to roll back a snap release.
+- SECURITY.md names GitHub private vulnerability reporting as the only
+  channel. Its email fallback pointed at an address that is not
+  published anywhere.
+- The website no longer says the daemon wakes only when you copy, and
+  the extension's description no longer implies that it binds
+  Super+V.
+- Footprints is a required check on `main`, as AGENTS.md says.
+
 ## [1.3.0] - 2026-10-12
 
 A large reliability release, built on a full audit of the app, the

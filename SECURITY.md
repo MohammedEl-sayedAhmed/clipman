@@ -25,14 +25,12 @@ If you discover a security vulnerability in Clipman, please report it
 privately so the project has time to release a fix before public
 disclosure.
 
-**Preferred channel:** [GitHub private vulnerability reporting][gh-report]
-on this repository.
+**Channel:** [GitHub private vulnerability reporting][gh-report]
+on this repository. It is the only channel.
 
 [gh-report]: https://github.com/MohammedEl-sayedAhmed/clipman/security/advisories/new
 
-If you cannot use private reporting, email the maintainer at the
-address listed in the project's `pyproject.toml` / git history. Do
-**not** open a public issue for security bugs.
+Do **not** open a public issue for security bugs.
 
 When reporting, please include:
 

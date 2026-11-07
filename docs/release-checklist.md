@@ -30,13 +30,15 @@ git reset --hard origin/main
 # 2. Bump versions in lockstep.
 ./scripts/bump-version.sh 1.0.5
 # This touches pyproject.toml, clipman/_version.py, snap/snapcraft.yaml,
-# flathub/*.json, aur/PKGBUILD, CITATION.cff, and data/*.metainfo.xml.
+# flathub/*.json, aur/PKGBUILD, aur/.SRCINFO, CITATION.cff, and
+# data/*.metainfo.xml (a new, empty <release> entry in each).
 
 # 3. Promote the Unreleased section in CHANGELOG.md.
 #    Open CHANGELOG.md and rename `## [Unreleased]` to
 #    `## [1.0.5] - YYYY-MM-DD` (today's date). Add a fresh
-#    `## [Unreleased]` block at the top.
-$EDITOR CHANGELOG.md
+#    `## [Unreleased]` block at the top. Put the same notes into the
+#    new <release> entry in both data/*.metainfo.xml files.
+$EDITOR CHANGELOG.md data/*.metainfo.xml
 
 # 4. Verify locally (lint, then the suite).
 scripts/dev.sh check
@@ -73,15 +75,19 @@ each stage either annotates the failure or moves on:
 4. **publish-pypi** — OIDC trusted publish.
 5. **build-snap** — `snapcore/action-build`, uploads .snap artifact.
 6. **publish-snap** — releases to `stable`, `candidate` and `beta`.
-7. **bundle-extension** — `gnome-extensions pack` → versioned zip.
-8. **github-release** — creates the GH Release with all artifacts.
+7. **build-distpkgs** — builds the `.deb` and the `.rpm`.
+8. **bundle-extension** — `gnome-extensions pack` → versioned zip.
+9. **github-release** — creates the GH Release with all artifacts.
    `scripts/release-notes.py` writes the body to a file: the CHANGELOG
    section, then the Assets table. It runs only when every publish job
    before it succeeded.
-9. **publish-aur** — refreshes `aur/PKGBUILD` and `aur/.SRCINFO` with
-   `scripts/update-aur.sh` and pushes to
-   `ssh://aur@aur.archlinux.org/clipman-clipboard.git`. Skipped with a
-   warning when `AUR_SSH_PRIVATE_KEY` is unset.
+10. **publish-aur** — refreshes `aur/PKGBUILD` and `aur/.SRCINFO` with
+    `scripts/update-aur.sh` and pushes to
+    `ssh://aur@aur.archlinux.org/clipman-clipboard.git`. Skipped with a
+    warning when `AUR_SSH_PRIVATE_KEY` is unset.
+11. **publish-ego** — uploads the extension zip to extensions.gnome.org
+    through `ego-upload.yml`. It runs only when `extension/` changed
+    since the previous release.
 
 If a stage fails before publish, the tag is already on `origin` — you
 can:
@@ -89,17 +95,18 @@ can:
 - Push a fix commit to `main`, delete the tag
   (`gh api -X DELETE repos/MohammedEl-sayedAhmed/clipman/git/refs/tags/v1.0.5`),
   then create it again through the API.
-- Or workflow-dispatch the release with the existing tag once main is
-  green.
+- Or workflow-dispatch the release with the existing tag. A re-run
+  retries the tagged commit only. A fix on `main` needs a new tag.
 
 ## After the pipeline goes green
 
-These steps aren't automatable today:
-
-- **GNOME Extensions website** — download
-  `clipman-extension-v1.0.5.zip` from the new GH Release and upload it
-  at https://extensions.gnome.org/upload/. EGO has no programmatic
-  upload API.
+- **Tarball hashes** — `scripts/update-aur.sh` writes the tarball hashes
+  into `aur/PKGBUILD`, the Flatpak manifest and `aur/.SRCINFO`. They
+  come from the tag, so they land in a follow-up PR, as #364 did for
+  1.3.0.
+- **GNOME Extensions website** — `publish-ego` uploads the zip. For a
+  missed upload, run "Upload to extensions.gnome.org" from the Actions
+  tab with the tag. e.g.o. still reviews each upload.
 
 ## Verify the release publicly
 
@@ -111,7 +118,7 @@ gh release view v1.0.5 --json assets --jq '.assets[].name'
 
 You should see the new version on PyPI within ~1 min of the publish
 step, on the Snap Store stable channel within ~5 min, and the GH
-Release listing wheel + sdist + snap + extension zip.
+Release listing wheel + sdist + snap + `.deb` + `.rpm` + extension zip.
 
 ## Roll back
 
@@ -119,8 +126,9 @@ If a release is broken in a way users will notice:
 
 - **PyPI**: you cannot delete or replace a published version. Bump
   patch (e.g. `1.0.6`) and re-cut.
-- **Snap Store**: revert to the previous revision via
-  `snapcraft revert clipman --revision=<prev>` or the Snap Store
+- **Snap Store**: release the previous revision again. Find it with
+  `snapcraft revisions clipman`, then run
+  `snapcraft release clipman <revision> stable`. Or use the Snap Store
   dashboard.
 - **GH Release**: edit notes to add a "yanked" prefix and a pointer to
   the fixed release. Don't delete the tag.

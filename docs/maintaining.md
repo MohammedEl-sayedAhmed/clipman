@@ -17,9 +17,10 @@ new maintainer knows what they are about to invoke.
   `scripts/bump-version.sh X.Y.Z`. The script rewrites `pyproject.toml`,
   `clipman/_version.py`, `snap/snapcraft.yaml`, `flathub/*.json`,
   `aur/PKGBUILD`, `CITATION.cff`, and `data/*.metainfo.xml` in a single
-  pass so no channel drifts. The extension's `metadata.json` integer is
-  left alone on purpose — it counts the D-Bus contract, not the
-  product version.
+  pass so no channel drifts. It also regenerates `aur/.SRCINFO`. The
+  extension's `metadata.json` integer is left alone on purpose — it is
+  the extension's own version on extensions.gnome.org, not the product
+  version. Bump it when `extension/` changes.
 - Promote the `[Unreleased]` block in `CHANGELOG.md` to
   `[X.Y.Z] - YYYY-MM-DD` and add a fresh empty `[Unreleased]` block on
   top.
@@ -28,7 +29,7 @@ new maintainer knows what they are about to invoke.
   commit. The identity pre-push hook rejects a locally pushed tag that
   points at a squash commit. Creating the tag is the trigger.
 - `.github/workflows/release.yml` fires on the tag and, as of v1.0.6+,
-  publishes to PyPI, the Snap Store `stable` channel, AUR, and the
+  publishes to PyPI, the Snap Store `stable`, `candidate` and `beta` channels, AUR, and the
   GitHub Release end-to-end. The full job DAG, secrets matrix, and
   SHA-pinning policy are documented in
   [docs/ci-cd.md](ci-cd.md#release-pipeline-end-to-end).

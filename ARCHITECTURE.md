@@ -30,10 +30,12 @@ the settings surface as an `Adw.Dialog` with a navigation sidebar and
 six panes
 (Appearance, Privacy, Shortcuts, Storage, Updates, About);
 `clipman/snippets_dialog.py` is an `Adw.NavigationSplitView`
-master-detail editor. The 20 declarative edge states from the
-mockups live as `StateSpec` entries in `clipman/edge_states.py` and
+master-detail editor. The 21 declarative edge states live as
+`StateSpec` entries in `clipman/edge_states.py` (most of them are
+drawn in `docs/design/states.html`) and
 are dispatched at render time by `render_edge_state` into one of
-`Adw.StatusPage`, `Adw.Banner`, or `Adw.AlertDialog`.
+`Adw.StatusPage`, a custom banner row (a `Gtk.Box`), or
+`Adw.AlertDialog`.
 `clipman/window.py` prepends the Catppuccin Mocha (dark) or warm-stone
 (light) palette to `clipman/style.css` as `@define-color` overrides of
 libadwaita's named colours, so the entire surface picks up the theme
@@ -91,10 +93,9 @@ the snap-confined daemon over the session bus.
 ## Data model
 
 The store is a single SQLite database at
-`~/.local/share/clipman/clipman.db` opened in WAL journal mode. WAL is
-used so the popup window can read history concurrently while the
-daemon writes new entries arriving from D-Bus callbacks. The schema
-lives in `clipman/database.py`:
+`~/.local/share/clipman/clipman.db` opened in WAL journal mode. The
+popup window and the clipboard monitor share one connection, on the
+main thread. The schema lives in `clipman/database.py`:
 
 - `entries` - clipboard history. Columns: `id`, `content_type`
   (`text` or `image`), `content_text`, `image_path`, `content_hash`
@@ -102,7 +103,8 @@ lives in `clipman/database.py`:
   `accessed_at`, `sensitive`. Pinning is a flag on this table, not a
   separate table. Indexes on `accessed_at DESC` and `content_hash`.
 - `snippets` - user-defined named snippets with `id`, `name`,
-  `content_text`, `created_at`.
+  `content_text`, `created_at`, and `use_count` (how many times the
+  snippet was pasted).
 - `settings` - key/value `TEXT` pairs for user preferences (max
   entries, theme, paste mode, update-check toggle, and so on).
 
@@ -113,6 +115,12 @@ written into `~/.local/share/clipman/images/` named by their hash, and
 the daemon checks their magic bytes (PNG, JPEG, GIF, BMP, WebP) before
 persisting. The BMP and WebP checks are loose, and a restore does not
 check images ([#335](https://github.com/MohammedEl-sayedAhmed/clipman/issues/335)).
+
+The history keeps at most `max_entries` clips, 500 by default. The
+value is clamped to 50 to 5000, and pinned clips do not count. When a
+new clip goes over the limit, the least recently used unpinned clips
+are deleted, with their image files. A text clip or an image over
+10 MB is not stored.
 
 Filesystem permissions are enforced on every startup:
 
@@ -147,7 +155,7 @@ can type keystrokes and move focus inside the compositor.
 | `Show()`                              | `() -> ()`   | Forces the popup visible.                                                                                                                                                                                         |
 | `Hide()`                              | `() -> ()`   | Hides the popup.                                                                                                                                                                                                  |
 | `Quit()`                              | `() -> ()`   | Exits the GTK application cleanly.                                                                                                                                                                                |
-| `NewEntry(s content_type, s content)` | `(ss) -> ()` | Called by the extension (or by the `wl-paste --watch` fallback) when the clipboard changes. `content_type` is `text` or `image`; `content` is the UTF-8 text, or the empty string for images (which the daemon then reads through `wl-paste --type image/png`). |
+| `NewEntry(s content_type, s content)` | `(ss) -> ()` | Called by the extension when the clipboard changes. (The `wl-paste --watch` fallback calls the clipboard monitor directly, in the same process.) `content_type` is `text` or `image`; `content` is the UTF-8 text, or the empty string for images (which the daemon then reads through `wl-paste --type image/png`). |
 
 ### Extension
 
@@ -218,9 +226,11 @@ No analytics, no crash reporting, no third-party services.
 2. The Clipman extension sees the `owner-changed` signal and sends the
    text to the daemon's D-Bus service with `NewEntry`. The daemon reads
    an image with `wl-paste --type image/png`.
-3. The clipboard monitor drops a duplicate by its SHA-256 hash, checks
-   for secrets, and stores the clip in `clipman.db` (SQLite, WAL). Image
-   files go to `images/`.
+3. The clipboard monitor drops the same content repeated within 100 ms,
+   checks for secrets, and stores the clip in `clipman.db` (SQLite, WAL).
+   The database keeps one row per SHA-256 hash, so a clip copied again
+   moves to the top instead of being stored twice. Image files go to
+   `images/`.
 
 **Paste**
 
@@ -235,8 +245,9 @@ No analytics, no crash reporting, no third-party services.
 **Around it**
 
 - The daemon runs as a systemd user service.
-- Its only network call is the opt-in update check: one HTTPS GET to
-  the GitHub Releases API a day, on a background thread.
+- Its only network call is the opt-out update check: one HTTPS GET to
+  the GitHub Releases API a day, on a background thread. Snap and
+  Flatpak installs start with it off.
 
 </details>
 

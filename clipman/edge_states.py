@@ -408,11 +408,12 @@ def render_edge_state(
     parent_window=None,
     on_action: Callable[[str], None] | None = None,
 ):
-    """Construct the Adw widget that visualises ``state_id``.
+    """Construct the widget that visualises ``state_id``.
 
     Returns:
         - ``Adw.StatusPage`` for ``kind == "statuspage"``,
-        - ``Adw.Banner`` for ``kind == "banner"``,
+        - a banner row (a ``Gtk.Box`` from ``build_banner_row``) for
+          ``kind == "banner"``,
         - ``Adw.AlertDialog`` for ``kind == "alertdialog"``.
 
     ``parent_window`` is only consulted for alert dialogs (which need
@@ -428,7 +429,9 @@ def render_edge_state(
     Wiring details:
         - ``StatusPage``: each ``Gtk.Button`` child connects ``clicked``
           -> ``on_action(button.action_id)``.
-        - ``Banner``: ``button-clicked`` -> ``on_action(primary_action_id)``.
+        - Banner row: the action button's ``clicked`` ->
+          ``on_action(primary_action_id)``, and the close button's
+          ``clicked``, when the row has one, -> ``on_action("dismiss-banner")``.
         - ``AlertDialog``: ``response`` -> ``on_action(response_id)``
           (the response id is exactly the action id we registered).
 
