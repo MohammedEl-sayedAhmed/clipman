@@ -3,7 +3,7 @@
     "name": "Clipman Clipboard Monitor",
     "description": "Clipboard history for GNOME on Wayland. Open it with a shortcut such as Super+V, search everything you copied, pin what you reuse, and paste it back into the window you were in.\n\nThis extension is the GNOME Shell part of Clipman. It tells the Clipman app when the clipboard changes, types the paste for it, and places its popup: things only the Shell can do on Wayland.\n\nIt needs the Clipman app (pipx, Snap, AUR or install.sh). Setup guide: https://github.com/MohammedEl-sayedAhmed/clipman\n\nWhat the app gives you:\n• Text, images, links and code in one searchable list\n• Pinned clips and snippets with templates\n• Incognito mode, and labelled passwords and tokens that clear themselves\n• A Catppuccin dark theme and a light theme\n• Everything stays on your computer",
     "shell-version": ["45", "46", "47", "48", "49", "50", "51"],
-    "version": 9,
+    "version": 10,
     "url": "https://github.com/MohammedEl-sayedAhmed/clipman",
     "donations": {
         "paypal": "mohammedelsayedammar"

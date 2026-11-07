@@ -183,6 +183,26 @@ All notable changes to Clipman are documented in this file.
   Super+V.
 - Footprints is a required check on `main`, as AGENTS.md says.
 
+### Changed — the extension's code, for its review on extensions.gnome.org
+
+- extensions.gnome.org rejected the extension's upload and asked to
+  remove the try-catch wrappers that are not needed and the
+  `destroyed` flag
+  ([#412](https://github.com/MohammedEl-sayedAhmed/clipman/issues/412)).
+  Six wrappers around calls that do not throw are gone; the five around
+  asynchronous replies and the clipboard stream's close stay. The flag
+  is gone too, since `disable()` already stops the name watcher and
+  cancels a clipboard read in progress.
+- Pasting back into the window you came from now first checks that the
+  window is still open.
+- A failing `SimulatePaste` or `MoveWindowToCursor` no longer answers
+  with `org.gnome.Shell.Extensions.clipman.Error`. On GNOME 50 and
+  later, GJS answers with its own error, `org.gnome.gjs.JSError.*`. On
+  GNOME 45 to 49, the app's call waits for its D-Bus timeout instead.
+  Neither call fails in normal use, and the app treats every failure
+  the same way.
+- The extension's version is 10.
+
 ## [1.3.0] - 2026-10-12
 
 A large reliability release, built on a full audit of the app, the

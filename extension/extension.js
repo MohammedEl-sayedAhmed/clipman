@@ -96,7 +96,6 @@ const KEY_LOOKUP = Object.assign(Object.create(null), {
 
 export default class ClipmanExtension extends Extension {
     enable() {
-        this._destroyed = false;
         this._paused = false;
         this._prevFocus = null;
         // MetaWindow -> its 'unmanaged' handler id.
@@ -148,7 +147,6 @@ export default class ClipmanExtension extends Extension {
     }
 
     disable() {
-        this._destroyed = true;
         this._removeWindowListPatches();
         if (this._clipboardTimeout) {
             GLib.source_remove(this._clipboardTimeout);
@@ -180,8 +178,9 @@ export default class ClipmanExtension extends Extension {
         this._virtualKeyboard = null;
     }
 
+    // Called only by the name watcher, which disable() stops.
     _ownBusName() {
-        if (this._busNameId || this._destroyed)
+        if (this._busNameId)
             return;
         this._busNameId = Gio.bus_own_name_on_connection(
             Gio.DBus.session,
@@ -216,12 +215,7 @@ export default class ClipmanExtension extends Extension {
         const origGetRunning = this._origGetRunning;
         Shell.AppSystem.prototype.get_running = function () {
             return origGetRunning.call(this).filter(app => {
-                let wins;
-                try {
-                    wins = origAppGetWindows.call(app);
-                } catch {
-                    return true;
-                }
+                const wins = origAppGetWindows.call(app);
                 return !(wins.length > 0 && wins.every(_isClipmanWindow));
             });
         };
@@ -304,25 +298,15 @@ export default class ClipmanExtension extends Extension {
     SimulatePasteAsync([mode], invocation) {
         if (!this._authorize(invocation))
             return;
-        try {
-            this._dispatchKeystroke(this._resolveRecipe(mode));
-            invocation.return_value(null);
-        } catch (e) {
-            invocation.return_dbus_error(
-                'org.gnome.Shell.Extensions.clipman.Error', e.message);
-        }
+        this._dispatchKeystroke(this._resolveRecipe(mode));
+        invocation.return_value(null);
     }
 
     MoveWindowToCursorAsync([title], invocation) {
         if (!this._authorize(invocation))
             return;
-        try {
-            this._moveWindowToCursor(title);
-            invocation.return_value(null);
-        } catch (e) {
-            invocation.return_dbus_error(
-                'org.gnome.Shell.Extensions.clipman.Error', e.message);
-        }
+        this._moveWindowToCursor(title);
+        invocation.return_value(null);
     }
 
     RestorePreviousFocusAsync(_params, invocation) {
@@ -330,14 +314,12 @@ export default class ClipmanExtension extends Extension {
             return;
         const prev = this._prevFocus;
         this._prevFocus = null;
-        if (prev && !_isClipmanWindow(prev)) {
-            try {
-                prev.activate(global.get_current_time());
-            } catch {
-                // The window closed meanwhile; the paste goes to the
-                // current focus.
-            }
-        }
+        // When that window has closed meanwhile, the paste goes to the
+        // current focus.
+        const open = prev &&
+            global.get_window_actors().some(a => a.get_meta_window() === prev);
+        if (open && !_isClipmanWindow(prev))
+            prev.activate(global.get_current_time());
         invocation.return_value(null);
     }
 
@@ -382,23 +364,19 @@ export default class ClipmanExtension extends Extension {
 
     _dispatchKeystroke(recipe) {
         const vk = this._getVirtualKeyboard();
-        const pressed = [];
-        try {
-            for (const mod of recipe.modifiers) {
-                vk.notify_keyval(Clutter.CURRENT_TIME,
-                    KEY_LOOKUP[mod], Clutter.KeyState.PRESSED);
-                pressed.push(mod);
-            }
+        for (const mod of recipe.modifiers) {
             vk.notify_keyval(Clutter.CURRENT_TIME,
-                KEY_LOOKUP[recipe.key], Clutter.KeyState.PRESSED);
+                KEY_LOOKUP[mod], Clutter.KeyState.PRESSED);
+        }
+        vk.notify_keyval(Clutter.CURRENT_TIME,
+            KEY_LOOKUP[recipe.key], Clutter.KeyState.PRESSED);
+        vk.notify_keyval(Clutter.CURRENT_TIME,
+            KEY_LOOKUP[recipe.key], Clutter.KeyState.RELEASED);
+        // Release the modifiers in reverse order. Reverse a copy: the
+        // recipe is shared.
+        for (const mod of [...recipe.modifiers].reverse()) {
             vk.notify_keyval(Clutter.CURRENT_TIME,
-                KEY_LOOKUP[recipe.key], Clutter.KeyState.RELEASED);
-        } finally {
-            // Never leave a modifier held down.
-            for (const mod of pressed.reverse()) {
-                vk.notify_keyval(Clutter.CURRENT_TIME,
-                    KEY_LOOKUP[mod], Clutter.KeyState.RELEASED);
-            }
+                KEY_LOOKUP[mod], Clutter.KeyState.RELEASED);
         }
     }
 
@@ -453,14 +431,12 @@ export default class ClipmanExtension extends Extension {
     }
 
     _showHiddenWindows() {
+        // A window leaves the map when it is unmanaged, so each one here is
+        // still open.
         for (const [win, handlerId] of this._hiddenWindows) {
-            try {
-                win.disconnect(handlerId);
-                if (win.show_in_window_list)
-                    win.show_in_window_list();
-            } catch {
-                // The window is gone already.
-            }
+            win.disconnect(handlerId);
+            if (win.show_in_window_list)
+                win.show_in_window_list();
         }
         this._hiddenWindows.clear();
     }
@@ -515,7 +491,8 @@ export default class ClipmanExtension extends Extension {
             }
         );
         const done = data => {
-            if (cancellable.is_cancelled() || this._destroyed)
+            // disable() and a newer copy cancel the read.
+            if (cancellable.is_cancelled())
                 return;
             this._endRead();
             if (data === null || this._paused)
