@@ -13,13 +13,13 @@ on `main`.
 | Delete merged branch | `delete-merged-branch.yml` | `pull_request` `closed` | Deletes the head branch of a merged same-repo pull request. GitHub's repository-level auto-delete does not fire for pull requests merged by the Actions auto-merge queue, so this closes that gap. It skips forks and refuses to delete the default branch. | No |
 | CodeQL | `codeql.yml` | `push` to `main`, `pull_request` to `main`, weekly cron (`27 4 * * 1`), `workflow_dispatch` | Runs `security-and-quality` CodeQL queries for Python and JavaScript; on PRs ratchets against the `security-baseline` branch; on push to `main` rebuilds the baseline from the fresh SARIF. | Yes — `Analyze (python)` and `Analyze (javascript)` |
 | Upload to extensions.gnome.org | `ego-upload.yml` | `workflow_call` from `release.yml` (only when `extension/` changed since the previous release), `workflow_dispatch` with a tag | Downloads the release's `clipman-extension-vX.Y.Z.zip` and uploads it with `scripts/ego-upload.py`, through the e.g.o. API (the same calls as `gnome-extensions upload`). Needs `EGO_USERNAME` and `EGO_PASSWORD`; without them it warns and skips. e.g.o. reviews every upload. | No |
-| Dependency review | `dependency-review.yml` | `pull_request` to `main` | Fails the PR on high-severity vulnerabilities or disallowed licenses introduced by dependency changes. | Yes — `review` (its job's name) |
+| Dependency review | `dependency-review.yml` | `pull_request` to `main` | Fails the PR on high-severity vulnerabilities introduced by dependency changes. It has no licence rule. | Yes — `review` (its job's name) |
 | Auto-label PR | `labeler.yml` | `pull_request_target` to `main` | Applies path-based labels from `.github/labeler.yml` so triage knows which area a PR touches. | No |
 | Sync labels | `labels.yml` | `push` to `main` touching `.github/labels.yml`, `workflow_dispatch` | Reconciles repository labels with the declarative `.github/labels.yml` source of truth. | No (push-only) |
-| Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests scripts clipman.py`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`, `.githooks/`), plus `scripts/dev.sh hooks-test`, the local git hooks' own test suite, and `scripts/dev.sh validate` (actionlint on the workflows, `appstreamcli` on the metainfo, `desktop-file-validate` on the desktop entry). | `Python (ruff)` and `Shell (shellcheck)` are; `Hooks (self-test)` and `Validate` are not yet |
-| Footprints | `footprints.yml` | `pull_request` to `main` (opened, synchronize, reopened, edited) | `scripts/check-footprints.sh`: blocks AI-tool attribution in the pull request's commits (trailers, messages, added lines), title and description, with the same checks as the local git hooks. A bot's description is skipped. | Not yet |
+| Lint | `lint.yml` | `push` to `main`, `pull_request` to `main` | `scripts/dev.sh ruff` (`ruff check clipman tests scripts clipman.py`) and `scripts/dev.sh shellcheck` (`install.sh`, `uninstall.sh`, `launcher.sh`, `scripts/*.sh`, `tests/e2e/*.sh`, `.githooks/`), plus `scripts/dev.sh hooks-test`, the local git hooks' own test suite, and `scripts/dev.sh validate` (actionlint on the workflows, `appstreamcli` on the metainfo, `desktop-file-validate` on both desktop entries). | `Python (ruff)` and `Shell (shellcheck)` are; `Hooks (self-test)` and `Validate` are not yet |
+| Footprints | `footprints.yml` | `pull_request` to `main` (opened, synchronize, reopened, edited) | `scripts/check-footprints.sh`: blocks AI-tool attribution in the pull request's commits (trailers, messages, added lines), title and description, with the same checks as the local git hooks. A bot's description is skipped. | Yes — `Footprints` |
 | Refresh project stats | `refresh-stats.yml` | Daily cron (`0 6 * * *`), `workflow_dispatch`, `push` to `main` touching its own paths | Fetches PyPI and GNOME Extensions counts on the runner, rebuilds the self-hosted star-history SVGs and the downloads history, adds Snap Store devices by country (`snapcraft metrics`, with the metrics-only `SNAP_METRICS_CREDENTIALS` secret; skipped without it), and commits them to the `stats` branch with the built-in `GITHUB_TOKEN`. No pull request, no personal token; `main` is never touched. | No |
-| Release | `release.yml` | `push` of tag matching `v*.*.*`, `workflow_dispatch` | End-to-end release pipeline: pre-flight version checks, matrix tests, builds (PyPI, snap, .deb/.rpm, extension bundle) with a wheel smoke test before the PyPI upload, and publishes to PyPI, Snap Store, AUR, and GitHub Releases. | No (tag-triggered only) |
+| Release | `release.yml` | `push` of tag matching `v*.*.*`, `workflow_dispatch` | End-to-end release pipeline: pre-flight version checks, matrix tests, builds (PyPI, snap, .deb/.rpm, extension bundle) with a wheel smoke test before the PyPI upload, and publishes to PyPI, Snap Store, AUR, GitHub Releases, and extensions.gnome.org (when `extension/` changed). | No (tag-triggered only) |
 | Scorecard | `scorecard.yml` | `push` to `main`, weekly cron (`37 4 * * 1`), `branch_protection_rule` | OSSF Scorecard supply-chain analysis; uploads SARIF to the GitHub Security tab and publishes results. | No |
 | Secret scan | `secret-scan.yml` | `push` to `main`, `pull_request` to `main` | Runs `gitleaks` over full git history to catch committed credentials. | Yes — `gitleaks` |
 | Snap refresh | `snap-refresh.yml` | Weekly cron (`0 4 * * 1`), `workflow_dispatch`, `push`/`pull_request` to `main` touching snap-relevant paths | Rebuilds the snap to pick up Ubuntu archive security updates. The scheduled run publishes every channel: edge from `main`, and beta, candidate and stable from the latest release tag, unless the store is already ahead of that tag. `scripts/snap-plan.sh` makes that plan, and `tests/test_snap_plan.py` checks it. See ADR 0012. | No |
@@ -77,13 +77,17 @@ graph and step contents):
   `.rpm` from a staged filesystem tree (reshaped in PR #29).
 - **bundle-extension** — `gnome-extensions pack` produces a
   versioned `clipman-extension-vX.Y.Z.zip` for the GNOME Extensions
-  website upload (manual; EGO has no programmatic upload API).
+  website upload.
+- **publish-ego** — runs after `github-release` and calls
+  `ego-upload.yml`, which uploads the zip to extensions.gnome.org. It
+  uploads only when `extension/` changed since the previous release.
 - **github-release** — runs only when every job before it succeeded
   (PyPI, Snap, extension bundle, deb/rpm), so a Release is never
   marked Latest with a failed publish behind it.
   `softprops/action-gh-release` assembles the artifacts under
-  `release-assets/` and creates the Release with the
-  pre-flight-extracted CHANGELOG section as the body.
+  `release-assets/` and creates the Release. The body comes from
+  `scripts/release-notes.py`: the CHANGELOG section, then an Assets
+  table.
   `fail_on_unmatched_files: true`: every file comes from a job that
   must succeed first, so a missing one means a broken glob. (The
   AppImage job was removed: it never produced a working AppImage, and
@@ -181,14 +185,17 @@ Required status checks on `main` (from
 - `test (3.10)` — from `test.yml`
 - `test (3.11)` — from `test.yml`
 - `test (3.12)` — from `test.yml`
+- `Footprints` — from `footprints.yml`
 
-`Hooks (self-test)`, `Validate`, `Footprints`, `package (wheel smoke)`
+`Hooks (self-test)`, `Validate`, `package (wheel smoke)`
 and `e2e (headless GNOME Shell)` run on every pull request but are not
 required yet. Branches must be up to date before merging (`strict`).
 
 Other protection settings (classic branch protection; there are no
 rulesets):
 
+- `required_pull_request_reviews`: not set, so no review is required
+  ([ADR 0006](adr/0006-solo-friendly-branch-protection.md)).
 - `required_linear_history`: enabled (rebase or squash merges only,
   no merge commits).
 - `allow_force_pushes`: disabled.
@@ -247,8 +254,9 @@ Ranked playbook, cheapest first.
    [ADR 0002](adr/0002-baseline-ratchet-for-codeql.md). Manual
    tampering with the `security-baseline` branch is auto-reverted by
    `baseline-guard.yml`; if a legitimate baseline change is needed,
-   land it through a normal PR that adjusts the rule set or
-   suppression list rather than rewriting the branch directly.
+   there is no rule set or suppression file to adjust. A merged
+   change refreshes the baseline by itself, so land any change through a
+   normal PR rather than rewriting the branch directly.
 
 ## Adding a new workflow
 

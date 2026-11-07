@@ -32,8 +32,8 @@ is the final decision-maker on architecture, scope, and dependencies.
 
 | Concern | Channel |
 |---------|---------|
-| Bug / feature / question / design idea | [GitHub Issues](https://github.com/MohammedEl-sayedAhmed/clipman/issues) (templates: bug, feature) |
-| Open-ended discussion or RFC | [GitHub Discussions](https://github.com/MohammedEl-sayedAhmed/clipman/discussions) |
+| Bug / feature / design idea | [GitHub Issues](https://github.com/MohammedEl-sayedAhmed/clipman/issues) (templates: bug, feature) |
+| Question, open-ended discussion or RFC | [GitHub Discussions](https://github.com/MohammedEl-sayedAhmed/clipman/discussions) |
 | Security vulnerability | Private channel per [SECURITY.md](SECURITY.md) — GitHub private advisory; never public issue |
 | Code of Conduct violation | Same private channel as security reports |
 

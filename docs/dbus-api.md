@@ -1,7 +1,7 @@
 # D-Bus API reference
 
 Reference for third-party integrators driving or observing clipman
-over D-Bus. Two interfaces are exported on the **session bus**:
+over D-Bus. Clipman owns three names on the **session bus**:
 
 1. The daemon's `com.clipman.Daemon` — used by anything that wants
    to drive clipman (toggle the popup, inject a clipboard entry).
@@ -10,9 +10,13 @@ over D-Bus. Two interfaces are exported on the **session bus**:
    paste keystrokes or reposition the popup. Most third-party
    integrators will not need this surface; it's documented for
    transparency.
+3. The daemon's `com.clipman.Clipman` — owned by `Adw.Application`
+   itself, with GLib's standard application interfaces. Its
+   `Activate` toggles the popup (see
+   [below](#comclipmanclipman-the-gtk-application)).
 
-All methods are synchronous (no out arguments, no signals). The
-surface is intentionally small.
+Clipman's own methods are synchronous (no out arguments, no signals).
+The surface is intentionally small.
 
 ## Stability tiers
 
@@ -92,9 +96,10 @@ gdbus call --session --dest com.clipman.Daemon \
 | Introduced   | 1.0.0          |
 | Stability    | stable         |
 
-Quits the GTK application. The daemon process exits and the bus
-name is released. Re-launching `clipman` (or letting the user's
-session autostart respawn it) brings the service back.
+Quits the GTK application. The daemon process exits with status 0 and
+the bus name is released. The systemd user service restarts the daemon
+only after a failure (`Restart=on-failure`), so it stays down until the
+next login, or until `clipman` or `clipman toggle` starts it again.
 
 ```bash
 gdbus call --session --dest com.clipman.Daemon \
@@ -124,7 +129,11 @@ Any other `content_type` is silently ignored. Storage is deduplicated
 by content hash across the whole history: sending a clip that is
 already stored moves it to the top instead of adding a copy. The same
 content arriving again within 100 ms is dropped, as a repeat of one
-copy; different content is always recorded.
+copy; different text is always recorded. Images are not compared, so
+any two image events within 100 ms count as one copy. The daemon
+also drops a clip while incognito is on, text or an image over
+10 MB, and the first event within 2 s after the popup's own copy
+(the clip it puts on the clipboard to paste).
 
 ```bash
 gdbus call --session --dest com.clipman.Daemon \
@@ -154,6 +163,10 @@ connection that owns `com.clipman.Daemon`. Any other caller gets
 per sender. When no daemon is running, every call is refused. The
 `gdbus` examples below therefore fail from a plain shell; they are here
 to show the signatures.
+
+**Errors.** When `SimulatePaste` or `MoveWindowToCursor` fails inside
+the Shell, the caller gets `org.gnome.Shell.Extensions.clipman.Error`
+with the failure's message.
 
 ### SimulatePaste
 
@@ -193,11 +206,12 @@ comes back with a "Couldn't auto-paste" dialog. It never falls back to
 | Field        | Value                                                       |
 |--------------|-------------------------------------------------------------|
 | Signature    | `(s)` → `()` — `title` matches the GTK window title         |
-| Introduced   | 1.0.0                                                       |
+| Introduced   | 1.0.0 on `com.clipman.Extension`; on this interface since 1.0.1 |
 | Stability    | stable                                                      |
 
 Finds the daemon's popup and moves it to the cursor position, clamped so
-the window stays inside the active workspace's work area. A window
+the window stays inside the work area of the current monitor (the one
+with the pointer). A window
 matches only when its `wm_class` is `com.clipman.Clipman`, its process
 is the daemon (when the pid is known) and its title equals `title`. If
 no window matches, the call is a silent no-op. On GNOME 49+ the popup is
@@ -215,7 +229,7 @@ gdbus call --session --dest org.gnome.Shell.Extensions.clipman \
 | Field        | Value                                                       |
 |--------------|-------------------------------------------------------------|
 | Signature    | `()` → `()`                                                 |
-| Introduced   | 1.2.0 (extension metadata.json v6)                          |
+| Introduced   | 1.2.0 (extension metadata.json v5)                          |
 | Stability    | stable                                                      |
 
 Gives focus back to the window that had it before `MoveWindowToCursor`
@@ -228,13 +242,34 @@ on Wayland.
 | Field        | Value                                                       |
 |--------------|-------------------------------------------------------------|
 | Signature    | `(b)` → `()` — `paused`                                     |
-| Introduced   | 1.2.2 (extension metadata.json v8)                          |
+| Introduced   | 1.3.0 (extension metadata.json v8)                          |
 | Stability    | stable                                                      |
 
 While paused the extension does not read the clipboard at all, so
 nothing crosses the session bus. The daemon calls it when incognito
 mode is switched on or off. A pending clipboard read is cancelled when
 pausing.
+
+## com.clipman.Clipman (the GTK application)
+
+| Field            | Value                                                  |
+|------------------|--------------------------------------------------------|
+| Bus name         | `com.clipman.Clipman`                                  |
+| Object path      | `/com/clipman/Clipman`                                 |
+| Interfaces       | `org.gtk.Application`, `org.freedesktop.Application`   |
+
+`Adw.Application` owns this name itself, as every GTK application with
+an application ID does. The interfaces are GLib's, not clipman's, so the
+stability tiers above do not apply to them. Clipman handles only
+`Activate`: it toggles the popup, as `Toggle` does. Clipman registers no
+actions, so `ActivateAction` and the `org.gtk.Actions` group on the
+same path have nothing to run.
+
+```bash
+gdbus call --session --dest com.clipman.Clipman \
+    --object-path /com/clipman/Clipman \
+    --method org.freedesktop.Application.Activate '{}'
+```
 
 ## Smoke-testing
 

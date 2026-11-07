@@ -481,13 +481,13 @@ def architecture():
         Card("popup", 2, 2, "Popup window", "history and snippets",
              "GTK 4 + Adw", "window", "violet"),
         Card("updates", 2, 3, "Update check", "once a day, in a thread",
-             "opt-in", "refresh", "violet", dashed=True),
+             "opt-out", "refresh", "violet", dashed=True),
         Card("images", 3, 0, "images/", "PNG files named by hash",
              "files · 0600", "image", "green"),
         Card("db", 3, 1, "clipman.db", "clips, snippets, settings",
              "SQLite · WAL", "database", "green"),
         Card("github", 3, 3, "GitHub Releases API", "the latest release",
-             "HTTPS · opt-in", "globe", "gray", dashed=True),
+             "HTTPS · opt-out", "globe", "gray", dashed=True),
     ]
     d = Diagram(
         name="architecture",
@@ -495,19 +495,21 @@ def architecture():
         desc=("Capture: an app copies to the Wayland clipboard. The Clipman "
               "GNOME Shell extension sees the owner-changed signal and sends "
               "the text to the daemon's D-Bus service with NewEntry; images "
-              "are read with wl-paste. The clipboard monitor drops duplicates "
-              "by SHA-256 hash, checks for secrets, and stores the clip in "
-              "clipman.db (SQLite, WAL) and images/. Paste: Super+V runs "
+              "are read with wl-paste. The clipboard monitor drops the same "
+              "content repeated within 100 ms, checks for secrets, and stores "
+              "the clip in clipman.db (SQLite, WAL) and images/. The database "
+              "keeps one row per SHA-256 hash, so a clip copied again moves "
+              "to the top. Paste: Super+V runs "
               "clipman toggle, which calls Toggle on the D-Bus service to "
               "show the popup. The popup reads the history, puts the chosen "
               "clip on the clipboard with wl-copy, and asks the extension to "
               "give focus back and type the paste keys into the app. The "
               "daemon runs as a systemd user service; its only network call "
-              "is an opt-in daily update check to the GitHub Releases API."),
+              "is an opt-out daily update check to the GitHub Releases API."),
         columns=[("Your session", "apps, keys and shortcuts"),
                  ("GNOME Shell", "Mutter and the extension"),
                  ("Clipman daemon", "Python · systemd user service"),
-                 ("Disk and network", "local files, one opt-in call")],
+                 ("Disk and network", "local files, one opt-out call")],
         cards=cards, col_w=224, col_gap=76, rows=4,
     )
     app, you, shortcut = d["app"], d["you"], d["shortcut"]

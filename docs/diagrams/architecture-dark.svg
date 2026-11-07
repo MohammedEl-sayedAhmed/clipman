@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1164 642" width="1164" height="642" role="img" aria-labelledby="title desc" font-family="Inter, 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Noto Sans', Cantarell, Arial, sans-serif">
 <title id="title">Clipman architecture</title>
-<desc id="desc">Capture: an app copies to the Wayland clipboard. The Clipman GNOME Shell extension sees the owner-changed signal and sends the text to the daemon's D-Bus service with NewEntry; images are read with wl-paste. The clipboard monitor drops duplicates by SHA-256 hash, checks for secrets, and stores the clip in clipman.db (SQLite, WAL) and images/. Paste: Super+V runs clipman toggle, which calls Toggle on the D-Bus service to show the popup. The popup reads the history, puts the chosen clip on the clipboard with wl-copy, and asks the extension to give focus back and type the paste keys into the app. The daemon runs as a systemd user service; its only network call is an opt-in daily update check to the GitHub Releases API.</desc>
+<desc id="desc">Capture: an app copies to the Wayland clipboard. The Clipman GNOME Shell extension sees the owner-changed signal and sends the text to the daemon's D-Bus service with NewEntry; images are read with wl-paste. The clipboard monitor drops the same content repeated within 100 ms, checks for secrets, and stores the clip in clipman.db (SQLite, WAL) and images/. The database keeps one row per SHA-256 hash, so a clip copied again moves to the top. Paste: Super+V runs clipman toggle, which calls Toggle on the D-Bus service to show the popup. The popup reads the history, puts the chosen clip on the clipboard with wl-copy, and asks the extension to give focus back and type the paste keys into the app. The daemon runs as a systemd user service; its only network call is an opt-out daily update check to the GitHub Releases API.</desc>
 <defs>
 <pattern id="hatch-amber" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#f9e2af" stroke-width="1.4" stroke-opacity="0.1"/></pattern>
 <pattern id="hatch-blue" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="#89b4fa" stroke-width="1.4" stroke-opacity="0.1"/></pattern>
@@ -28,7 +28,7 @@
 <circle cx="946" cy="48" r="11" fill="#313244"/>
 <text x="946" y="52" font-size="12" font-weight="700" text-anchor="middle" fill="#cdd6f4">4</text>
 <text x="965" y="53" font-size="15" font-weight="700" fill="#cdd6f4">Disk and network</text>
-<text x="936" y="76" font-size="12" fill="#a6adc8">local files, one opt-in call</text>
+<text x="936" y="76" font-size="12" fill="#a6adc8">local files, one opt-out call</text>
 <g>
 <rect x="34" y="90" width="196" height="92" rx="12" fill="#1e1e2e"/>
 <rect x="34" y="90" width="196" height="92" rx="12" fill="url(#hatch-blue)"/>
@@ -104,7 +104,7 @@
 <g>
 <rect x="634" y="474" width="196" height="92" rx="12" fill="#1e1e2e"/>
 <rect x="634.75" y="474.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#cba6f7" stroke-width="1.5" stroke-opacity="0.7" stroke-dasharray="5 4"/>
-<rect x="648" y="488" width="48.76" height="20" rx="10" fill="#cba6f7" fill-opacity="0.14"/><text x="656" y="501.96" font-size="11" font-weight="600" fill="#cba6f7">opt-in</text>
+<rect x="648" y="488" width="56.58" height="20" rx="10" fill="#cba6f7" fill-opacity="0.14"/><text x="656" y="501.96" font-size="11" font-weight="600" fill="#cba6f7">opt-out</text>
 <g transform="translate(800 490)" fill="none" stroke="#cba6f7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.8"/><path d="M13.2 2.2v2.7h-2.7"/></g>
 <text x="648" y="532" font-size="15" font-weight="700" fill="#cdd6f4">Update check</text>
 <text x="648" y="552" font-size="12" fill="#bac2de">once a day, in a thread</text>
@@ -130,7 +130,7 @@
 <g>
 <rect x="934" y="474" width="196" height="92" rx="12" fill="#1e1e2e"/>
 <rect x="934.75" y="474.75" width="194.5" height="90.5" rx="11.5" fill="none" stroke="#bac2de" stroke-width="1.5" stroke-opacity="0.7" stroke-dasharray="5 4"/>
-<rect x="948" y="488" width="104.38" height="20" rx="10" fill="#bac2de" fill-opacity="0.14"/><text x="956" y="501.96" font-size="11" font-weight="600" fill="#bac2de">HTTPS · opt-in</text>
+<rect x="948" y="488" width="112.2" height="20" rx="10" fill="#bac2de" fill-opacity="0.14"/><text x="956" y="501.96" font-size="11" font-weight="600" fill="#bac2de">HTTPS · opt-out</text>
 <g transform="translate(1100 490)" fill="none" stroke="#bac2de" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.2"/><ellipse cx="8" cy="8" rx="2.6" ry="6.2"/><path d="M1.8 8h12.4"/></g>
 <text x="948" y="532" font-size="15" font-weight="700" fill="#cdd6f4">GitHub Releases API</text>
 <text x="948" y="552" font-size="12" fill="#bac2de">the latest release</text>

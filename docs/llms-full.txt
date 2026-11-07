@@ -9,7 +9,7 @@
 
 ## Overview
 
-Clipman is a clipboard history manager for GNOME desktops running Wayland. Unlike X11-era tools that poll the clipboard or rely on root-window hacks, Clipman cooperates with the compositor: a GNOME Shell extension reports every copy to the daemon over D-Bus. On GNOME the extension is required, because GNOME does not offer the data-control protocol that `wl-paste --watch` needs. The daemon runs as a user systemd service when installed with `install.sh`, and is stateless beyond a single SQLite database under `~/.local/share/clipman/`.
+Clipman is a clipboard history manager for GNOME desktops running Wayland. Unlike X11-era tools that poll the clipboard or rely on root-window hacks, Clipman cooperates with the compositor: a GNOME Shell extension reports every copy to the daemon over D-Bus. On GNOME the extension is required, because GNOME does not offer the data-control protocol that `wl-paste --watch` needs. The daemon runs as a user systemd service when installed with `install.sh`, and keeps its data under `~/.local/share/clipman/`: the SQLite history database, the image files, and the safety copies of the database taken before a restore.
 
 ## Architecture
 
@@ -20,7 +20,7 @@ The daemon's UI layer is libadwaita-first:
 - `clipman/window.py` builds an `Adw.ApplicationWindow` with an `Adw.HeaderBar` and a virtualized `Gtk.ListView` history list (lightweight bound rows, no per-row `Adw.ActionRow`) — the popup that opens on Super+V.
 - `clipman/preferences.py` ships the settings surface as an `Adw.Dialog` with a left navigation sidebar and **six panes**: Appearance (theme + accent/font color pickers + opacity + font size), Privacy (start-in-incognito + sensitive-data auto-clear + purge-now), Shortcuts (toggle binding + paste mode), Storage (max entries + database location + backup/restore), Updates (opt-out daily check, see ADR 0007), and About.
 - `clipman/snippets_dialog.py` wraps the reusable-snippet editor in an `Adw.NavigationSplitView` master-detail dialog with a searchable list on the left and an editor form on the right (template variables `${date}`, `${time}`, `${clipboard}` included).
-- `clipman/edge_states.py` declares **20 `StateSpec` entries** — empty history, no search results, incognito paused, sensitive auto-cleared, first-run, extension missing, backup failed, and the other intentional edge moments — dispatched at render time by `render_edge_state` into one of `Adw.StatusPage`, `Adw.Banner`, or `Adw.AlertDialog`.
+- `clipman/edge_states.py` declares **21 `StateSpec` entries** — empty history, no search results, incognito paused, sensitive auto-cleared, first-run, extension missing, backup failed, and the other intentional edge moments — dispatched at render time by `render_edge_state` into one of `Adw.StatusPage`, a custom banner row (a `Gtk.Box`), or `Adw.AlertDialog`.
 - `clipman/window.py` injects the Catppuccin Mocha (dark) and warm-stone (light) palettes as `@define-color` overrides of libadwaita's named colors (`@accent_color`, `@window_bg_color`, `@card_bg_color`, …) ahead of `clipman/style.css`, so every Adw widget picks up the theme without per-widget CSS rules.
 - `clipman/_version.py` is a leaf module holding the single `__version__` string literal; `clipman/__init__.py` re-exports it so the public `clipman.__version__` API still works while submodules can import the constant without re-entering the package root (CodeQL `py/cyclic-import`).
 
@@ -41,8 +41,8 @@ Clips that match a known secret shape (vendor API tokens, private keys, JSON Web
 - Substring search over text clips and snippets (SQL `LIKE` with escaped wildcards)
 - Pinning to keep entries past the history-size cap
 - Reusable snippets with template variables (`${date}`, `${time}`, `${clipboard}`)
-- Catppuccin Mocha (dark) and a warm-stone light palette; respects system dark/light preference
-- 225 translatable strings in `po/clipman.pot`; no translations yet, and contributions are welcome (issue #321)
+- Catppuccin Mocha (dark) and a warm-stone light palette; dark by default, and can follow the system dark/light preference
+- 236 translatable strings in `po/clipman.pot`; no translations yet, and contributions are welcome (issue #321)
 
 ## Distribution
 

@@ -6,8 +6,8 @@ extension.
 
 ## Source layout
 
-See the **Project structure** block at the bottom of `README.md` for
-the canonical map. Two halves matter for development:
+See the collapsed **Project structure** block under "How It Works" in
+`README.md` for the canonical map. Two halves matter for development:
 
 - **Python daemon** under `clipman/` (entry point: `clipman.py`).
 - **GNOME Shell extension** under `extension/` — JavaScript, runs
@@ -27,8 +27,9 @@ scripts/dev-setup.sh      # or: make setup
 The venv is created with `--system-site-packages`, so the distro's
 PyGObject and dbus-python bindings are reused and never rebuilt
 against a different GIR stack. Re-running the script is safe; it skips
-what is already in place. If it cannot `sudo` without a password it
-prints the exact package-manager command and carries on.
+what is already in place. In a terminal it asks for your sudo
+password. With no terminal it prints the exact package-manager command
+and carries on.
 
 The venv step needs PyPI; set `CLIPMAN_NO_NETWORK=1` to skip it and
 install the extras later. With a distro PyGObject older than 3.46, or
@@ -37,7 +38,7 @@ needs a C compiler and GLib 2.80.
 
 
 `scripts/deps.sh` is the single source of truth for the system package
-lists (`runtime`, `test`, `lint` sets). `install.sh` and CI read it
+lists (`runtime`, `test`, `lint` and `i18n` sets). `install.sh` and CI read it
 too, so there is no second copy to keep in sync:
 
 ```bash
@@ -122,8 +123,9 @@ home, so it never touches your desktop. In it, `tests/e2e/install_flow.sh`:
 5. opens and hides the popup, checking that it does not spin a CPU core;
 6. runs `uninstall.sh`.
 
-It needs `gnome-shell`, the runtime packages and `wl-clipboard`. CI runs
-it on GNOME Shell 46.
+It needs `gnome-shell`, the runtime packages, `wl-clipboard`, `dconf`
+and `dbus-run-session`. `.github/workflows/test.yml` lists every package.
+CI runs it on GNOME Shell 46.
 
 ## Lint
 
@@ -134,8 +136,8 @@ scripts/dev.sh check                 # or: make check — lint, then test
 
 `lint` runs `ruff check clipman tests scripts clipman.py` and
 `shellcheck --severity=warning` over `install.sh`, `uninstall.sh`,
-`launcher.sh`, `scripts/*.sh` and the `.githooks/` scripts,
-the same scopes CI uses; `scripts/dev.sh ruff` and
+`launcher.sh`, `scripts/*.sh`, `tests/e2e/*.sh` and the `.githooks/`
+scripts, the same scopes CI uses; `scripts/dev.sh ruff` and
 `scripts/dev.sh shellcheck` run either half alone. Ruff is pinned in
 the `lint` extra so the local version matches CI.
 
@@ -145,13 +147,14 @@ scripts/dev.sh validate
 
 `validate` runs `actionlint` on the workflows (it also runs shellcheck on
 every `run:` block), `appstreamcli validate` on both metainfo files and
-`desktop-file-validate` on the desktop entry, as CI's `Validate` job does.
+`desktop-file-validate` on both desktop entries, as CI's `Validate` job does.
 The lint package set (`scripts/deps.sh --lint`) has everything except
 actionlint, which Ubuntu does not package; CI downloads a release pinned
 by checksum (see `.github/workflows/lint.yml`).
 
-Configuration lives in `pyproject.toml`. The two per-file ignores for
-`E402` in `clipman/app.py` and `clipman/window.py` are intentional —
+Configuration lives in `pyproject.toml`. The three per-file ignores for
+`E402` in `clipman/app.py`, `clipman/window.py` and `clipman.py` are
+intentional —
 `gi.require_version()` legitimately must precede `from gi.repository
 import ...`.
 
@@ -166,8 +169,9 @@ scripts/dev.sh screenshot --out /tmp/clipman.png
 
 ### Daemon
 
-Run it in the foreground to see `print()` output and Python tracebacks
-(stop the service first, as above):
+Run it in the foreground to see log warnings, errors and Python
+tracebacks. The daemon logs through `logging`, so `print()` output does
+not show (stop the service first, as above):
 
 ```bash
 systemctl --user stop clipman.service
