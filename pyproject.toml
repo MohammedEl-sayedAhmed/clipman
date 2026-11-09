@@ -36,7 +36,7 @@ Donate = "https://www.paypal.com/paypalme/mohammedelsayedammar"
 clipman = "clipman.cli:main"
 
 [project.optional-dependencies]
-lint = ["ruff==0.17.3"]
+lint = ["ruff==0.17.4"]
 # PyGObject cap: CI builds it from source against noble's GLib 2.80; bump deliberately.
 test = ["pytest==9.2.0", "PyGObject>=3.46,<3.59", "dbus-python>=1.3"]
 dev = ["clipman-clipboard[lint,test]"]
